@@ -220,6 +220,11 @@ cmd_purge() {  # delete the data dir (saved login + state); dashboard gates this
     rm -f "$DISK_CACHE"
     printf 'ok'
 }
+
+# Default-instance process controls. Signals only — the default data dir
+# (~/Library/Application Support/Claude) is never read or written by this tool.
+cmd_quit_default()  { local m; m=$(cmd_defaultpid); [ -n "$m" ] && kill -TERM $m 2>/dev/null; true; }
+cmd_force_default() { local m; m=$(cmd_defaultpid); [ -n "$m" ] && kill -9 $(tree_pids $m) 2>/dev/null; true; }
 cmd_quit()  { local m; m=$(main_pids_for_dir "$INSTANCES_DIR/$1"); [ -n "$m" ] && kill -TERM $m 2>/dev/null; true; }
 cmd_force() { local m; m=$(main_pids_for_dir "$INSTANCES_DIR/$1"); [ -n "$m" ] && kill -9 $(tree_pids $m) 2>/dev/null; true; }
 cmd_clean() {
@@ -241,6 +246,8 @@ case "${1:-stats}" in
     mainpid) cmd_mainpid "${2:?}" ;;
     defaultpid) cmd_defaultpid ;;
     create) cmd_create "${2:?}" ;;
+    quitdefault) cmd_quit_default ;;
+    forcedefault) cmd_force_default ;;
     remove) cmd_remove "${2:?}" ;;
     purge) cmd_purge "${2:?}" ;;
 esac
