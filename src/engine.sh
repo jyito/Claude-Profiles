@@ -225,6 +225,52 @@ cmd_purge() {  # delete the data dir (saved login + state); dashboard gates this
 # (~/Library/Application Support/Claude) is never read or written by this tool.
 cmd_quit_default()  { local m; m=$(cmd_defaultpid); [ -n "$m" ] && kill -TERM $m 2>/dev/null; true; }
 cmd_force_default() { local m; m=$(cmd_defaultpid); [ -n "$m" ] && kill -9 $(tree_pids $m) 2>/dev/null; true; }
+
+# Bulk cleanup. All of these are process signals or regenerable-cache deletion
+# only — sign-ins and data dirs are never touched, so even the killswitch is
+# safe: every instance reopens already authenticated.
+all_profile_slugs() {
+    local app
+    while IFS= read -r app; do
+        [ -n "$app" ] || continue
+        bundle_id_of "$app" | sed "s/^$BUNDLE_ID_PREFIX\.//"
+    done <<EOF
+$(profile_wrappers)
+EOF
+}
+
+cmd_quitall() {  # graceful TERM to every running profile instance (default untouched)
+    local slug m
+    for slug in $(all_profile_slugs); do
+        m=$(main_pids_for_dir "$INSTANCES_DIR/$slug")
+        # shellcheck disable=SC2086
+        [ -n "$m" ] && kill -TERM $m 2>/dev/null
+    done
+    true
+}
+
+cmd_cleanall() {  # clear caches for every STOPPED profile; running ones are skipped
+    local slug out=""
+    for slug in $(all_profile_slugs); do
+        [ -n "$(main_pids_for_dir "$INSTANCES_DIR/$slug")" ] && continue
+        cmd_clean "$slug" >/dev/null
+        out="$out $slug"
+    done
+    printf 'ok%s' "$out"
+}
+
+cmd_killswitch() {  # emergency stop: SIGKILL every Claude instance tree, default included
+    local slug m
+    for slug in $(all_profile_slugs); do
+        m=$(main_pids_for_dir "$INSTANCES_DIR/$slug")
+        # shellcheck disable=SC2086
+        [ -n "$m" ] && kill -9 $(tree_pids $m) 2>/dev/null
+    done
+    m=$(cmd_defaultpid)
+    # shellcheck disable=SC2086
+    [ -n "$m" ] && kill -9 $(tree_pids $m) 2>/dev/null
+    true
+}
 cmd_quit()  { local m; m=$(main_pids_for_dir "$INSTANCES_DIR/$1"); [ -n "$m" ] && kill -TERM $m 2>/dev/null; true; }
 cmd_force() { local m; m=$(main_pids_for_dir "$INSTANCES_DIR/$1"); [ -n "$m" ] && kill -9 $(tree_pids $m) 2>/dev/null; true; }
 cmd_clean() {
@@ -248,6 +294,9 @@ case "${1:-stats}" in
     create) cmd_create "${2:?}" ;;
     quitdefault) cmd_quit_default ;;
     forcedefault) cmd_force_default ;;
+    quitall) cmd_quitall ;;
+    cleanall) cmd_cleanall ;;
+    killswitch) cmd_killswitch ;;
     remove) cmd_remove "${2:?}" ;;
     purge) cmd_purge "${2:?}" ;;
 esac

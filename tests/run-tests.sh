@@ -114,6 +114,16 @@ check "clean frees caches"     "[ \"\$('$ENGINE' clean evex)\" = ok ] && [ ! -d 
 check "clean preserves login"  "[ -f '$WORK/instances/evex/Cookies' ]"
 check "clean refuses if running" "[ \"\$('$ENGINE' clean business)\" = running ]"
 
+echo "== bulk cleanup =="
+mkdir -p "$WORK/instances/bulkstopped/GPUCache"; dd if=/dev/zero of="$WORK/instances/bulkstopped/GPUCache/b" bs=1024 count=64 2>/dev/null
+mkdir -p "$WORK/apps/Claude BulkStopped.app/Contents"
+printf '<plist><dict>\n<key>CFBundleIdentifier</key>\n<string>local.claude-profiles.bulkstopped</string>\n<key>CFBundleDisplayName</key>\n<string>Claude BulkStopped</string>\n</dict></plist>\n' > "$WORK/apps/Claude BulkStopped.app/Contents/Info.plist"
+R=$("$ENGINE" cleanall)
+check "cleanall cleans stopped"  "case \"\$R\" in ok*bulkstopped*) [ ! -d '$WORK/instances/bulkstopped/GPUCache' ] ;; *) false ;; esac"
+check "cleanall skips running"   "case \"\$R\" in *business*) false ;; *) true ;; esac"
+check "cleanup modal in UI"      "grep -q 'id=\"cleanmodal\"' '$ROOT/src/dashboard.html'"
+check "killswitch arm-confirm"   "grep -q 'Click again to confirm' '$ROOT/src/dashboard.html'"
+
 echo "== dashboard JS =="
 if command -v node >/dev/null 2>&1; then
     "$ENGINE" stats > "$WORK/stats.json"
