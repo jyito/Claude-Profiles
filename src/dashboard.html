@@ -200,7 +200,7 @@ function render(data) {
       '<div class="avatar" style="background:' + av[0] + ';color:' + av[1] + '">' + initial + "</div>" +
       '<div style="flex:1"><div class="name">' + p.name.replace(/^Claude /, "").replace(/^\(/, "Claude (") + "</div>" +
       '<div class="sub' + (p.running ? " on" : "") + '"><span class="dot"></span>' +
-      (p.running ? "Running · " + p.procs + " procs · " + p.ptys + " PTYs"
+      (p.running ? "Running · " + p.procs + " procs · " + p.ptys + " terminals"
                  : "Stopped" + (p.opens ? " · opened " + p.opens + "× · last " + p.last : "")) +
       "</div></div></div>";
     if (p.running) {
