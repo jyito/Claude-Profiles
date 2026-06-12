@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Claude Profiles</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#1A1915; color:#F1EFE8; font:14px/1.5 -apple-system, "SF Pro Text", Helvetica, sans-serif;
+         -webkit-user-select:none; cursor:default; padding:18px 16px; }
+  .top { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:14px; }
+  .kpi-label { font-size:12px; color:#888780; margin-bottom:2px; }
+  .kpi { font-size:26px; font-weight:500; }
+  .kpi small { font-size:14px; color:#888780; font-weight:400; }
+  .btn-add { background:#D85A30; color:#FAECE7; border:none; border-radius:8px; padding:8px 14px;
+             font-size:13px; cursor:pointer; font-family:inherit; }
+  .btn-add:active { transform:scale(.98); }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(280px,1fr)); gap:12px; }
+  .card { background:#21201A; border:.5px solid #2e2c25; border-radius:10px; padding:14px; }
+  .hdr { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+  .avatar { width:34px; height:34px; border-radius:9px; display:flex; align-items:center;
+            justify-content:center; font-weight:500; font-size:14px; flex:none; }
+  .name { font-size:14px; font-weight:500; }
+  .sub { font-size:12px; color:#888780; display:flex; align-items:center; gap:5px; }
+  .sub.on { color:#5DCAA5; }
+  .dot { width:7px; height:7px; border-radius:50%; background:#5F5E5A; display:inline-block; flex:none; }
+  .on .dot { background:#5DCAA5; }
+  .charts { display:flex; gap:14px; margin-bottom:10px; }
+  .charts > div { flex:1; }
+  .ml { font-size:11px; color:#888780; }
+  .acts { display:flex; gap:8px; }
+  .acts button { flex:1; background:transparent; border:.5px solid #3a382f; color:#D3D1C7; border-radius:7px;
+                 padding:6px 0; font-size:12px; cursor:pointer; font-family:inherit; }
+  .acts button.primary { background:#2A4A3E; border:none; color:#9FE1CB; }
+  .acts button:active { transform:scale(.98); }
+  .meta { font-size:12px; color:#888780; margin-bottom:10px; padding:6px 0; }
+  .toast { position:sticky; top:0; font-size:12px; color:#9FE1CB; margin-bottom:8px; min-height:16px; }
+</style></head><body>
+<div class="top">
+  <div>
+    <div class="kpi-label">Total memory in use</div>
+    <div class="kpi" id="kpi">—</div>
+  </div>
+  <button class="btn-add" onclick="act('add')">＋ New profile</button>
+</div>
+<div class="toast" id="toast"></div>
+<div class="grid" id="grid"></div>
+<script>
+var hist = {}, MAXPTS = 30;
+var AV = [["#712B13","#F5C4B3"],["#26215C","#CECBF6"],["#04342C","#9FE1CB"],["#4B1528","#F4C0D1"],["#042C53","#B5D4F4"]];
+function act(a, slug) {
+  document.title = "cp:" + a + (slug ? ":" + slug : "");
+  var t = document.getElementById("toast");
+  t.textContent = {add:"Opening profile creator…", open:"Launching…", focus:"Bringing windows forward…", focusdefault:"Bringing windows forward…", quit:"Asking instance to quit…",
+                   force:"Force quitting…", clean:"Clearing caches…"}[a] || "";
+  setTimeout(function(){ t.textContent = ""; }, 2500);
+}
+function spark(arr, color) {
+  if (arr.length < 2) return '<svg style="width:100%;height:22px"></svg>';
+  var max = Math.max.apply(null, arr.concat([1])), pts = [];
+  for (var i = 0; i < arr.length; i++)
+    pts.push((i * (100 / (MAXPTS - 1))).toFixed(1) + "," + (20 - (arr[i] / max) * 16).toFixed(1));
+  return '<svg viewBox="0 0 100 22" preserveAspectRatio="none" style="width:100%;height:22px">' +
+         '<polyline points="' + pts.join(" ") + '" fill="none" stroke="' + color + '" stroke-width="2" ' +
+         'vector-effect="non-scaling-stroke"/></svg>';
+}
+function updateStats(data) {
+  var totalMem = 0, running = 0, html = "";
+  for (var i = 0; i < data.length; i++) {
+    var p = data[i], key = p.slug || "_default";
+    if (!hist[key]) hist[key] = { cpu: [], mem: [] };
+    hist[key].cpu.push(p.cpu); hist[key].mem.push(p.mem);
+    if (hist[key].cpu.length > MAXPTS) { hist[key].cpu.shift(); hist[key].mem.shift(); }
+    if (p.running) { totalMem += p.mem; running++; }
+    var av = AV[i % AV.length];
+    var initial = (p.slug ? p.name.replace(/^Claude /, "") : "C").charAt(0).toUpperCase();
+    html += '<div class="card"><div class="hdr">' +
+      '<div class="avatar" style="background:' + av[0] + ';color:' + av[1] + '">' + initial + "</div>" +
+      '<div style="flex:1"><div class="name">' + p.name.replace(/^Claude /, "").replace(/^\(/, "Claude (") + "</div>" +
+      '<div class="sub' + (p.running ? " on" : "") + '"><span class="dot"></span>' +
+      (p.running ? "Running · " + p.procs + " procs · " + p.ptys + " PTYs"
+                 : "Stopped" + (p.opens ? " · opened " + p.opens + "× · last " + p.last : "")) +
+      "</div></div></div>";
+    if (p.running) {
+      html += '<div class="charts"><div><div class="ml">CPU ' + p.cpu.toFixed(1) + "%</div>" +
+        spark(hist[key].cpu, "#F0997B") + '</div><div><div class="ml">Memory ' + Math.round(p.mem) + " MB</div>" +
+        spark(hist[key].mem, "#9FE1CB") + "</div></div>";
+    } else {
+      html += '<div class="meta">' + (p.disk >= 0 ? "Disk " + (p.disk >= 1024 ? (p.disk/1024).toFixed(1) + " GB" : p.disk + " MB") : "") + "</div>";
+    }
+    html += '<div class="acts">';
+    if (p.slug) {
+      if (p.running) {
+        html += '<button class="primary" onclick="act(\'focus\',\'' + p.slug + '\')">Show Window</button>' +
+                '<button onclick="act(\'quit\',\'' + p.slug + '\')">Quit</button>' +
+                '<button onclick="act(\'force\',\'' + p.slug + '\')">Force Quit</button>';
+      } else {
+        html += '<button class="primary" onclick="act(\'open\',\'' + p.slug + '\')">Open</button>' +
+                '<button onclick="act(\'clean\',\'' + p.slug + '\')">Clean Caches</button>';
+      }
+    } else {
+      if (p.running) {
+        html += '<button class="primary" onclick="act(\'focusdefault\')">Show Window</button>';
+      } else {
+        html += '<button disabled style="opacity:.4">Not running</button>';
+      }
+    }
+    html += "</div></div>";
+  }
+  document.getElementById("grid").innerHTML = html;
+  document.getElementById("kpi").innerHTML = Math.round(totalMem).toLocaleString() +
+    ' <small>MB across ' + running + " running</small>";
+}
+</script></body></html>
