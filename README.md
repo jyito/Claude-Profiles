@@ -78,6 +78,15 @@ A profile is a generated `.app` bundle whose entire executable is a short bash s
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Run `tests/run-tests.sh` before sending a PR — it runs anywhere, no Mac required for the bash/JS layers.
 
+## Attribution
+
+This project is MIT-licensed: use it freely, including commercially. The
+license requires preserving the copyright notice in copies and substantial
+portions of the code. Beyond that, [NOTICE](NOTICE) carries one non-binding
+request: if you ship something substantially derived from this code, credit
+the project and get in touch. Acknowledgment is the whole economy of open
+source — be cool about it.
+
 ## License
 
 [MIT](LICENSE)
