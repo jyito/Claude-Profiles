@@ -122,7 +122,7 @@ const fs=require('fs');
 const html=fs.readFileSync('$ROOT/src/dashboard.html','utf8');
 const js=html.match(/<script>([\s\S]*)<\/script>/)[1];
 let grid='',kpi='';
-global.document={getElementById:(id)=>({set innerHTML(v){if(id==='grid')grid=v;else kpi=v;},set textContent(v){}}),title:''};
+global.document={getElementById:(id)=>({set innerHTML(v){if(id==='grid')grid=v;else kpi=v;},set textContent(v){},get className(){return ''},set className(v){},focus(){},value:''}),addEventListener:()=>{},title:''};
 global.setTimeout=()=>{};
 eval(js);
 const d=JSON.parse(fs.readFileSync('$WORK/stats.json','utf8'));

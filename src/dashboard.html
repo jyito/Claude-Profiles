@@ -31,14 +31,21 @@
   .acts button:active { transform:scale(.98); }
   .meta { font-size:12px; color:#888780; margin-bottom:10px; padding:6px 0; }
   .toast { position:sticky; top:0; font-size:12px; color:#9FE1CB; margin-bottom:8px; min-height:16px; }
-  .npform { display:none; gap:8px; margin-bottom:12px; }
-  .npform.show { display:flex; }
-  .npform input { flex:1; background:#21201A; border:.5px solid #3a382f; color:#F1EFE8; border-radius:8px;
-                  padding:8px 12px; font-size:13px; font-family:inherit; outline:none; }
-  .npform input:focus { border-color:#D85A30; }
-  .npform button { background:#D85A30; color:#FAECE7; border:none; border-radius:8px; padding:8px 14px;
-                   font-size:13px; cursor:pointer; font-family:inherit; }
-  .npform button.ghost { background:transparent; border:.5px solid #3a382f; color:#D3D1C7; }
+  .scrim { position:fixed; inset:0; background:rgba(10,9,7,.6); display:none;
+           align-items:center; justify-content:center; z-index:10; }
+  .scrim.show { display:flex; }
+  .modal { background:#21201A; border:.5px solid #3a382f; border-radius:14px; padding:22px;
+           width:400px; max-width:calc(100vw - 48px); }
+  .modal h2 { font-size:16px; font-weight:500; margin:0 0 4px; }
+  .modal p { font-size:12px; color:#888780; margin:0 0 14px; }
+  .modal input { width:100%; box-sizing:border-box; background:#1A1915; border:.5px solid #3a382f;
+                 color:#F1EFE8; border-radius:8px; padding:10px 12px; font-size:13px;
+                 font-family:inherit; outline:none; margin-bottom:14px; }
+  .modal input:focus { border-color:#D85A30; }
+  .modal .row { display:flex; gap:8px; justify-content:flex-end; }
+  .modal button { border-radius:8px; padding:8px 16px; font-size:13px; cursor:pointer; font-family:inherit; }
+  .modal .go { background:#D85A30; color:#FAECE7; border:none; }
+  .modal .ghost { background:transparent; border:.5px solid #3a382f; color:#D3D1C7; }
   .linkbtn { background:none; border:none; color:#888780; font-size:11px; cursor:pointer;
              font-family:inherit; padding:6px 0 0; text-align:center; width:100%; }
   .linkbtn:hover { color:#E24B4A; }
@@ -55,20 +62,29 @@
   <button class="btn-add" onclick="toggleNp(true)">＋ New Profile</button>
 </div>
 <div class="toast" id="toast"></div>
-<div class="npform" id="npform">
-  <input id="npname" placeholder="Profile name — e.g. Business, Client X" maxlength="40"
-         onkeydown="if(event.key==='Enter')createProfile()">
-  <button onclick="createProfile()">Create</button>
-  <button class="ghost" onclick="toggleNp(false)">Cancel</button>
+<div class="scrim" id="npmodal" onclick="if(event.target===this)toggleNp(false)">
+  <div class="modal">
+    <h2>New profile</h2>
+    <p>A separate Claude app with its own account, permanently signed in after the first launch.</p>
+    <input id="npname" placeholder="Profile name — e.g. Personal, Client X" maxlength="40"
+           onkeydown="if(event.key==='Enter')createProfile()">
+    <div class="row">
+      <button class="ghost" onclick="toggleNp(false)">Cancel</button>
+      <button class="go" onclick="createProfile()">Create Profile</button>
+    </div>
+  </div>
 </div>
 <div class="grid" id="grid"></div>
 <script>
 var hist = {}, MAXPTS = 30, uiLock = false, confirmStep = {}, lastData = null;
 function toggleNp(show) {
-  var f = document.getElementById("npform");
-  if (show) { f.className = "npform show"; uiLock = true; document.getElementById("npname").focus(); }
-  else { f.className = "npform"; document.getElementById("npname").value = ""; uiLock = false; rerender(); }
+  var f = document.getElementById("npmodal");
+  if (show) { f.className = "scrim show"; uiLock = true; document.getElementById("npname").focus(); }
+  else { f.className = "scrim"; document.getElementById("npname").value = ""; uiLock = false; rerender(); }
 }
+document.addEventListener("keydown", function(e) {
+  if (e.key === "Escape" && document.getElementById("npmodal").className.indexOf("show") > -1) toggleNp(false);
+});
 function createProfile() {
   var name = document.getElementById("npname").value.replace(/[":\\{}]/g, "").trim();
   if (!name) return;
