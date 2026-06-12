@@ -103,6 +103,8 @@ on handleAction(raw)
 			do shell script quoted form of enginePath & " create " & quoted form of theName & " >/dev/null 2>&1"
 		else if verb is "focus" or verb is "focusdefault" then
 			my focusInstance(verb, slug)
+		else if verb is "quitdefault" or verb is "forcedefault" then
+			do shell script quoted form of enginePath & " " & verb & " >/dev/null 2>&1 &"
 		else if verb is in {"open", "quit", "force", "clean", "remove", "purge"} then
 			do shell script quoted form of enginePath & " " & verb & " " & quoted form of slug & " >/dev/null 2>&1 &"
 		end if

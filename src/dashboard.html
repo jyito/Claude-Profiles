@@ -90,7 +90,8 @@ function act(a, slug) {
   var t = document.getElementById("toast");
   t.textContent = {create:"Creating profile…", open:"Launching…", focus:"Bringing windows forward…",
                    focusdefault:"Bringing windows forward…", quit:"Asking instance to quit…",
-                   force:"Force quitting…", clean:"Clearing caches…", remove:"Removing app…",
+                   force:"Force quitting…", quitdefault:"Asking Claude to quit…", forcedefault:"Force quitting Claude…",
+                   clean:"Clearing caches…", remove:"Removing app…",
                    purge:"Erasing saved login…"}[a] || "";
   setTimeout(function(){ t.textContent = ""; }, 2500);
 }
@@ -154,7 +155,9 @@ function render(data) {
       }
     } else {
       if (p.running) {
-        html += '<button class="primary" onclick="act(\'focusdefault\')">Show Window</button>';
+        html += '<button class="primary" onclick="act(\'focusdefault\')">Show Window</button>' +
+                '<button onclick="act(\'quitdefault\')">Quit</button>' +
+                '<button onclick="act(\'forcedefault\')">Force Quit</button>';
       } else {
         html += '<button disabled style="opacity:.4">Not running</button>';
       }
