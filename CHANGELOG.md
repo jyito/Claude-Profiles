@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.3.0] — 2026-06-12
+- Cleanup button in the dashboard header: a modal with graceful quit-all,
+  cache-clear for all stopped profiles, and Emergency Stop — a killswitch
+  that force-quits every Claude instance (default included) for when the
+  machine is overloaded. Arm-then-confirm, 3-second disarm. All sign-ins
+  and data survive every option.
+- Engine: quitall / cleanall / killswitch subcommands.
+
+
 ## [0.2.0] — 2026-06-12
 Consistent UI: the dashboard is now the app.
 - Launching opens the dashboard window directly; the dialog menu is demoted

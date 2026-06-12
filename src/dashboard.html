@@ -46,6 +46,18 @@
   .modal button { border-radius:8px; padding:8px 16px; font-size:13px; cursor:pointer; font-family:inherit; }
   .modal .go { background:#D85A30; color:#FAECE7; border:none; }
   .modal .ghost { background:transparent; border:.5px solid #3a382f; color:#D3D1C7; }
+  .cleanrow { display:block; width:100%; text-align:left; background:#1A1915; border:.5px solid #3a382f;
+              border-radius:10px; padding:12px 14px; margin-bottom:10px; cursor:pointer; font-family:inherit; }
+  .cleanrow .t { font-size:13px; font-weight:500; color:#F1EFE8; }
+  .cleanrow .d { font-size:11px; color:#888780; margin-top:2px; }
+  .cleanrow:hover { border-color:#5F5E5A; }
+  .cleanrow.danger { background:#2A1210; border-color:#712B13; }
+  .cleanrow.danger .t { color:#F0997B; }
+  .cleanrow.danger:hover { border-color:#D85A30; }
+  .cleanrow.armed { background:#501313; border-color:#E24B4A; }
+  .cleanrow.armed .t { color:#F7C1C1; }
+  .btn-ghost { background:transparent; color:#D3D1C7; border:.5px solid #3a382f; border-radius:8px;
+               padding:8px 14px; font-size:13px; cursor:pointer; font-family:inherit; margin-right:8px; }
   .linkbtn { background:none; border:none; color:#888780; font-size:11px; cursor:pointer;
              font-family:inherit; padding:6px 0 0; text-align:center; width:100%; }
   .linkbtn:hover { color:#E24B4A; }
@@ -59,7 +71,7 @@
     <div class="kpi-label">Total memory in use</div>
     <div class="kpi" id="kpi">—</div>
   </div>
-  <button class="btn-add" onclick="toggleNp(true)">＋ New Profile</button>
+  <div><button class="btn-ghost" onclick="toggleClean(true)">Cleanup</button><button class="btn-add" onclick="toggleNp(true)">＋ New Profile</button></div>
 </div>
 <div class="toast" id="toast"></div>
 <div class="scrim" id="npmodal" onclick="if(event.target===this)toggleNp(false)">
@@ -74,6 +86,25 @@
     </div>
   </div>
 </div>
+<div class="scrim" id="cleanmodal" onclick="if(event.target===this)toggleClean(false)">
+  <div class="modal">
+    <h2>Cleanup</h2>
+    <p>Everything here is reversible where it counts: sign-ins and profile data are never touched.</p>
+    <button class="cleanrow" onclick="act('quitall');toggleClean(false)">
+      <div class="t">Quit all profiles</div>
+      <div class="d">Politely closes every running profile instance. Your default Claude keeps running.</div>
+    </button>
+    <button class="cleanrow" onclick="act('cleanall');toggleClean(false)">
+      <div class="t">Clear caches on stopped profiles</div>
+      <div class="d">Frees disk by deleting regenerable caches. Running profiles are skipped automatically.</div>
+    </button>
+    <button class="cleanrow danger" id="ksw" onclick="killswitch()">
+      <div class="t">Emergency Stop</div>
+      <div class="d">Force-quits every Claude instance immediately, including the default — for when your machine is drowning. All sign-ins survive; everything reopens authenticated.</div>
+    </button>
+    <div class="row"><button class="ghost" onclick="toggleClean(false)">Close</button></div>
+  </div>
+</div>
 <div class="grid" id="grid"></div>
 <script>
 var hist = {}, MAXPTS = 30, uiLock = false, confirmStep = {}, lastData = null;
@@ -83,8 +114,37 @@ function toggleNp(show) {
   else { f.className = "scrim"; document.getElementById("npname").value = ""; uiLock = false; rerender(); }
 }
 document.addEventListener("keydown", function(e) {
-  if (e.key === "Escape" && document.getElementById("npmodal").className.indexOf("show") > -1) toggleNp(false);
+  if (e.key === "Escape") {
+    if (document.getElementById("npmodal").className.indexOf("show") > -1) toggleNp(false);
+    if (document.getElementById("cleanmodal").className.indexOf("show") > -1) toggleClean(false);
+  }
 });
+var kswArmed = false, kswTimer = null;
+function toggleClean(show) {
+  var f = document.getElementById("cleanmodal");
+  if (show) { f.className = "scrim show"; uiLock = true; }
+  else { f.className = "scrim"; uiLock = false; disarmKsw(); rerender(); }
+}
+function disarmKsw() {
+  kswArmed = false; if (kswTimer) clearTimeout(kswTimer);
+  var k = document.getElementById("ksw");
+  if (k) { k.className = "cleanrow danger";
+    k.querySelector(".t").textContent = "Emergency Stop";
+    k.querySelector(".d").textContent = "Force-quits every Claude instance immediately, including the default — for when your machine is drowning. All sign-ins survive; everything reopens authenticated."; }
+}
+function killswitch() {
+  var k = document.getElementById("ksw");
+  if (!kswArmed) {
+    kswArmed = true;
+    k.className = "cleanrow armed";
+    k.querySelector(".t").textContent = "Click again to confirm Emergency Stop";
+    k.querySelector(".d").textContent = "Kills every Claude process tree right now. Disarms in 3 seconds.";
+    kswTimer = setTimeout(disarmKsw, 3000);
+    return;
+  }
+  act("killswitch");
+  toggleClean(false);
+}
 function createProfile() {
   var name = document.getElementById("npname").value.replace(/[":\\{}]/g, "").trim();
   if (!name) return;
@@ -107,7 +167,8 @@ function act(a, slug) {
   t.textContent = {create:"Creating profile…", open:"Launching…", focus:"Bringing windows forward…",
                    focusdefault:"Bringing windows forward…", quit:"Asking instance to quit…",
                    force:"Force quitting…", quitdefault:"Asking Claude to quit…", forcedefault:"Force quitting Claude…",
-                   clean:"Clearing caches…", remove:"Removing app…",
+                   clean:"Clearing caches…", remove:"Removing app…", quitall:"Quitting all profiles…",
+                   cleanall:"Clearing caches on stopped profiles…", killswitch:"EMERGENCY STOP — killing all Claude instances…",
                    purge:"Erasing saved login…"}[a] || "";
   setTimeout(function(){ t.textContent = ""; }, 2500);
 }
