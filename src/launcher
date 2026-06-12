@@ -463,16 +463,29 @@ Your saved login is NOT deleted by this step." "Cancel" "Remove App") || return 
 # --- main menu loop -----------------------------------------------------------
 
 launch_dashboard() {
-    # Native window UI (osascript + WKWebView). If the host exits abnormally
-    # within a few seconds, fall back to the classic dialog menu automatically.
+    # Compile the window host into a stay-open applet (applets run on the main
+    # thread, which AppKit/WebKit require; plain osascript runs scripts on a
+    # background thread). Recompiled every launch — it takes well under a
+    # second and guarantees the embedded Resources path is always current.
     local res="$(self_path)/Contents/Resources"
-    local started=$SECONDS
-    "$OSA" "$res/dashboard.applescript" >/dev/null 2>&1
-    local rc=$?
-    if [ "$rc" -ne 0 ] && [ $((SECONDS - started)) -lt 4 ]; then
-        show_info "The dashboard window couldn't open on this Mac — using the classic menu instead."
+    local rt="$INSTANCES_DIR/.runtime"
+    local applet="$rt/Claude Profiles Dashboard.app"
+    mkdir -p "$rt"
+
+    sed "s|__RESOURCES__|$res|g" "$res/dashboard.applescript" > "$rt/dashboard-src.applescript"
+    if ! /usr/bin/osacompile -s -o "$applet" "$rt/dashboard-src.applescript" 2> "$rt/compile.log"; then
+        show_info "The dashboard window couldn't be prepared on this Mac — using the classic menu instead. (Details: $rt/compile.log)"
         classic_menu
+        return
     fi
+
+    # Brand the applet so the Dock shows Claude Profiles, not a generic applet.
+    [ -f "$res/app.icns" ] && cp "$res/app.icns" "$applet/Contents/Resources/applet.icns" 2>/dev/null
+    /usr/libexec/PlistBuddy -c "Set :CFBundleName Claude Profiles" \
+        "$applet/Contents/Info.plist" >/dev/null 2>&1 || true
+
+    # open activates the existing instance if the dashboard is already running.
+    open "$applet"
 }
 
 classic_menu() {
