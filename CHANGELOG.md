@@ -1,7 +1,7 @@
 # Changelog
 
 ## [0.1.0] — 2026-06-12
-Initial release.
+Initial release (Apache-2.0).
 - Multi-account profiles: generated native wrapper apps, one per account,
   each permanently signed in via its own `--user-data-dir`.
 - GUI manager app (native dialogs, no terminal): add / open / remove with

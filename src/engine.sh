@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2026 jyito — Licensed under the Apache License, Version 2.0.
+# See LICENSE and NOTICE in the repository root.
 # engine.sh — data + actions backend for the Claude Profiles dashboard window.
 # Subcommands:  stats | open <slug> | quit <slug> | force <slug> | clean <slug>
 set -u
