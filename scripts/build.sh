@@ -23,6 +23,10 @@ fi
 ( cd dist && zip -ryq Claude-Profiles.zip "Claude Profiles.app" ) 
 cp docs/INSTALL.md dist/
 
+if [ "$(uname)" = "Darwin" ] && command -v iconutil >/dev/null 2>&1 && [ -d assets/icon.iconset ]; then
+    iconutil -c icns assets/icon.iconset -o "$APP/Contents/Resources/app.icns"
+fi
+
 if [ "$(uname)" = "Darwin" ]; then
     bash scripts/make-dmg.sh "$APP"
     mv Claude-Profiles.dmg dist/ 2>/dev/null || true

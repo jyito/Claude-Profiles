@@ -472,6 +472,13 @@ launch_dashboard() {
     local applet="$rt/Claude Profiles Dashboard.app"
     mkdir -p "$rt"
 
+    # Single instance: if the dashboard is already running, focus it and stop.
+    # (Also prevents recompiling the bundle underneath a live process.)
+    if ps axo command= 2>/dev/null | grep -F "Claude Profiles Dashboard.app" | grep -qv grep; then
+        open "$applet" 2>/dev/null
+        return
+    fi
+
     sed "s|__RESOURCES__|$res|g" "$res/dashboard.applescript" > "$rt/dashboard-src.applescript"
     if ! /usr/bin/osacompile -s -o "$applet" "$rt/dashboard-src.applescript" 2> "$rt/compile.log"; then
         show_info "The dashboard window couldn't be prepared on this Mac — using the classic menu instead. (Details: $rt/compile.log)"
