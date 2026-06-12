@@ -1,0 +1,517 @@
+#!/bin/bash
+#
+# Claude Profiles.app — GUI manager for multi-account Claude Desktop.
+# Everything runs through native macOS dialogs. No Terminal required.
+#
+set -u
+
+APP_TITLE="Claude Profiles"
+APPS_DIR="${CLAUDE_PROFILES_APPS_DIR:-$HOME/Applications}"
+INSTANCES_DIR="${CLAUDE_PROFILES_INSTANCES_DIR:-$HOME/.claude-instances}"
+BUNDLE_ID_PREFIX="local.claude-profiles"
+SELF_ID="$BUNDLE_ID_PREFIX.manager"
+OSA="/usr/bin/osascript"
+
+# --- native dialog helpers --------------------------------------------------
+
+esc_msg() {  # escape quotes + normalize newlines for AppleScript string literals
+    local m="$1"
+    m="${m//\"/\\\"}"
+    printf '%s' "${m//$'\n'/\\n}"
+}
+
+dialog_icon() {  # branded dialogs: use our own icon when present
+    local icns
+    icns="$(self_path)/Contents/Resources/app.icns"
+    [ -f "$icns" ] && printf ' with icon (POSIX file "%s")' "$icns"
+}
+
+show_alert() {  # $1 = message
+    "$OSA" -e "display alert \"$APP_TITLE\" message \"$(esc_msg "$1")\" as critical buttons {\"OK\"} default button \"OK\"" >/dev/null 2>&1
+}
+
+show_info() {   # $1 = message
+    "$OSA" -e "display dialog \"$(esc_msg "$1")\" with title \"$APP_TITLE\" buttons {\"OK\"} default button \"OK\"$(dialog_icon)" >/dev/null 2>&1
+}
+
+ask_buttons_3() { # $1 = message, $2/$3/$4 = buttons (last is default); prints pressed
+    local out
+    out=$("$OSA" -e "display dialog \"$(esc_msg "$1")\" with title \"$APP_TITLE\" buttons {\"$2\",\"$3\",\"$4\"} default button \"$4\"$(dialog_icon)" 2>/dev/null) || return 1
+    printf '%s' "${out#*button returned:}"
+}
+
+ask_text() {    # $1 = prompt, $2 = ok-button label; prints text, fails on cancel
+    local out
+    out=$("$OSA" -e "display dialog \"$1\" default answer \"\" with title \"$APP_TITLE\" buttons {\"Cancel\",\"$2\"} default button \"$2\"$(dialog_icon)" 2>/dev/null) || return 1
+    printf '%s' "${out#*text returned:}"
+}
+
+ask_choice() {  # $1 = prompt, rest = items; prints selection, fails on cancel
+    local prompt="$1"; shift
+    local items="" item
+    for item in "$@"; do
+        items+="\"$item\","
+    done
+    items="${items%,}"
+    local out
+    out=$("$OSA" -e "choose from list {$items} with title \"$APP_TITLE\" with prompt \"$prompt\" OK button name \"Choose\"" 2>/dev/null)
+    [ "$out" = "false" ] && return 1
+    [ -n "$out" ] || return 1
+    printf '%s' "$out"
+}
+
+ask_buttons() { # $1 = message, $2 = cancel label, $3 = ok label; prints pressed button
+    local out
+    out=$("$OSA" -e "display dialog \"$1\" with title \"$APP_TITLE\" buttons {\"$2\",\"$3\"} default button \"$3\"$(dialog_icon)" 2>/dev/null) || return 1
+    printf '%s' "${out#*button returned:}"
+}
+
+# --- core helpers (same engine as claude-profiles.sh) -----------------------
+
+slugify() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9'; }
+
+sanitize_name() { printf '%s' "$1" | tr -d '"\\{}' | sed 's/^ *//;s/ *$//'; }
+
+app_name_for() {
+    case "$1" in
+        Claude\ *|claude\ *|Claude|claude) printf '%s' "$1" ;;
+        *) printf 'Claude %s' "$1" ;;
+    esac
+}
+
+detect_claude_app() {
+    if [ -n "${CLAUDE_PROFILES_APP:-}" ] && [ -d "${CLAUDE_PROFILES_APP}" ]; then
+        printf '%s' "$CLAUDE_PROFILES_APP"; return 0
+    fi
+    local c
+    for c in "/Applications/Claude.app" "$HOME/Applications/Claude.app"; do
+        [ -d "$c" ] && { printf '%s' "$c"; return 0; }
+    done
+    return 1
+}
+
+bundle_id_of() { defaults read "$1/Contents/Info" CFBundleIdentifier 2>/dev/null; }
+display_name_of() { defaults read "$1/Contents/Info" CFBundleDisplayName 2>/dev/null; }
+
+profile_wrappers() {
+    local app id
+    [ -d "$APPS_DIR" ] || return 0
+    for app in "$APPS_DIR"/*.app; do
+        [ -d "$app" ] || continue
+        id=$(bundle_id_of "$app") || continue
+        [ "$id" = "$SELF_ID" ] && continue
+        case "$id" in
+            "$BUNDLE_ID_PREFIX".*) printf '%s\n' "$app" ;;
+        esac
+    done
+}
+
+wrapper_for_name() {  # $1 = display name
+    local app
+    while IFS= read -r app; do
+        [ -n "$app" ] || continue
+        [ "$(display_name_of "$app")" = "$1" ] && { printf '%s' "$app"; return 0; }
+    done <<EOF
+$(profile_wrappers)
+EOF
+    return 1
+}
+
+human_size() { [ -d "$1" ] && du -sh "$1" 2>/dev/null | awk '{print $1}' || printf '0'; }
+
+self_path() {
+    # Resolve the .app bundle this launcher lives in.
+    local d
+    d=$(cd "$(dirname "$0")/../.." && pwd)
+    printf '%s' "$d"
+}
+
+ensure_self_icon() {
+    # First run: borrow Claude's icon so the manager looks native too.
+    local me icns claude_app
+    me=$(self_path)
+    [ -f "$me/Contents/Resources/app.icns" ] && return 0
+    claude_app=$(detect_claude_app) || return 0
+    icns=$(ls "$claude_app/Contents/Resources/"*.icns 2>/dev/null | head -n 1)
+    [ -n "$icns" ] && cp "$icns" "$me/Contents/Resources/app.icns" && touch "$me"
+}
+
+# --- resource monitoring & cleanup -------------------------------------------
+# Each instance is launched with --user-data-dir=<dir>, so its main process is
+# findable by that argument; helpers are collected by walking the child tree.
+
+main_pids_for_dir() {  # $1 = data dir -> main PIDs (one per line)
+    ps axo pid=,command= | awk -v d="--user-data-dir=$1" 'index($0, d) && !/awk/ {print $1}'
+}
+
+tree_pids() {  # $@ = seed PIDs -> seeds + all descendants, space-separated
+    local snap all="$*" grew=1
+    snap=$(ps axo pid=,ppid=)
+    while [ "$grew" -eq 1 ]; do
+        grew=0
+        while read -r pid ppid; do
+            case " $all " in *" $pid "*) continue ;; esac
+            case " $all " in *" $ppid "*) all="$all $pid"; grew=1 ;; esac
+        done <<EOF2
+$snap
+EOF2
+    done
+    printf '%s' "$all"
+}
+
+usage_for_pids() {  # $@ = PIDs -> "CPU% MEM_MB NPROC"
+    local csv
+    csv=$(printf '%s' "$*" | tr ' ' ',')
+    ps -o pcpu=,rss= -p "$csv" 2>/dev/null | awk '{c+=$1; m+=$2; n++} END {printf "%.1f %.0f %d", c, m/1024, n}'
+}
+
+pty_count_for_pids() {  # $@ = PIDs -> number of pty handles (ttys)
+    local csv
+    csv=$(printf '%s' "$*" | tr ' ' ',')
+    lsof -p "$csv" 2>/dev/null | grep -c ' /dev/ttys' || true
+}
+
+profile_status_line() {  # $1 = display name, $2 = data dir -> one report line
+    local mains pids cpu mem nproc ptys disk last="" n
+    disk=$(human_size "$2")
+    if [ -f "$2/.profile-activity" ]; then
+        n=$(wc -l < "$2/.profile-activity" | tr -d ' ')
+        last=" · opened ${n}× · last $(tail -n 1 "$2/.profile-activity")"
+    fi
+    mains=$(main_pids_for_dir "$2")
+    if [ -z "$mains" ]; then
+        printf '%s\n      stopped · disk %s%s' "$1" "$disk" "$last"
+        return 0
+    fi
+    # shellcheck disable=SC2086
+    pids=$(tree_pids $mains)
+    read -r cpu mem nproc <<EOF2
+$(usage_for_pids $pids)
+EOF2
+    ptys=$(pty_count_for_pids $pids)
+    printf '%s\n      ● running · CPU %s%% · MEM %s MB · %s procs · %s PTYs · disk %s%s' \
+        "$1" "$cpu" "$mem" "$nproc" "$ptys" "$disk" "$last"
+}
+
+build_activity_report() {
+    local lines="" app name dir
+    # Default instance (plain Claude.app, default data dir) shown for context.
+    local def_main
+    def_main=$(ps axo pid=,command= | awk '/Claude\.app\/Contents\/MacOS\/Claude/ && !/--user-data-dir/ && !/Helper/ {print $1; exit}')
+    if [ -n "$def_main" ]; then
+        local pids cpu mem nproc ptys
+        # shellcheck disable=SC2086
+        pids=$(tree_pids $def_main)
+        read -r cpu mem nproc <<EOF2
+$(usage_for_pids $pids)
+EOF2
+        ptys=$(pty_count_for_pids $pids)
+        lines+="Claude (default)\n      ● running · CPU ${cpu}% · MEM ${mem} MB · ${nproc} procs · ${ptys} PTYs"
+    else
+        lines+="Claude (default)\n      stopped"
+    fi
+    while IFS= read -r app; do
+        [ -n "$app" ] || continue
+        name=$(display_name_of "$app")
+        dir="$INSTANCES_DIR/$(bundle_id_of "$app" | sed "s/^$BUNDLE_ID_PREFIX\.//")"
+        lines+="\n\n$(profile_status_line "$name" "$dir")"
+    done <<EOF2
+$(profile_wrappers)
+EOF2
+    printf '%s' "$lines"
+}
+
+CACHE_SUBDIRS=("Cache" "Code Cache" "GPUCache" "DawnGraphiteCache" "DawnWebGPUCache" "ShaderCache" "Crashpad/completed" "Crashpad/pending")
+
+clear_caches() {  # $1 = data dir -> prints freed, e.g. "412M"
+    local before after d
+    before=$(du -sk "$1" 2>/dev/null | awk '{print $1}')
+    for d in "${CACHE_SUBDIRS[@]}"; do
+        rm -rf "${1:?}/$d" 2>/dev/null
+    done
+    after=$(du -sk "$1" 2>/dev/null | awk '{print $1}')
+    awk -v b="${before:-0}" -v a="${after:-0}" 'BEGIN {
+        f=b-a; if (f<0) f=0;
+        if (f>1048576) printf "%.1f GB", f/1048576;
+        else if (f>1024) printf "%.0f MB", f/1024;
+        else printf "%d KB", f }'
+}
+
+cleanup_menu() {
+    local app name dir mains items=() names=() dirs=()
+    while IFS= read -r app; do
+        [ -n "$app" ] || continue
+        name=$(display_name_of "$app")
+        dir="$INSTANCES_DIR/$(bundle_id_of "$app" | sed "s/^$BUNDLE_ID_PREFIX\.//")"
+        names+=("$name"); dirs+=("$dir")
+        mains=$(main_pids_for_dir "$dir")
+        if [ -n "$mains" ]; then
+            items+=("Quit $name (graceful)")
+            items+=("Force Quit $name")
+        else
+            items+=("Clear caches: $name (keeps login, frees disk)")
+        fi
+    done <<EOF2
+$(profile_wrappers)
+EOF2
+    items+=("Clear caches for ALL stopped profiles")
+    local pick
+    pick=$(ask_choice "Cleanup utilities. Cache clearing never touches sign-ins — only regenerable Electron caches (Cache, GPUCache, Code Cache, shader caches, old crash dumps)." "${items[@]}") || return 0
+
+    local i target_name="" target_dir=""
+    case "$pick" in
+        "Quit "*|"Force Quit "*)
+            for i in "${!names[@]}"; do
+                if [ "$pick" = "Quit ${names[$i]} (graceful)" ] || [ "$pick" = "Force Quit ${names[$i]}" ]; then
+                    target_name="${names[$i]}"; target_dir="${dirs[$i]}"; break
+                fi
+            done
+            mains=$(main_pids_for_dir "$target_dir")
+            [ -z "$mains" ] && { show_info "$target_name is no longer running."; return 0; }
+            if [ "${pick#Force }" != "$pick" ]; then
+                # shellcheck disable=SC2086
+                kill -9 $(tree_pids $mains) 2>/dev/null
+                show_info "Force-quit $target_name. All of its processes and PTYs were released."
+            else
+                # TERM the main process; Electron shuts its helpers down cleanly.
+                # shellcheck disable=SC2086
+                kill -TERM $mains 2>/dev/null
+                show_info "Asked $target_name to quit. If it's stuck, run Cleanup again and choose Force Quit."
+            fi
+            ;;
+        "Clear caches: "*)
+            for i in "${!names[@]}"; do
+                if [ "$pick" = "Clear caches: ${names[$i]} (keeps login, frees disk)" ]; then
+                    target_name="${names[$i]}"; target_dir="${dirs[$i]}"; break
+                fi
+            done
+            local freed
+            freed=$(clear_caches "$target_dir")
+            show_info "Cleared caches for $target_name — freed $freed. Sign-in and settings untouched."
+            ;;
+        "Clear caches for ALL stopped profiles")
+            local total_msg=""
+            for i in "${!names[@]}"; do
+                mains=$(main_pids_for_dir "${dirs[$i]}")
+                [ -n "$mains" ] && continue
+                total_msg+="${names[$i]}: freed $(clear_caches "${dirs[$i]}")\n"
+            done
+            [ -z "$total_msg" ] && total_msg="No stopped profiles to clean.\n"
+            show_info "$total_msg(Running profiles were skipped — quit them first to clean their caches.)"
+            ;;
+    esac
+}
+
+activity_dashboard() {
+    while true; do
+        local report btn
+        report=$(build_activity_report)
+        btn=$(ask_buttons_3 "ACTIVITY — $(date '+%H:%M:%S')\n\n$report\n\nMemory is the live working set of every process in each instance's tree; PTYs are open terminal handles. Quit or force-quit an instance to release them." "Done" "Clean Up…" "Refresh") || return 0
+        case "$btn" in
+            "Refresh") continue ;;
+            "Clean Up…") cleanup_menu ;;
+            *) return 0 ;;
+        esac
+    done
+}
+
+# --- actions -----------------------------------------------------------------
+
+create_profile() {
+    local raw name slug app_name claude_app
+    raw=$(ask_text "Name the new profile (e.g. Business, Personal, Client X):" "Create") || return 0
+    name=$(sanitize_name "$raw")
+    slug=$(slugify "$name")
+    if [ -z "$slug" ]; then
+        show_alert "Profile names need at least one letter or number."
+        return 0
+    fi
+    app_name=$(app_name_for "$name")
+
+    claude_app=$(detect_claude_app) || {
+        show_alert "Claude.app was not found in /Applications or ~/Applications. Install Claude Desktop from claude.ai/download first."
+        return 0
+    }
+
+    local wrapper="$APPS_DIR/$app_name.app"
+    local data_dir="$INSTANCES_DIR/$slug"
+    local existed=0
+    [ -d "$wrapper" ] && existed=1
+
+    rm -rf "$wrapper"
+    mkdir -p "$wrapper/Contents/MacOS" "$wrapper/Contents/Resources" "$data_dir"
+
+    cat > "$wrapper/Contents/Info.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleName</key>
+	<string>$app_name</string>
+	<key>CFBundleDisplayName</key>
+	<string>$app_name</string>
+	<key>CFBundleIdentifier</key>
+	<string>$BUNDLE_ID_PREFIX.$slug</string>
+	<key>CFBundleExecutable</key>
+	<string>launcher</string>
+	<key>CFBundleIconFile</key>
+	<string>app</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleVersion</key>
+	<string>1.0</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>LSMinimumSystemVersion</key>
+	<string>11.0</string>
+</dict>
+</plist>
+PLIST
+
+    cat > "$wrapper/Contents/MacOS/launcher" <<LAUNCHER
+#!/bin/bash
+DATA_DIR="$data_dir"
+mkdir -p "\$DATA_DIR"
+CLAUDE_APP="$claude_app"
+if [ ! -d "\$CLAUDE_APP" ]; then
+    for c in "/Applications/Claude.app" "\$HOME/Applications/Claude.app"; do
+        [ -d "\$c" ] && CLAUDE_APP="\$c" && break
+    done
+fi
+if [ ! -d "\$CLAUDE_APP" ]; then
+    /usr/bin/osascript -e 'display alert "$app_name" message "Claude.app could not be found. Reinstall Claude Desktop, then open Claude Profiles and re-create this profile." as critical buttons {"OK"} default button "OK"' >/dev/null 2>&1
+    exit 1
+fi
+# Local activity log: stays inside the profile folder, never leaves this Mac.
+LOG="\$DATA_DIR/.profile-activity"
+date '+%Y-%m-%d %H:%M' >> "\$LOG" && tail -n 50 "\$LOG" > "\$LOG.t" && mv "\$LOG.t" "\$LOG"
+exec /usr/bin/open -n -a "\$CLAUDE_APP" --args --user-data-dir="\$DATA_DIR"
+LAUNCHER
+    chmod +x "$wrapper/Contents/MacOS/launcher"
+
+    local icns
+    icns=$(ls "$claude_app/Contents/Resources/"*.icns 2>/dev/null | head -n 1)
+    [ -n "$icns" ] && cp "$icns" "$wrapper/Contents/Resources/app.icns"
+    touch "$wrapper"
+
+    local verb="created"
+    [ "$existed" -eq 1 ] && verb="rebuilt (your saved login was kept)"
+    local btn
+    btn=$(ask_buttons "“$app_name” was $verb. It now appears in ~/Applications, Spotlight, and Launchpad.
+
+Open it now? The first time, sign in to the account you want for this profile — after that it stays signed in.
+
+Tip: if the browser login opens the wrong Claude window, use the copy-code option on the login page and paste the code into this profile's window." "Later" "Open Now") || return 0
+    if [ "$btn" = "Open Now" ]; then
+        "$wrapper/Contents/MacOS/launcher" &
+    fi
+}
+
+open_profile() {  # $1 = display name
+    local wrapper
+    wrapper=$(wrapper_for_name "$1") || { show_alert "Couldn't find the app for “$1”."; return 0; }
+    "$wrapper/Contents/MacOS/launcher" &
+}
+
+remove_profile() {
+    local names=() app
+    while IFS= read -r app; do
+        [ -n "$app" ] && names+=("$(display_name_of "$app")")
+    done <<EOF
+$(profile_wrappers)
+EOF
+    if [ "${#names[@]}" -eq 0 ]; then
+        show_info "There are no profiles to remove yet."
+        return 0
+    fi
+
+    local pick wrapper id slug data_dir
+    pick=$(ask_choice "Which profile do you want to remove?" "${names[@]}") || return 0
+    wrapper=$(wrapper_for_name "$pick") || return 0
+    id=$(bundle_id_of "$wrapper")
+    slug="${id#"$BUNDLE_ID_PREFIX".}"
+    data_dir="$INSTANCES_DIR/$slug"
+
+    local btn
+    btn=$(ask_buttons "Remove the app “$pick” from ~/Applications?
+
+Your saved login is NOT deleted by this step." "Cancel" "Remove App") || return 0
+    [ "$btn" = "Remove App" ] || return 0
+    rm -rf "$wrapper"
+
+    if [ -d "$data_dir" ]; then
+        local typed
+        typed=$(ask_text "The app is gone, but this profile's data ($(human_size "$data_dir")) still exists — it contains the SAVED LOGIN and settings.
+
+• Leave the box empty and press Keep to keep it (re-adding “$pick” later won't need a new sign-in).
+• Or type DELETE to erase it permanently." "Keep") || { show_info "Removed the app. Saved login kept."; return 0; }
+        if [ "$typed" = "DELETE" ]; then
+            rm -rf "$data_dir"
+            show_info "“$pick” was fully removed, including its saved login."
+        else
+            show_info "Removed the app. Saved login kept — re-create “$pick” any time and it will already be signed in."
+        fi
+    else
+        show_info "“$pick” was removed."
+    fi
+}
+
+# --- main menu loop -----------------------------------------------------------
+
+launch_dashboard() {
+    # Native window UI (osascript + WKWebView). If the host exits abnormally
+    # within a few seconds, fall back to the dialog dashboard automatically.
+    local res="$(self_path)/Contents/Resources"
+    local started=$SECONDS
+    /usr/bin/osascript "$res/dashboard.applescript" >/dev/null 2>&1
+    local rc=$?
+    if [ "$rc" -ne 0 ] && [ $((SECONDS - started)) -lt 4 ]; then
+        show_info "The dashboard window couldn't open on this Mac (falling back to the classic view)."
+        activity_dashboard
+    fi
+}
+
+main() {
+    # Internal action dispatch so the dashboard window can reuse dialog flows.
+    if [ "${1:-}" = "--action" ]; then
+        case "${2:-}" in
+            add) create_profile ;;
+            remove) remove_profile ;;
+        esac
+        exit 0
+    fi
+    ensure_self_icon
+    while true; do
+        local names=() items=() app data_dir id slug
+        while IFS= read -r app; do
+            [ -n "$app" ] || continue
+            names+=("$(display_name_of "$app")")
+        done <<EOF
+$(profile_wrappers)
+EOF
+        items=()
+        local n
+        for n in "${names[@]:-}"; do
+            [ -n "$n" ] && items+=("▶  Open $n")
+        done
+        items+=("＋  Add a profile…")
+        items+=("📊  Open Dashboard")
+        items+=("☰  Classic menu view…")
+        [ "${#names[@]}" -gt 0 ] && items+=("✕  Remove a profile…")
+
+        local pick
+        pick=$(ask_choice "Each profile is a separate Claude app with its own account, permanently signed in. Run as many at once as you like." "${items[@]}") || exit 0
+
+        case "$pick" in
+            "＋  Add a profile…") create_profile ;;
+            "📊  Open Dashboard") launch_dashboard ;;
+            "☰  Classic menu view…") activity_dashboard ;;
+            "✕  Remove a profile…") remove_profile ;;
+            "▶  Open "*) open_profile "${pick#▶  Open }" ;;
+        esac
+    done
+}
+
+main "$@"

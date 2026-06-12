@@ -1,0 +1,4 @@
+dist/
+*.zip
+*.dmg
+.DS_Store

@@ -1,0 +1,161 @@
+#!/bin/bash
+# engine.sh — data + actions backend for the Claude Profiles dashboard window.
+# Subcommands:  stats | open <slug> | quit <slug> | force <slug> | clean <slug>
+set -u
+
+APPS_DIR="${CLAUDE_PROFILES_APPS_DIR:-$HOME/Applications}"
+INSTANCES_DIR="${CLAUDE_PROFILES_INSTANCES_DIR:-$HOME/.claude-instances}"
+BUNDLE_ID_PREFIX="local.claude-profiles"
+DISK_CACHE="${TMPDIR:-/tmp}/claude-profiles-disk-cache"
+
+bundle_id_of() { defaults read "$1/Contents/Info" CFBundleIdentifier 2>/dev/null; }
+display_name_of() { defaults read "$1/Contents/Info" CFBundleDisplayName 2>/dev/null; }
+
+profile_wrappers() {
+    local app id
+    [ -d "$APPS_DIR" ] || return 0
+    for app in "$APPS_DIR"/*.app; do
+        [ -d "$app" ] || continue
+        id=$(bundle_id_of "$app") || continue
+        [ "$id" = "$BUNDLE_ID_PREFIX.manager" ] && continue
+        case "$id" in "$BUNDLE_ID_PREFIX".*) printf '%s\n' "$app" ;; esac
+    done
+}
+
+main_pids_for_dir() {
+    ps axo pid=,command= | awk -v d="--user-data-dir=$1" 'index($0, d) && !/awk/ {print $1}'
+}
+
+tree_pids() {
+    local snap all="$*" grew=1
+    snap=$(ps axo pid=,ppid=)
+    while [ "$grew" -eq 1 ]; do
+        grew=0
+        while read -r pid ppid; do
+            case " $all " in *" $pid "*) continue ;; esac
+            case " $all " in *" $ppid "*) all="$all $pid"; grew=1 ;; esac
+        done <<EOF
+$snap
+EOF
+    done
+    printf '%s' "$all"
+}
+
+usage_for_pids() {
+    local csv; csv=$(printf '%s' "$*" | tr ' ' ',')
+    ps -o pcpu=,rss= -p "$csv" 2>/dev/null | awk '{c+=$1; m+=$2; n++} END {printf "%.1f %.0f %d", c, m/1024, n}'
+}
+
+pty_count_for_pids() {
+    local csv; csv=$(printf '%s' "$*" | tr ' ' ',')
+    lsof -p "$csv" 2>/dev/null | grep -c ' /dev/ttys' || true
+}
+
+disk_mb() {  # cached 30s — du on multi-GB dirs is too slow for a live tick
+    local key="$1" now ts line size
+    now=$(date +%s)
+    if [ -f "$DISK_CACHE" ]; then
+        line=$(grep "^$key " "$DISK_CACHE" 2>/dev/null | tail -1)
+        if [ -n "$line" ]; then
+            ts=$(printf '%s' "$line" | awk '{print $2}')
+            size=$(printf '%s' "$line" | awk '{print $3}')
+            [ $((now - ts)) -lt 30 ] && { printf '%s' "$size"; return 0; }
+        fi
+    fi
+    size=$(( $(du -sk "$key" 2>/dev/null | awk '{print $1}') / 1024 ))
+    grep -v "^$key " "$DISK_CACHE" 2>/dev/null > "$DISK_CACHE.t" || true
+    printf '%s %s %s\n' "$key" "$now" "$size" >> "$DISK_CACHE.t"
+    mv "$DISK_CACHE.t" "$DISK_CACHE"
+    printf '%s' "$size"
+}
+
+profile_json() {  # $1 name, $2 slug, $3 data_dir
+    local mains pids cpu=0 mem=0 nproc=0 ptys=0 running=false disk opens=0 last=""
+    disk=$(disk_mb "$3")
+    if [ -f "$3/.profile-activity" ]; then
+        opens=$(wc -l < "$3/.profile-activity" | tr -d ' ')
+        last=$(tail -n 1 "$3/.profile-activity")
+    fi
+    mains=$(main_pids_for_dir "$3")
+    if [ -n "$mains" ]; then
+        running=true
+        # shellcheck disable=SC2086
+        pids=$(tree_pids $mains)
+        read -r cpu mem nproc <<EOF
+$(usage_for_pids $pids)
+EOF
+        ptys=$(pty_count_for_pids $pids)
+    fi
+    printf '{"name":"%s","slug":"%s","running":%s,"cpu":%s,"mem":%s,"procs":%s,"ptys":%s,"disk":%s,"opens":%s,"last":"%s"}' \
+        "$1" "$2" "$running" "${cpu:-0}" "${mem:-0}" "${nproc:-0}" "${ptys:-0}" "$disk" "$opens" "$last"
+}
+
+cmd_stats() {
+    local out="[" first=1 app name slug
+    # default instance
+    local def
+    def=$(ps axo pid=,command= | awk '/Claude\.app\/Contents\/MacOS\/Claude/ && !/--user-data-dir/ && !/Helper/ {print $1; exit}')
+    if [ -n "$def" ]; then
+        local pids cpu mem nproc ptys
+        # shellcheck disable=SC2086
+        pids=$(tree_pids $def)
+        read -r cpu mem nproc <<EOF
+$(usage_for_pids $pids)
+EOF
+        ptys=$(pty_count_for_pids $pids)
+        out+="{\"name\":\"Claude (default)\",\"slug\":\"\",\"running\":true,\"cpu\":$cpu,\"mem\":$mem,\"procs\":$nproc,\"ptys\":$ptys,\"disk\":-1,\"opens\":0,\"last\":\"\"}"
+        first=0
+    else
+        out+='{"name":"Claude (default)","slug":"","running":false,"cpu":0,"mem":0,"procs":0,"ptys":0,"disk":-1,"opens":0,"last":""}'
+        first=0
+    fi
+    while IFS= read -r app; do
+        [ -n "$app" ] || continue
+        name=$(display_name_of "$app")
+        slug=$(bundle_id_of "$app" | sed "s/^$BUNDLE_ID_PREFIX\.//")
+        [ "$first" -eq 0 ] && out+=","
+        out+=$(profile_json "$name" "$slug" "$INSTANCES_DIR/$slug")
+        first=0
+    done <<EOF
+$(profile_wrappers)
+EOF
+    printf '%s]' "$out"
+}
+
+wrapper_for_slug() {
+    local app
+    while IFS= read -r app; do
+        [ -n "$app" ] || continue
+        [ "$(bundle_id_of "$app")" = "$BUNDLE_ID_PREFIX.$1" ] && { printf '%s' "$app"; return 0; }
+    done <<EOF
+$(profile_wrappers)
+EOF
+    return 1
+}
+
+cmd_open()  { local w; w=$(wrapper_for_slug "$1") && "$w/Contents/MacOS/launcher" & }
+cmd_mainpid() { main_pids_for_dir "$INSTANCES_DIR/${1:?}" | head -n 1; }
+cmd_defaultpid() {
+    ps axo pid=,command= | awk '/Claude\.app\/Contents\/MacOS\/Claude/ && !/--user-data-dir/ && !/Helper/ {print $1; exit}'
+}
+cmd_quit()  { local m; m=$(main_pids_for_dir "$INSTANCES_DIR/$1"); [ -n "$m" ] && kill -TERM $m 2>/dev/null; true; }
+cmd_force() { local m; m=$(main_pids_for_dir "$INSTANCES_DIR/$1"); [ -n "$m" ] && kill -9 $(tree_pids $m) 2>/dev/null; true; }
+cmd_clean() {
+    local dir="$INSTANCES_DIR/${1:?}" d
+    [ -n "$(main_pids_for_dir "$dir")" ] && { printf 'running'; return 0; }
+    for d in "Cache" "Code Cache" "GPUCache" "DawnGraphiteCache" "DawnWebGPUCache" "ShaderCache" "Crashpad/completed" "Crashpad/pending"; do
+        rm -rf "${dir:?}/$d" 2>/dev/null
+    done
+    rm -f "$DISK_CACHE"
+    printf 'ok'
+}
+
+case "${1:-stats}" in
+    stats) cmd_stats ;;
+    open)  cmd_open  "${2:?}" ;;
+    quit)  cmd_quit  "${2:?}" ;;
+    force) cmd_force "${2:?}" ;;
+    clean) cmd_clean "${2:?}" ;;
+    mainpid) cmd_mainpid "${2:?}" ;;
+    defaultpid) cmd_defaultpid ;;
+esac

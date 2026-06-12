@@ -1,0 +1,17 @@
+name: CI
+on:
+  push: { branches: [main] }
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck
+        run: |
+          sudo apt-get install -y shellcheck
+          shellcheck -S error src/launcher src/engine.sh cli/claude-profiles.sh scripts/*.sh
+      - name: test suite
+        run: bash tests/run-tests.sh
+      - name: build assembles
+        run: bash scripts/build.sh && test -f "dist/Claude-Profiles.zip"
