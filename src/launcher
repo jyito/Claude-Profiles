@@ -191,7 +191,7 @@ profile_status_line() {  # $1 = display name, $2 = data dir -> one report line
 $(usage_for_pids $pids)
 EOF2
     ptys=$(pty_count_for_pids $pids)
-    printf '%s\n      ● running · CPU %s%% · MEM %s MB · %s procs · %s PTYs · disk %s%s' \
+    printf '%s\n      ● running · CPU %s%% · MEM %s MB · %s procs · %s terminals · disk %s%s' \
         "$1" "$cpu" "$mem" "$nproc" "$ptys" "$disk" "$last"
 }
 
@@ -308,7 +308,7 @@ activity_dashboard() {
     while true; do
         local report btn
         report=$(build_activity_report)
-        btn=$(ask_buttons_3 "ACTIVITY — $(date '+%H:%M:%S')\n\n$report\n\nMemory is the live working set of every process in each instance's tree; PTYs are open terminal handles. Quit or force-quit an instance to release them." "Done" "Clean Up…" "Refresh") || return 0
+        btn=$(ask_buttons_3 "ACTIVITY — $(date '+%H:%M:%S')\n\n$report\n\nMemory is the live working set of every process in each instance's tree; terminals are background terminal sessions held by the instance. Quit or force-quit an instance to release them." "Done" "Clean Up…" "Refresh") || return 0
         case "$btn" in
             "Refresh") continue ;;
             "Clean Up…") cleanup_menu ;;
