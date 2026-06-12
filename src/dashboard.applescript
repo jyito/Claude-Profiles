@@ -88,7 +88,11 @@ on handleAction(raw)
 			do shell script quoted form of launcherPath & " --action add >/dev/null 2>&1 &"
 		else if verb is "focus" or verb is "focusdefault" then
 			my focusInstance(verb, slug)
-		else if verb is in {"open", "quit", "force", "clean"} then
+		else if verb is "create" then
+			-- the name is everything after the second colon (it may itself contain text)
+			set theName to my joinFrom(parts, 3, ":")
+			do shell script quoted form of enginePath & " create " & quoted form of theName & " >/dev/null 2>&1"
+		else if verb is in {"open", "quit", "force", "clean", "remove", "purge"} then
 			do shell script quoted form of enginePath & " " & verb & " " & quoted form of slug & " >/dev/null 2>&1 &"
 		end if
 	end try
@@ -114,6 +118,15 @@ on focusInstance(verb, slug)
 		end if
 	end try
 end focusInstance
+
+on joinFrom(theItems, startIndex, theDelim)
+	set acc to ""
+	repeat with i from startIndex to (count of theItems)
+		if acc is not "" then set acc to acc & theDelim
+		set acc to acc & (item i of theItems)
+	end repeat
+	return acc
+end joinFrom
 
 on splitText(theText, theDelim)
 	set savedDelims to AppleScript's text item delimiters

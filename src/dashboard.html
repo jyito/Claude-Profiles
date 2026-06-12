@@ -31,24 +31,67 @@
   .acts button:active { transform:scale(.98); }
   .meta { font-size:12px; color:#888780; margin-bottom:10px; padding:6px 0; }
   .toast { position:sticky; top:0; font-size:12px; color:#9FE1CB; margin-bottom:8px; min-height:16px; }
+  .npform { display:none; gap:8px; margin-bottom:12px; }
+  .npform.show { display:flex; }
+  .npform input { flex:1; background:#21201A; border:.5px solid #3a382f; color:#F1EFE8; border-radius:8px;
+                  padding:8px 12px; font-size:13px; font-family:inherit; outline:none; }
+  .npform input:focus { border-color:#D85A30; }
+  .npform button { background:#D85A30; color:#FAECE7; border:none; border-radius:8px; padding:8px 14px;
+                   font-size:13px; cursor:pointer; font-family:inherit; }
+  .npform button.ghost { background:transparent; border:.5px solid #3a382f; color:#D3D1C7; }
+  .linkbtn { background:none; border:none; color:#888780; font-size:11px; cursor:pointer;
+             font-family:inherit; padding:6px 0 0; text-align:center; width:100%; }
+  .linkbtn:hover { color:#E24B4A; }
+  .confirm { font-size:12px; color:#D3D1C7; line-height:1.5; }
+  .confirm input { width:100%; background:#1A1915; border:.5px solid #3a382f; color:#F1EFE8; border-radius:7px;
+                   padding:6px 10px; font-size:12px; font-family:inherit; outline:none; margin:8px 0; }
+  .confirm .danger { background:#501313; color:#F7C1C1; border:none; }
 </style></head><body>
 <div class="top">
   <div>
     <div class="kpi-label">Total memory in use</div>
     <div class="kpi" id="kpi">—</div>
   </div>
-  <button class="btn-add" onclick="act('add')">＋ New profile</button>
+  <button class="btn-add" onclick="toggleNp(true)">＋ New Profile</button>
 </div>
 <div class="toast" id="toast"></div>
+<div class="npform" id="npform">
+  <input id="npname" placeholder="Profile name — e.g. Business, Client X" maxlength="40"
+         onkeydown="if(event.key==='Enter')createProfile()">
+  <button onclick="createProfile()">Create</button>
+  <button class="ghost" onclick="toggleNp(false)">Cancel</button>
+</div>
 <div class="grid" id="grid"></div>
 <script>
-var hist = {}, MAXPTS = 30;
+var hist = {}, MAXPTS = 30, uiLock = false, confirmStep = {}, lastData = null;
+function toggleNp(show) {
+  var f = document.getElementById("npform");
+  if (show) { f.className = "npform show"; uiLock = true; document.getElementById("npname").focus(); }
+  else { f.className = "npform"; document.getElementById("npname").value = ""; uiLock = false; rerender(); }
+}
+function createProfile() {
+  var name = document.getElementById("npname").value.replace(/[":\\{}]/g, "").trim();
+  if (!name) return;
+  toggleNp(false);
+  act("create", name);
+}
+function startRemove(slug)  { confirmStep[slug] = 1; uiLock = true; rerender(); }
+function cancelRemove(slug) { delete confirmStep[slug]; uiLock = false; rerender(); }
+function confirmRemove(slug) { act("remove", slug); confirmStep[slug] = 2; rerender(); }
+function finishPurge(slug) {
+  var v = (document.getElementById("purge-" + slug) || {value:""}).value;
+  if (v === "DELETE") { act("purge", slug); }
+  delete confirmStep[slug]; uiLock = false; rerender();
+}
+function rerender() { if (lastData) render(lastData); }
 var AV = [["#712B13","#F5C4B3"],["#26215C","#CECBF6"],["#04342C","#9FE1CB"],["#4B1528","#F4C0D1"],["#042C53","#B5D4F4"]];
 function act(a, slug) {
   document.title = "cp:" + a + (slug ? ":" + slug : "");
   var t = document.getElementById("toast");
-  t.textContent = {add:"Opening profile creator…", open:"Launching…", focus:"Bringing windows forward…", focusdefault:"Bringing windows forward…", quit:"Asking instance to quit…",
-                   force:"Force quitting…", clean:"Clearing caches…"}[a] || "";
+  t.textContent = {create:"Creating profile…", open:"Launching…", focus:"Bringing windows forward…",
+                   focusdefault:"Bringing windows forward…", quit:"Asking instance to quit…",
+                   force:"Force quitting…", clean:"Clearing caches…", remove:"Removing app…",
+                   purge:"Erasing saved login…"}[a] || "";
   setTimeout(function(){ t.textContent = ""; }, 2500);
 }
 function spark(arr, color) {
@@ -61,6 +104,11 @@ function spark(arr, color) {
          'vector-effect="non-scaling-stroke"/></svg>';
 }
 function updateStats(data) {
+  lastData = data;
+  if (uiLock) return;
+  render(data);
+}
+function render(data) {
   var totalMem = 0, running = 0, html = "";
   for (var i = 0; i < data.length; i++) {
     var p = data[i], key = p.slug || "_default";
@@ -90,6 +138,16 @@ function updateStats(data) {
         html += '<button class="primary" onclick="act(\'focus\',\'' + p.slug + '\')">Show Window</button>' +
                 '<button onclick="act(\'quit\',\'' + p.slug + '\')">Quit</button>' +
                 '<button onclick="act(\'force\',\'' + p.slug + '\')">Force Quit</button>';
+      } else if (confirmStep[p.slug] === 1) {
+        html += '</div><div class="confirm">Remove the app “' + p.name + '”? Your saved login is kept.' +
+          '<div class="acts" style="margin-top:8px">' +
+          '<button class="danger" style="flex:1;border-radius:7px;padding:6px 0;font-size:12px;cursor:pointer" onclick="confirmRemove(\'' + p.slug + '\')">Remove App</button>' +
+          '<button onclick="cancelRemove(\'' + p.slug + '\')">Cancel</button></div><div style="display:none">';
+      } else if (confirmStep[p.slug] === 2) {
+        html += '</div><div class="confirm">App removed. Erase the saved login and data too? Type DELETE to confirm, or Keep it for later.' +
+          '<input id="purge-' + p.slug + '" placeholder="Type DELETE to erase permanently">' +
+          '<div class="acts"><button class="danger" style="flex:1;border-radius:7px;padding:6px 0;font-size:12px;cursor:pointer" onclick="finishPurge(\'' + p.slug + '\')">Confirm</button>' +
+          '<button onclick="delete confirmStep[\'' + p.slug + '\'];uiLock=false;rerender()">Keep Login</button></div><div style="display:none">';
       } else {
         html += '<button class="primary" onclick="act(\'open\',\'' + p.slug + '\')">Open</button>' +
                 '<button onclick="act(\'clean\',\'' + p.slug + '\')">Clean Caches</button>';
@@ -101,7 +159,11 @@ function updateStats(data) {
         html += '<button disabled style="opacity:.4">Not running</button>';
       }
     }
-    html += "</div></div>";
+    html += "</div>";
+    if (p.slug && !p.running && !confirmStep[p.slug]) {
+      html += '<button class="linkbtn" onclick="startRemove(\'' + p.slug + '\')">Remove profile…</button>';
+    }
+    html += "</div>";
   }
   document.getElementById("grid").innerHTML = html;
   document.getElementById("kpi").innerHTML = Math.round(totalMem).toLocaleString() +

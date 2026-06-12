@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.2.0] — 2026-06-12
+Consistent UI: the dashboard is now the app.
+- Launching opens the dashboard window directly; the dialog menu is demoted
+  to an automatic fallback (or `--classic` for scripting).
+- New Profile is an in-window form; Remove is an in-card two-step flow with
+  the typed-DELETE safeguard, all in the dashboard aesthetic.
+- Engine gains headless `create` / `remove` / `purge` subcommands.
+- UI edits pause live re-rendering so confirmation steps can't be interrupted.
+
+
 ## [0.1.0] — 2026-06-12
 Initial release (Apache-2.0).
 - Multi-account profiles: generated native wrapper apps, one per account,

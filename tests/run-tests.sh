@@ -75,17 +75,24 @@ check "cli bash syntax"        "bash -n '$ROOT/cli/claude-profiles.sh'"
 
 echo "== profile lifecycle (dialog flows) =="
 printf '＋  Add a profile…\nbutton returned:Create, text returned:Business\nbutton returned:Later\nfalse\n' > "$WORK/queue"
-"$L" >/dev/null 2>&1
+"$L" --classic >/dev/null 2>&1
 check "add creates wrapper"    "[ -d '$WORK/apps/Claude Business.app' ]"
 check "add creates data dir"   "[ -d '$WORK/instances/business' ]"
 touch "$WORK/instances/business/marker"
 printf '＋  Add a profile…\nbutton returned:Create, text returned:Business\nbutton returned:Later\nfalse\n' > "$WORK/queue"
-"$L" >/dev/null 2>&1
+"$L" --classic >/dev/null 2>&1
 check "re-add preserves data"  "[ -f '$WORK/instances/business/marker' ]"
 printf '＋  Add a profile…\nbutton returned:Create, text returned:Eve\" {X}\nbutton returned:Later\nfalse\n' > "$WORK/queue"
-"$L" >/dev/null 2>&1
+"$L" --classic >/dev/null 2>&1
 check "hostile names sanitized" "[ -d '$WORK/apps/Claude Eve X.app' ]"
 check "--action add dispatch"  "printf 'button returned:Create, text returned:Disp\nbutton returned:Later\n' > '$WORK/queue'; '$L' --action add >/dev/null 2>&1; [ -d '$WORK/apps/Claude Disp.app' ]"
+
+echo "== engine headless lifecycle =="
+check "engine create"          "[ \"\$('$ENGINE' create 'Head Less')\" = 'ok headless' ] && [ -d '$WORK/apps/Claude Head Less.app' ]"
+check "engine create sanitizes" "[ \"\$('$ENGINE' create 'Bad\":{Name}')\" = 'ok badname' ]"
+check "engine remove keeps data" "mkdir -p '$WORK/instances/headless'; touch '$WORK/instances/headless/m'; [ \"\$('$ENGINE' remove headless)\" = ok ] && [ ! -d '$WORK/apps/Claude Head Less.app' ] && [ -f '$WORK/instances/headless/m' ]"
+check "engine purge erases data" "[ \"\$('$ENGINE' purge headless)\" = ok ] && [ ! -d '$WORK/instances/headless' ]"
+check "default launch exits 0"   "printf 'x\n' > '$WORK/queue'; '$L' >/dev/null 2>&1"
 
 echo "== engine stats =="
 printf '2026-06-10 08:12\n2026-06-12 09:14\n' > "$WORK/instances/business/.profile-activity"
@@ -120,11 +127,12 @@ global.setTimeout=()=>{};
 eval(js);
 const d=JSON.parse(fs.readFileSync('$WORK/stats.json','utf8'));
 updateStats(d); updateStats(d);
-console.log((grid.match(/class=\"card\"/g)||[]).length, (grid.match(/Show Window/g)||[]).length, (grid.match(/<polyline/g)||[]).length);
+console.log((grid.match(/class=\"card\"/g)||[]).length, (grid.match(/Show Window/g)||[]).length, (grid.match(/<polyline/g)||[]).length, (grid.match(/Remove profile/g)||[]).length);
 " 2>/dev/null)
     check "cards render"        "[ \"\$(echo '$R' | awk '{print \$1}')\" -ge 3 ]"
     check "Show Window buttons" "[ \"\$(echo '$R' | awk '{print \$2}')\" = 2 ]"
     check "sparklines render"   "[ \"\$(echo '$R' | awk '{print \$3}')\" -ge 4 ]"
+    check "in-card remove flow"  "[ \"\$(echo '$R' | awk '{print \$4}')\" -ge 1 ]"
 else
     echo "  - node not found, skipping JS render tests"
 fi
