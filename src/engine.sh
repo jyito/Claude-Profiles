@@ -140,6 +140,86 @@ cmd_mainpid() { main_pids_for_dir "$INSTANCES_DIR/${1:?}" | head -n 1; }
 cmd_defaultpid() {
     ps axo pid=,command= | awk '/Claude\.app\/Contents\/MacOS\/Claude/ && !/--user-data-dir/ && !/Helper/ {print $1; exit}'
 }
+
+detect_claude_app() {
+    if [ -n "${CLAUDE_PROFILES_APP:-}" ] && [ -d "${CLAUDE_PROFILES_APP}" ]; then
+        printf '%s' "$CLAUDE_PROFILES_APP"; return 0
+    fi
+    local c
+    for c in "/Applications/Claude.app" "$HOME/Applications/Claude.app"; do
+        [ -d "$c" ] && { printf '%s' "$c"; return 0; }
+    done
+    return 1
+}
+
+cmd_create() {  # headless profile creation for the dashboard; prints "ok <slug>" or "err <msg>"
+    local name slug app_name claude_app
+    name=$(printf '%s' "${1:?}" | tr -d '"\\{}:' | sed 's/^ *//;s/ *$//')
+    slug=$(printf '%s' "$name" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9')
+    [ -n "$slug" ] || { printf 'err name needs a letter or number'; return 0; }
+    case "$name" in Claude\ *|claude\ *|Claude|claude) app_name="$name" ;; *) app_name="Claude $name" ;; esac
+    claude_app=$(detect_claude_app) || { printf 'err Claude.app not found'; return 0; }
+
+    local wrapper="$APPS_DIR/$app_name.app" data_dir="$INSTANCES_DIR/$slug"
+    rm -rf "$wrapper"
+    mkdir -p "$wrapper/Contents/MacOS" "$wrapper/Contents/Resources" "$data_dir"
+
+    cat > "$wrapper/Contents/Info.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleName</key><string>$app_name</string>
+	<key>CFBundleDisplayName</key><string>$app_name</string>
+	<key>CFBundleIdentifier</key><string>$BUNDLE_ID_PREFIX.$slug</string>
+	<key>CFBundleExecutable</key><string>launcher</string>
+	<key>CFBundleIconFile</key><string>app</string>
+	<key>CFBundlePackageType</key><string>APPL</string>
+	<key>CFBundleVersion</key><string>1.0</string>
+	<key>CFBundleShortVersionString</key><string>1.0</string>
+	<key>LSUIElement</key><true/>
+	<key>LSMinimumSystemVersion</key><string>11.0</string>
+</dict>
+</plist>
+PLIST
+
+    cat > "$wrapper/Contents/MacOS/launcher" <<LAUNCHER
+#!/bin/bash
+DATA_DIR="$data_dir"
+mkdir -p "\$DATA_DIR"
+LOG="\$DATA_DIR/.profile-activity"
+date '+%Y-%m-%d %H:%M' >> "\$LOG" && tail -n 50 "\$LOG" > "\$LOG.t" && mv "\$LOG.t" "\$LOG"
+CLAUDE_APP="$claude_app"
+if [ ! -d "\$CLAUDE_APP" ]; then
+    for c in "/Applications/Claude.app" "\$HOME/Applications/Claude.app"; do
+        [ -d "\$c" ] && CLAUDE_APP="\$c" && break
+    done
+fi
+if [ ! -d "\$CLAUDE_APP" ]; then
+    /usr/bin/osascript -e 'display alert "$app_name" message "Claude.app could not be found. Reinstall Claude Desktop, then re-create this profile in Claude Profiles." as critical buttons {"OK"} default button "OK"' >/dev/null 2>&1
+    exit 1
+fi
+exec /usr/bin/open -n -a "\$CLAUDE_APP" --args --user-data-dir="\$DATA_DIR"
+LAUNCHER
+    chmod +x "$wrapper/Contents/MacOS/launcher"
+    local icns
+    icns=$(ls "$claude_app/Contents/Resources/"*.icns 2>/dev/null | head -n 1)
+    [ -n "$icns" ] && cp "$icns" "$wrapper/Contents/Resources/app.icns"
+    touch "$wrapper"
+    printf 'ok %s' "$slug"
+}
+
+cmd_remove() {  # delete the wrapper app only; the data dir (saved login) is untouched
+    local w; w=$(wrapper_for_slug "${1:?}") || { printf 'err not found'; return 0; }
+    rm -rf "$w"
+    printf 'ok'
+}
+
+cmd_purge() {  # delete the data dir (saved login + state); dashboard gates this behind typed DELETE
+    rm -rf "${INSTANCES_DIR:?}/${1:?}"
+    rm -f "$DISK_CACHE"
+    printf 'ok'
+}
 cmd_quit()  { local m; m=$(main_pids_for_dir "$INSTANCES_DIR/$1"); [ -n "$m" ] && kill -TERM $m 2>/dev/null; true; }
 cmd_force() { local m; m=$(main_pids_for_dir "$INSTANCES_DIR/$1"); [ -n "$m" ] && kill -9 $(tree_pids $m) 2>/dev/null; true; }
 cmd_clean() {
@@ -160,4 +240,7 @@ case "${1:-stats}" in
     clean) cmd_clean "${2:?}" ;;
     mainpid) cmd_mainpid "${2:?}" ;;
     defaultpid) cmd_defaultpid ;;
+    create) cmd_create "${2:?}" ;;
+    remove) cmd_remove "${2:?}" ;;
+    purge) cmd_purge "${2:?}" ;;
 esac

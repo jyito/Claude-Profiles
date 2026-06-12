@@ -464,26 +464,18 @@ Your saved login is NOT deleted by this step." "Cancel" "Remove App") || return 
 
 launch_dashboard() {
     # Native window UI (osascript + WKWebView). If the host exits abnormally
-    # within a few seconds, fall back to the dialog dashboard automatically.
+    # within a few seconds, fall back to the classic dialog menu automatically.
     local res="$(self_path)/Contents/Resources"
     local started=$SECONDS
-    /usr/bin/osascript "$res/dashboard.applescript" >/dev/null 2>&1
+    "$OSA" "$res/dashboard.applescript" >/dev/null 2>&1
     local rc=$?
     if [ "$rc" -ne 0 ] && [ $((SECONDS - started)) -lt 4 ]; then
-        show_info "The dashboard window couldn't open on this Mac (falling back to the classic view)."
-        activity_dashboard
+        show_info "The dashboard window couldn't open on this Mac — using the classic menu instead."
+        classic_menu
     fi
 }
 
-main() {
-    # Internal action dispatch so the dashboard window can reuse dialog flows.
-    if [ "${1:-}" = "--action" ]; then
-        case "${2:-}" in
-            add) create_profile ;;
-            remove) remove_profile ;;
-        esac
-        exit 0
-    fi
+classic_menu() {
     ensure_self_icon
     while true; do
         local names=() items=() app data_dir id slug
@@ -499,8 +491,7 @@ EOF
             [ -n "$n" ] && items+=("▶  Open $n")
         done
         items+=("＋  Add a profile…")
-        items+=("📊  Open Dashboard")
-        items+=("☰  Classic menu view…")
+        items+=("📊  Activity & Cleanup…")
         [ "${#names[@]}" -gt 0 ] && items+=("✕  Remove a profile…")
 
         local pick
@@ -508,12 +499,29 @@ EOF
 
         case "$pick" in
             "＋  Add a profile…") create_profile ;;
-            "📊  Open Dashboard") launch_dashboard ;;
-            "☰  Classic menu view…") activity_dashboard ;;
+            "📊  Activity & Cleanup…") activity_dashboard ;;
             "✕  Remove a profile…") remove_profile ;;
             "▶  Open "*) open_profile "${pick#▶  Open }" ;;
         esac
     done
+}
+
+main() {
+    # Internal action dispatch (kept for compatibility and scripting).
+    if [ "${1:-}" = "--action" ]; then
+        case "${2:-}" in
+            add) create_profile ;;
+            remove) remove_profile ;;
+        esac
+        exit 0
+    fi
+    # Dialog menu on demand; otherwise the dashboard IS the app.
+    if [ "${1:-}" = "--classic" ]; then
+        classic_menu
+        exit 0
+    fi
+    ensure_self_icon
+    launch_dashboard
 }
 
 main "$@"
