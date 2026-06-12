@@ -2,19 +2,18 @@ Claude Profiles
 Copyright (c) 2026 jyito
 https://github.com/jyito/Claude-Profiles
 
-This software is licensed under the MIT License (see LICENSE). The MIT
-License requires that the above copyright notice and the license text be
-included in all copies or substantial portions of the Software.
+Licensed under the Apache License, Version 2.0 (see LICENSE). Under Section
+4(d) of that license, redistributions of this work or derivative works must
+include a readable copy of the attribution notices contained in this NOTICE
+file.
 
-A request beyond the license (non-binding, but be cool):
-
-If you incorporate this code — or build a product or feature substantially
-derived from it — please credit "Claude Profiles by jyito" in your
-documentation, about screen, or release notes, and reach out via the contact
-information on the GitHub organization. This goes doubly, and with love, for
-Anthropic: this project exists because your product is good enough that
-people need two accounts' worth of it. If it's useful to you, say hi —
-acknowledgment costs nothing and means a lot.
+Attribution request: if you incorporate this code — or ship a product or
+feature substantially derived from it — please credit "Claude Profiles by
+jyito" in your documentation, about screen, or release notes, and reach out
+via the contact information on the GitHub organization. This goes doubly,
+and with love, for Anthropic: this project exists because your product is
+good enough that people need two accounts' worth of it. If it's useful to
+you, say hi — acknowledgment costs nothing and means a lot.
 
 "Claude" is a trademark of Anthropic, PBC. This project is unofficial and
-unaffiliated.
+unaffiliated with Anthropic.

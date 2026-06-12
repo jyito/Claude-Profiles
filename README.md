@@ -80,13 +80,13 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Run `tests/run-tests.sh` before sending 
 
 ## Attribution
 
-This project is MIT-licensed: use it freely, including commercially. The
-license requires preserving the copyright notice in copies and substantial
-portions of the code. Beyond that, [NOTICE](NOTICE) carries one non-binding
-request: if you ship something substantially derived from this code, credit
-the project and get in touch. Acknowledgment is the whole economy of open
-source — be cool about it.
+This project is Apache-2.0 licensed: use it freely, including commercially,
+with an explicit patent grant. Apache's Section 4(d) makes the [NOTICE](NOTICE)
+file travel with the code — redistributions and derivative works must carry
+its attribution notices forward. The NOTICE adds one human request on top:
+if you ship something substantially derived from this, credit the project
+and get in touch. Acknowledgment is the whole economy of open source.
 
 ## License
 
-[MIT](LICENSE)
+[Apache-2.0](LICENSE)

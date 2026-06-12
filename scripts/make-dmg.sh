@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2026 jyito — Licensed under the Apache License, Version 2.0.
+# See LICENSE and NOTICE in the repository root.
 # make-dmg.sh — build the polished, native DMG on a Mac (one command, builder-only;
 # end users never run this). Produces a compressed UDZO image with the standard
 # drag-to-Applications layout.

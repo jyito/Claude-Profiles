@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2026 jyito — Licensed under the Apache License, Version 2.0.
+# See LICENSE and NOTICE in the repository root.
 # build.sh — assemble "Claude Profiles.app" from src/ into dist/.
 # Works anywhere (the bundle is plain files); zip always, DMG only on macOS.
 set -euo pipefail

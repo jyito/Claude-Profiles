@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2026 jyito — Licensed under the Apache License, Version 2.0.
+# See LICENSE and NOTICE in the repository root.
 #
 # Claude Profiles.app — GUI manager for multi-account Claude Desktop.
 # Everything runs through native macOS dialogs. No Terminal required.

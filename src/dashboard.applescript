@@ -1,4 +1,6 @@
 -- dashboard.applescript — native window host for the Claude Profiles dashboard.
+-- Copyright 2026 jyito — Licensed under the Apache License, Version 2.0.
+-- See LICENSE and NOTICE in the repository root.
 -- Pure macOS built-ins: run by /usr/bin/osascript, no compilation, no dependencies.
 -- JS -> native bridge: the page sets document.title to "cp:action:slug";
 -- a 0.5s NSTimer polls the title (KVO property, no blocks needed) and acts.
