@@ -20,7 +20,7 @@ property theWindow : missing value
 property theWebView : missing value
 property resourcesDir : "__RESOURCES__"
 property enginePath : "__RESOURCES__/engine.sh"
-property tickN : 0
+property pollTimer : missing value
 property didSetup : false
 
 on run
@@ -52,18 +52,13 @@ on setupWindow()
 	theWindow's |center|()
 	theWindow's makeKeyAndOrderFront:(missing value)
 	activate
+	-- actions poll at 250ms so clicks feel instant; stats stay on the 2s idle tick
+	set pollTimer to current application's NSTimer's scheduledTimerWithTimeInterval:0.25 target:me selector:"checkBridge:" userInfo:(missing value) repeats:true
 end setupWindow
 
-on idle
-	if not didSetup then return 1
+on checkBridge:aTimer
+	if not didSetup then return
 	try
-		-- quit when the window is closed (but not when minimized)
-		if ((theWindow's isVisible()) as boolean) is false and ((theWindow's isMiniaturized()) as boolean) is false then
-			quit
-			return 1
-		end if
-
-		-- poll the JS -> native channel
 		set rawTitle to ""
 		try
 			set rawTitle to (theWebView's title()) as text
@@ -71,19 +66,30 @@ on idle
 		if rawTitle starts with "cp:" then
 			theWebView's evaluateJavaScript:"document.title='Claude Profiles'" completionHandler:(missing value)
 			my handleAction(rawTitle)
-			set tickN to 0
-		end if
-
-		-- push fresh stats every other idle (~2s)
-		set tickN to tickN + 1
-		if (tickN mod 2) is 1 then
-			try
-				set statsJSON to do shell script quoted form of enginePath & " stats"
-				theWebView's evaluateJavaScript:("updateStats(" & statsJSON & ")") completionHandler:(missing value)
-			end try
+			my pushStats()
 		end if
 	end try
-	return 1
+end checkBridge:
+
+on pushStats()
+	try
+		set statsJSON to do shell script quoted form of enginePath & " stats"
+		theWebView's evaluateJavaScript:("updateStats(" & statsJSON & ")") completionHandler:(missing value)
+	end try
+end pushStats
+
+on idle
+	if not didSetup then return 2
+	try
+		-- quit when the window is closed (but not when minimized)
+		if ((theWindow's isVisible()) as boolean) is false and ((theWindow's isMiniaturized()) as boolean) is false then
+			if pollTimer is not missing value then pollTimer's invalidate()
+			quit
+			return 2
+		end if
+		my pushStats()
+	end try
+	return 2
 end idle
 
 on handleAction(raw)
@@ -114,6 +120,18 @@ on focusInstance(verb, slug)
 		set theApp to current application's NSRunningApplication's runningApplicationWithProcessIdentifier:(pidText as integer)
 		if theApp is not missing value then
 			theApp's activateWithOptions:3
+			delay 0.3
+			if not ((theApp's isActive()) as boolean) then
+				-- macOS 14+ cooperative activation can ignore the polite request,
+				-- especially across Spaces, displays, and fullscreen windows.
+				-- System Events' frontmost reliably travels there (asks for
+				-- Automation permission once, the first time it's needed).
+				try
+					tell application "System Events"
+						set frontmost of (first application process whose unix id is (pidText as integer)) to true
+					end tell
+				end try
+			end if
 		end if
 	end try
 end focusInstance
