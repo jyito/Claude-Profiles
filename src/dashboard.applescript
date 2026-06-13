@@ -22,6 +22,7 @@ property resourcesDir : "__RESOURCES__"
 property enginePath : "__RESOURCES__/engine.sh"
 property pollTimer : missing value
 property didSetup : false
+property idleCount : 0
 
 on run
 	try
@@ -86,6 +87,13 @@ on pushTerminals(slug)
 	end try
 end pushTerminals
 
+on pushConfig()
+	try
+		set cjson to do shell script quoted form of enginePath & " getconfig"
+		theWebView's evaluateJavaScript:("updateConfig(" & cjson & ")") completionHandler:(missing value)
+	end try
+end pushConfig
+
 on idle
 	if not didSetup then return 2
 	try
@@ -96,6 +104,10 @@ on idle
 			return 2
 		end if
 		my pushStats()
+		-- enforce opt-in auto rules roughly every 16s (every 8th 2s tick); the
+		-- engine no-ops cheaply when both settings are disabled (the default).
+		set idleCount to idleCount + 1
+		if idleCount mod 8 = 0 then do shell script quoted form of enginePath & " autotick >/dev/null 2>&1 &"
 	end try
 	return 2
 end idle
@@ -117,6 +129,12 @@ on handleAction(raw)
 			set tdev to ""
 			if (count of parts) > 3 then set tdev to item 4 of parts
 			do shell script quoted form of enginePath & " closeterm " & quoted form of slug & " " & quoted form of tdev & " >/dev/null 2>&1 &"
+		else if verb is "getconfig" then
+			my pushConfig()
+		else if verb is "setconfig" then
+			set sval to ""
+			if (count of parts) > 3 then set sval to item 4 of parts
+			do shell script quoted form of enginePath & " setconfig " & quoted form of slug & " " & quoted form of sval & " >/dev/null 2>&1 &"
 		else if verb is in {"quitall", "cleanall", "killswitch"} then
 			do shell script quoted form of enginePath & " " & verb & " >/dev/null 2>&1 &"
 		else if verb is in {"opendefault", "quitdefault", "forcedefault"} then
