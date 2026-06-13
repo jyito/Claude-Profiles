@@ -10,9 +10,58 @@ INSTANCES_DIR="${CLAUDE_PROFILES_INSTANCES_DIR:-$HOME/.claude-instances}"
 BUNDLE_ID_PREFIX="local.claude-profiles"
 DISK_CACHE="${TMPDIR:-/tmp}/claude-profiles-disk-cache"
 SETTINGS_FILE="$INSTANCES_DIR/.runtime/settings"
+RES_DIR=$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd)  # where badge-icon.applescript lives
 
 bundle_id_of() { defaults read "$1/Contents/Info" CFBundleIdentifier 2>/dev/null; }
 display_name_of() { defaults read "$1/Contents/Info" CFBundleDisplayName 2>/dev/null; }
+
+badge_color_for() {  # deterministic "r g b" per slug, from a palette that contrasts the coral Claude icon
+    local n
+    n=$(printf '%s' "$1" | cksum | awk '{print $1}')
+    case $((n % 6)) in
+        0) printf '59 125 216' ;;   # blue
+        1) printf '93 202 165' ;;   # mint
+        2) printf '224 165 94' ;;   # amber
+        3) printf '124 92 196' ;;   # purple
+        4) printf '210 95 140' ;;   # pink
+        *) printf '76 169 178' ;;   # teal
+    esac
+}
+
+badge_icon() {  # write a badged Claude icon to <resdir>/app.icns; degrade to a plain copy
+    # of the Claude icns if the imaging tools or the compositor aren't available
+    # (non-macOS, CI). The badged icon is generated locally and never committed.
+    local slug="$1" name="$2" icns="$3" resdir="$4"
+    local script="$RES_DIR/badge-icon.applescript"
+    if ! command -v osascript >/dev/null 2>&1 || ! command -v sips >/dev/null 2>&1 \
+        || ! command -v iconutil >/dev/null 2>&1 || [ ! -f "$script" ] || [ -z "$icns" ]; then
+        [ -n "$icns" ] && cp "$icns" "$resdir/app.icns" 2>/dev/null
+        return 0
+    fi
+    local letter color tmp base pair s nm
+    letter=$(printf '%s' "$name" | sed 's/^Claude //' | cut -c1 | tr '[:lower:]' '[:upper:]')
+    [ -n "$letter" ] || letter="C"
+    color=$(badge_color_for "$slug")
+    tmp=$(mktemp -d) || { cp "$icns" "$resdir/app.icns" 2>/dev/null; return 0; }
+    base="$tmp/base.png"
+    mkdir -p "$tmp/icon.iconset"
+    # shellcheck disable=SC2086
+    if sips -s format png -z 1024 1024 "$icns" --out "$base" >/dev/null 2>&1 \
+        && osascript "$script" "$base" "$tmp/badged.png" "$letter" $color >/dev/null 2>&1 \
+        && [ -f "$tmp/badged.png" ]; then
+        for pair in "16 icon_16x16" "32 icon_16x16@2x" "32 icon_32x32" "64 icon_32x32@2x" \
+            "128 icon_128x128" "256 icon_128x128@2x" "256 icon_256x256" \
+            "512 icon_256x256@2x" "512 icon_512x512" "1024 icon_512x512@2x"; do
+            s=${pair%% *}; nm=${pair#* }
+            sips -z "$s" "$s" "$tmp/badged.png" --out "$tmp/icon.iconset/$nm.png" >/dev/null 2>&1
+        done
+        iconutil -c icns "$tmp/icon.iconset" -o "$resdir/app.icns" >/dev/null 2>&1 \
+            || cp "$icns" "$resdir/app.icns" 2>/dev/null
+    else
+        cp "$icns" "$resdir/app.icns" 2>/dev/null
+    fi
+    rm -rf "$tmp"
+}
 
 profile_wrappers() {
     local app id
@@ -306,9 +355,20 @@ LAUNCHER
     chmod +x "$wrapper/Contents/MacOS/launcher"
     local icns
     icns=$(ls "$claude_app/Contents/Resources/"*.icns 2>/dev/null | head -n 1)
-    [ -n "$icns" ] && cp "$icns" "$wrapper/Contents/Resources/app.icns"
+    badge_icon "$slug" "$app_name" "$icns" "$wrapper/Contents/Resources"
     touch "$wrapper"
     printf 'ok %s' "$slug"
+}
+
+cmd_rebadge() {  # regenerate the per-profile badged icon for an existing wrapper
+    local w name icns claude_app
+    w=$(wrapper_for_slug "${1:?}") || { printf 'err not found'; return 0; }
+    name=$(display_name_of "$w"); [ -n "$name" ] || name="Claude $1"
+    claude_app=$(detect_claude_app) || { printf 'err Claude.app not found'; return 0; }
+    icns=$(ls "$claude_app/Contents/Resources/"*.icns 2>/dev/null | head -n 1)
+    badge_icon "$1" "$name" "$icns" "$w/Contents/Resources"
+    touch "$w"
+    printf 'ok'
 }
 
 cmd_remove() {  # delete the wrapper app only; the data dir (saved login) is untouched
@@ -469,6 +529,7 @@ case "${1:-stats}" in
     cleanall) cmd_cleanall ;;
     killswitch) cmd_killswitch ;;
     remove) cmd_remove "${2:?}" ;;
+    rebadge) cmd_rebadge "${2:?}" ;;
     purge) cmd_purge "${2:?}" ;;
     getconfig) cmd_getconfig ;;
     setconfig) cmd_setconfig "${2:?}" "${3:?}" ;;
