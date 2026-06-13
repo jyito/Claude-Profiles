@@ -68,6 +68,14 @@ pty_count_for_pids() {
     lsof -p "$csv" 2>/dev/null | awk '$NF ~ /^\/dev\/ttys/ {print $NF}' | sort -u | wc -l | tr -d ' '
 }
 
+instance_devices() {  # the /dev/ttysNN devices owned by slug $1's process tree, deduped
+    local mains pids csv
+    mains=$(main_pids_for_dir "$INSTANCES_DIR/$1"); [ -z "$mains" ] && return
+    # shellcheck disable=SC2086
+    pids=$(tree_pids $mains); csv=$(printf '%s' "$pids" | tr ' ' ',')
+    lsof -p "$csv" 2>/dev/null | awk '$NF ~ /^\/dev\/ttys/ {print $NF}' | sort -u
+}
+
 json_str() {  # minimal JSON string escaping for arbitrary text (e.g. a command line)
     printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g' | tr -d '\n\r\t'
 }
@@ -166,6 +174,25 @@ EOF
 
 cmd_open()  { local w; w=$(wrapper_for_slug "$1") && "$w/Contents/MacOS/launcher" & }
 cmd_mainpid() { main_pids_for_dir "$INSTANCES_DIR/${1:?}" | head -n 1; }
+cmd_closeterm() {  # close a terminal by device — refuses any device not owned by this
+                   # instance's tree, so it can never touch another instance or an
+                   # arbitrary process. SIGHUP goes to processes whose CONTROLLING
+                   # terminal is the device (the session inside the pty), not the
+                   # Electron pty master (which merely holds an fd on it).
+    local slug="${1:?}" dev="${2:?}" tdev sess
+    case "$dev" in
+        ttys*)     dev="/dev/$dev" ;;
+        /dev/ttys*) ;;
+        *) printf 'baddev'; return 0 ;;
+    esac
+    instance_devices "$slug" | grep -qx "$dev" || { printf 'refused'; return 0; }
+    tdev=${dev#/dev/}
+    sess=$(ps -t "$tdev" -o pid= 2>/dev/null)
+    # shellcheck disable=SC2086
+    [ -n "$sess" ] && kill -HUP $sess 2>/dev/null
+    printf 'ok'
+}
+
 cmd_terminals() {  # JSON array of this instance's terminals: [{dev,pid,cmd,idle}]
     # Devices are discovered only within this instance's own process tree, so each
     # /dev/ttysNN belongs to exactly one instance — no cross-app confusion. One row
@@ -355,6 +382,7 @@ case "${1:-stats}" in
     clean) cmd_clean "${2:?}" ;;
     mainpid) cmd_mainpid "${2:?}" ;;
     terminals) cmd_terminals "${2:?}" ;;
+    closeterm) cmd_closeterm "${2:?}" "${3:?}" ;;
     defaultpid) cmd_defaultpid ;;
     create) cmd_create "${2:?}" ;;
     opendefault) cmd_open_default ;;

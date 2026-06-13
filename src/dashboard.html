@@ -79,7 +79,13 @@
   .tterm td.dev { color:#9FE1CB; font-variant-numeric:tabular-nums; white-space:nowrap; }
   .tterm td.cmd { color:#D3D1C7; font-family:"SF Mono", ui-monospace, monospace; font-size:11px; word-break:break-all; }
   .tterm td.idle { color:#888780; white-space:nowrap; text-align:right; }
+  .tterm td.x { text-align:right; white-space:nowrap; width:1%; }
+  .xbtn { background:transparent; border:.5px solid #3a382f; color:#A8A69C; border-radius:6px;
+          padding:3px 9px; font-size:11px; cursor:pointer; font-family:inherit; }
+  .xbtn:hover { border-color:#D85A30; color:#F0997B; }
+  .xbtn.armed { background:#501313; border-color:#E24B4A; color:#F7C1C1; }
   .drill .empty { color:#888780; font-size:12px; padding:6px 0; }
+  .drill .hint { color:#6b6a64; font-size:11px; margin-top:8px; }
 </style></head><body>
 <div class="top">
   <div>
@@ -123,7 +129,23 @@
 <div class="grid" id="grid"></div>
 <script>
 var hist = {}, MAXPTS = 30, uiLock = false, confirmStep = {}, lastData = null;
-var expanded = null, terminals = {};
+var expanded = null, terminals = {}, closeArmed = null;
+function closeTerm(slug, dev) {   // two-step: first click arms, second confirms (live session)
+  var k = slug + "/" + dev;
+  if (closeArmed === k) {
+    closeArmed = null;
+    document.title = "cp:closeterm:" + slug + ":" + dev;
+    var t = document.getElementById("toast");
+    t.textContent = "Closing " + dev + "…";
+    setTimeout(function(){ t.textContent = ""; }, 2500);
+    setTimeout(function(){ if (expanded === slug) document.title = "cp:terminals:" + slug; }, 700);
+    rerender();
+  } else {
+    closeArmed = k;
+    setTimeout(function(){ if (closeArmed === k) { closeArmed = null; rerender(); } }, 3000);
+    rerender();
+  }
+}
 function toggleExpand(slug) {
   if (expanded === slug) { expanded = null; }
   else { expanded = slug; act("terminals", slug); }   // ask the host for this profile's terminals
@@ -149,14 +171,16 @@ function drillPanel(slug) {
   var h = '<div class="drill"><h4>Terminals — live sessions in this profile</h4>';
   if (!rows) return h + '<div class="empty">Loading…</div></div>';
   if (!rows.length) return h + '<div class="empty">No active terminals.</div></div>';
-  h += '<table class="tterm"><tr><th>Device</th><th>Command</th><th>Idle</th></tr>';
+  h += '<table class="tterm"><tr><th>Device</th><th>Command</th><th>Idle</th><th></th></tr>';
   for (var i = 0; i < rows.length; i++) {
-    var r = rows[i];
-    h += '<tr><td class="dev">' + esc(r.dev.replace("/dev/", "")) + "</td>" +
+    var r = rows[i], dev = r.dev.replace("/dev/", ""), on = closeArmed === slug + "/" + dev;
+    h += '<tr><td class="dev">' + esc(dev) + "</td>" +
          '<td class="cmd" title="' + esc(r.cmd) + '">' + esc(r.cmd) + "</td>" +
-         '<td class="idle">' + fmtIdle(r.idle) + "</td></tr>";
+         '<td class="idle">' + fmtIdle(r.idle) + "</td>" +
+         '<td class="x"><button class="xbtn' + (on ? " armed" : "") + '" onclick="closeTerm(\'' +
+           slug + "','" + dev + '\')">' + (on ? "Confirm" : "Close") + "</button></td></tr>";
   }
-  return h + "</table></div>";
+  return h + '</table><div class="hint">Closing sends a hangup to that terminal\'s session — anything running in it stops.</div></div>';
 }
 function toggleNp(show) {
   var f = document.getElementById("npmodal");
@@ -236,6 +260,9 @@ function updateStats(data) {
   lastData = data;
   if (uiLock) return;
   render(data);
+  // keep an open drill-down live: ask for fresh terminals each tick, but never
+  // clobber a command the user just queued (title already starts with cp:).
+  if (expanded && document.title.indexOf("cp:") !== 0) document.title = "cp:terminals:" + expanded;
 }
 function render(data) {
   var totalMem = 0, running = 0, html = "";
