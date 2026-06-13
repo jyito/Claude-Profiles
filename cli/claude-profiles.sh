@@ -14,6 +14,7 @@
 #   claude-profiles list             show profiles, paths, disk usage
 #   claude-profiles remove <Name>    delete wrapper (data dir needs separate confirmation)
 #   claude-profiles open <Name>      launch a profile from the terminal
+#   claude-profiles clean <Name>     clear a stopped profile's regenerable caches (keeps login)
 #   claude-profiles code-alias <Name>  (optional) append a Claude Code alias to ~/.zshrc
 #
 # Requirements: macOS built-ins only (bash, open, defaults, du, sips optional).
@@ -102,6 +103,21 @@ human_size() {
     else
         printf '%s' "—"
     fi
+}
+
+main_pids_for_dir() {
+    # PIDs whose --user-data-dir is EXACTLY $1 — matched as a complete argv value
+    # (the char after the dir must be a space or end of line), so a profile whose
+    # data dir is a prefix of another's can't be mistaken for it. Mirrors the
+    # hardened matcher in src/engine.sh.
+    ps axo pid=,command= | awk -v d="--user-data-dir=$1" '
+        !/awk/ {
+            i = index($0, d)
+            if (i > 0) {
+                c = substr($0, i + length(d), 1)
+                if (c == "" || c == " ") print $1
+            }
+        }'
 }
 
 # ---------------------------------------------------------------------------
@@ -318,6 +334,33 @@ cmd_open() {
 }
 
 # ---------------------------------------------------------------------------
+# clean
+# ---------------------------------------------------------------------------
+
+cmd_clean() {
+    local name="${1:-}"
+    [ -n "$name" ] || die "usage: claude-profiles clean <Name>"
+    local slug data_dir d
+    slug=$(slugify "$name")
+    wrapper_for_slug "$slug" >/dev/null || die "no profile found for '$name' (slug: $slug). Try: claude-profiles list"
+    data_dir="$INSTANCES_DIR/$slug"
+    [ -d "$data_dir" ] || die "no data dir for '$name' yet — nothing to clean"
+    if [ -n "$(main_pids_for_dir "$data_dir")" ]; then
+        die "'$name' is running — quit it first; cache cleanup never touches a live instance"
+    fi
+    # Regenerable Electron caches only — sign-ins (Cookies, Local Storage) and
+    # everything else are left alone. Keep this list in sync with the "all" tier
+    # in src/engine.sh (cmd_clean).
+    local before after
+    before=$(human_size "$data_dir")
+    for d in "Cache" "Code Cache" "GPUCache" "DawnGraphiteCache" "DawnWebGPUCache" "ShaderCache" "Crashpad/completed" "Crashpad/pending"; do
+        rm -rf "${data_dir:?}/$d" 2>/dev/null
+    done
+    after=$(human_size "$data_dir")
+    printf "Cleaned regenerable caches for '%s' (%s -> %s). Sign-in and settings untouched.\n" "$name" "$before" "$after"
+}
+
+# ---------------------------------------------------------------------------
 # code-alias (optional enhancement: Claude Code parity)
 # ---------------------------------------------------------------------------
 
@@ -344,7 +387,7 @@ cmd_code_alias() {
 # ---------------------------------------------------------------------------
 
 usage() {
-    sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 main() {
@@ -355,9 +398,10 @@ main() {
         list|ls)    cmd_list "$@" ;;
         remove|rm)  cmd_remove "$@" ;;
         open)       cmd_open "$@" ;;
+        clean)      cmd_clean "$@" ;;
         code-alias) cmd_code_alias "$@" ;;
         -h|--help|help|"") usage ;;
-        *) die "unknown command '$cmd' (try: add, list, remove, open, code-alias)" ;;
+        *) die "unknown command '$cmd' (try: add, list, remove, open, clean, code-alias)" ;;
     esac
 }
 
