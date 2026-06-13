@@ -12,7 +12,7 @@ Multi-account Claude Desktop for macOS. Each "profile" is a generated native
 run simultaneously. The user-facing app is a native dashboard window (dark
 UI, live per-instance CPU/MEM/PTY/disk, sparklines, Show Window focusing,
 cleanup utilities). Status: **v0.2, fully working on the maintainer's Mac**,
-80/80 tests, CI configured, private repo target `jyito/Claude-Profiles`,
+83/83 tests, CI configured, private repo target `jyito/Claude-Profiles`,
 intended to go public once docs/screenshots/signing are in place.
 
 ## Non-negotiables (PRs violating these get declined)
@@ -129,8 +129,9 @@ intended to go public once docs/screenshots/signing are in place.
 ## Build / test / release
 
 ```bash
-bash tests/run-tests.sh    # 80 tests; runs on macOS or Linux (mac tools shimmed)
+bash tests/run-tests.sh    # 83 tests; runs on macOS or Linux (mac tools shimmed)
 shellcheck -S error src/launcher src/engine.sh cli/claude-profiles.sh scripts/*.sh
+bash scripts/make-icon.sh  # regenerate assets/icon.iconset from app-icon.svg (sips, macOS)
 bash scripts/build.sh      # assembles dist/Claude Profiles.app (+ DMG on macOS)
 ```
 
@@ -178,10 +179,17 @@ Close hangup reaches a live session; clean-tier clicks; Settings open + change;
 Throttle renice. Plus: `tccutil reset AppleEvents local.claude-profiles.dashboard`
 if Show Window stays broken with no prompt.
 
+**Icon DONE** (v0.3.0): `assets/app-icon.svg` is the source — a "window stack"
+mark (cascading coral/mint/gray app windows on the dark squircle, macOS-grid
+margin), trademark-safe, no Anthropic artwork. `scripts/make-icon.sh`
+regenerates `assets/icon.iconset` from it with **macOS built-ins only** (`sips`
+reads SVG natively — no librsvg); `build.sh` bakes the iconset into the bundle.
+Two alternates kept in `assets/icon-candidates/` (fanned deck, profile grid) —
+swap `app-icon.svg` and re-run make-icon.sh to change. Reads cleanly at Dock
+sizes; collapses to a coral tile at 16px (the layered detail is sub-resolution).
+
 **Deferred to v0.3.1**: launch options (open-minimized isn't clean for
-Electron; auto-launch LaunchAgent is persistent system config). Icon is a
-VISUAL decision pending maintainer review (fanned deck-of-profiles direction;
-never commit Anthropic artwork).
+Electron; auto-launch LaunchAgent is persistent system config).
 
 1. **Screenshots/video** (maintainer's Mac): dashboard hero with 2+ profiles
    and live sparklines; ~15s recording ending on a Show Window jump; Dock
