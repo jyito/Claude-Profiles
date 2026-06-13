@@ -14,6 +14,7 @@ cp src/launcher              "$APP/Contents/MacOS/launcher"
 cp src/engine.sh             "$APP/Contents/Resources/engine.sh"
 cp src/dashboard.html        "$APP/Contents/Resources/dashboard.html"
 cp src/dashboard.applescript "$APP/Contents/Resources/dashboard.applescript"
+cp src/badge-icon.applescript "$APP/Contents/Resources/badge-icon.applescript"
 chmod +x "$APP/Contents/MacOS/launcher" "$APP/Contents/Resources/engine.sh"
 
 if command -v plutil >/dev/null 2>&1; then
