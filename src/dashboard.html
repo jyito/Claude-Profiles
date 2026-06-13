@@ -65,6 +65,21 @@
   .confirm input { width:100%; background:#1A1915; border:.5px solid #3a382f; color:#F1EFE8; border-radius:7px;
                    padding:6px 10px; font-size:12px; font-family:inherit; outline:none; margin:8px 0; }
   .confirm .danger { background:#501313; color:#F7C1C1; border:none; }
+  .card.expanded { grid-column:1 / -1; }
+  .expander { background:none; border:none; color:#888780; font-size:11px; cursor:pointer;
+              font-family:inherit; padding:8px 0 0; width:100%; text-align:center; }
+  .expander:hover { color:#D3D1C7; }
+  .drill { margin-top:12px; border-top:.5px solid #2e2c25; padding-top:12px; }
+  .drill h4 { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:#888780;
+              font-weight:500; margin:0 0 8px; }
+  .tterm { width:100%; border-collapse:collapse; font-size:12px; }
+  .tterm th { text-align:left; color:#888780; font-weight:400; font-size:11px;
+              padding:4px 8px; border-bottom:.5px solid #2e2c25; }
+  .tterm td { padding:5px 8px; border-bottom:.5px solid #211f19; vertical-align:top; }
+  .tterm td.dev { color:#9FE1CB; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .tterm td.cmd { color:#D3D1C7; font-family:"SF Mono", ui-monospace, monospace; font-size:11px; word-break:break-all; }
+  .tterm td.idle { color:#888780; white-space:nowrap; text-align:right; }
+  .drill .empty { color:#888780; font-size:12px; padding:6px 0; }
 </style></head><body>
 <div class="top">
   <div>
@@ -108,6 +123,41 @@
 <div class="grid" id="grid"></div>
 <script>
 var hist = {}, MAXPTS = 30, uiLock = false, confirmStep = {}, lastData = null;
+var expanded = null, terminals = {};
+function toggleExpand(slug) {
+  if (expanded === slug) { expanded = null; }
+  else { expanded = slug; act("terminals", slug); }   // ask the host for this profile's terminals
+  rerender();
+}
+function updateTerminals(slug, arr) {   // pushed by the host after `engine terminals <slug>`
+  terminals[slug] = arr;
+  if (expanded === slug) rerender();
+}
+function fmtIdle(s) {
+  if (s == null || s < 0) return "—";
+  if (s < 60) return "active";
+  var m = Math.floor(s / 60);
+  if (m < 60) return m + "m idle";
+  return Math.floor(m / 60) + "h " + (m % 60) + "m idle";
+}
+function esc(s) {
+  return ("" + (s == null ? "" : s)).replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+function drillPanel(slug) {
+  var rows = terminals[slug];
+  var h = '<div class="drill"><h4>Terminals — live sessions in this profile</h4>';
+  if (!rows) return h + '<div class="empty">Loading…</div></div>';
+  if (!rows.length) return h + '<div class="empty">No active terminals.</div></div>';
+  h += '<table class="tterm"><tr><th>Device</th><th>Command</th><th>Idle</th></tr>';
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    h += '<tr><td class="dev">' + esc(r.dev.replace("/dev/", "")) + "</td>" +
+         '<td class="cmd" title="' + esc(r.cmd) + '">' + esc(r.cmd) + "</td>" +
+         '<td class="idle">' + fmtIdle(r.idle) + "</td></tr>";
+  }
+  return h + "</table></div>";
+}
 function toggleNp(show) {
   var f = document.getElementById("npmodal");
   if (show) { f.className = "scrim show"; uiLock = true; document.getElementById("npname").focus(); }
@@ -116,7 +166,8 @@ function toggleNp(show) {
 document.addEventListener("keydown", function(e) {
   if (e.key === "Escape") {
     if (document.getElementById("npmodal").className.indexOf("show") > -1) toggleNp(false);
-    if (document.getElementById("cleanmodal").className.indexOf("show") > -1) toggleClean(false);
+    else if (document.getElementById("cleanmodal").className.indexOf("show") > -1) toggleClean(false);
+    else if (expanded) { expanded = null; rerender(); }
   }
 });
 var kswArmed = false, kswTimer = null;
@@ -196,7 +247,7 @@ function render(data) {
     if (p.running) { totalMem += p.mem; running++; }
     var av = AV[i % AV.length];
     var initial = (p.slug ? p.name.replace(/^Claude /, "") : "C").charAt(0).toUpperCase();
-    html += '<div class="card"><div class="hdr">' +
+    html += '<div class="card' + (expanded === p.slug ? " expanded" : "") + '"><div class="hdr">' +
       '<div class="avatar" style="background:' + av[0] + ';color:' + av[1] + '">' + initial + "</div>" +
       '<div style="flex:1"><div class="name">' + p.name.replace(/^Claude /, "").replace(/^\(/, "Claude (") + "</div>" +
       '<div class="sub' + (p.running ? " on" : "") + '"><span class="dot"></span>' +
@@ -240,6 +291,12 @@ function render(data) {
       }
     }
     html += "</div>";
+    if (p.slug && p.running) {
+      html += '<button class="expander" onclick="toggleExpand(\'' + p.slug + '\')">' +
+              (expanded === p.slug ? "▴ Hide terminals" : "▾ Terminals" + (p.ptys ? " (" + p.ptys + ")" : "")) +
+              "</button>";
+      if (expanded === p.slug) html += drillPanel(p.slug);
+    }
     if (p.slug && !p.running && !confirmStep[p.slug]) {
       html += '<button class="linkbtn" onclick="startRemove(\'' + p.slug + '\')">Remove profile…</button>';
     }
