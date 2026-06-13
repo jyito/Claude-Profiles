@@ -129,6 +129,23 @@ check "closeterm refuses unknown device" "[ \"\$('$ENGINE' closeterm business tt
 check "closeterm refuses when stopped"   "[ \"\$('$ENGINE' closeterm evex ttys001)\" = refused ]"
 check "closeterm rejects bad device arg" "[ \"\$('$ENGINE' closeterm business notadev)\" = baddev ]"
 
+echo "== settings & auto-clean =="
+check "getconfig defaults to zero"   "[ \"\$('$ENGINE' getconfig)\" = '{\"autoCloseIdleMin\":0,\"autoCleanThresholdMB\":0}' ]"
+check "setconfig persists threshold" "[ \"\$('$ENGINE' setconfig autoCleanThresholdMB 500)\" = ok ]"
+check "getconfig reflects setting"   "'$ENGINE' getconfig | grep -q '\"autoCleanThresholdMB\":500'"
+check "setconfig rejects bad key"    "[ \"\$('$ENGINE' setconfig nope 5)\" = 'err badkey' ]"
+check "setconfig rejects bad value"  "[ \"\$('$ENGINE' setconfig autoCloseIdleMin -3)\" = 'err badval' ]"
+"$ENGINE" setconfig autoCleanThresholdMB 0 >/dev/null; "$ENGINE" setconfig autoCloseIdleMin 0 >/dev/null
+check "autotick is a no-op when disabled" "[ \"\$('$ENGINE' autotick)\" = ok ]"
+check "autotick runs with auto-close on" "'$ENGINE' setconfig autoCloseIdleMin 60 >/dev/null; [ \"\$('$ENGINE' autotick)\" = ok ]"
+"$ENGINE" setconfig autoCloseIdleMin 0 >/dev/null
+mkdir -p "$WORK/apps/Claude AutoBig.app/Contents" "$WORK/instances/autobig/GPUCache"
+printf '<plist><dict>\n<key>CFBundleIdentifier</key>\n<string>local.claude-profiles.autobig</string>\n<key>CFBundleDisplayName</key>\n<string>Claude AutoBig</string>\n</dict></plist>\n' > "$WORK/apps/Claude AutoBig.app/Contents/Info.plist"
+dd if=/dev/zero of="$WORK/instances/autobig/GPUCache/big" bs=1024 count=2048 2>/dev/null
+rm -f "${TMPDIR:-/tmp}/claude-profiles-disk-cache"
+check "autotick cleans over-threshold stopped profile" "'$ENGINE' setconfig autoCleanThresholdMB 1 >/dev/null; '$ENGINE' autotick >/dev/null; [ ! -d '$WORK/instances/autobig/GPUCache' ]"
+"$ENGINE" setconfig autoCleanThresholdMB 0 >/dev/null
+
 echo "== default instance launch =="
 printf '#!/bin/bash\nprintf "%%s\\\\n" "$*" >> "%s/open.log"\n' "$WORK" > "$WORK/shims/open" && chmod +x "$WORK/shims/open"
 check "opendefault launches Claude" "'$ENGINE' opendefault >/dev/null; grep -q -- '-n -a $WORK/Claude.app' '$WORK/open.log'"
@@ -160,6 +177,13 @@ check "cleanall cleans stopped"  "case \"\$R\" in ok*bulkstopped*) [ ! -d '$WORK
 check "cleanall skips running"   "case \"\$R\" in *business*) false ;; *) true ;; esac"
 check "cleanup modal in UI"      "grep -q 'id=\"cleanmodal\"' '$ROOT/src/dashboard.html'"
 check "killswitch arm-confirm"   "grep -q 'Click again to confirm' '$ROOT/src/dashboard.html'"
+
+echo "== settings UI =="
+check "settings modal in UI"     "grep -q 'id=\"setmodal\"' '$ROOT/src/dashboard.html'"
+check "settings save wired"      "grep -q 'saveSetting(' '$ROOT/src/dashboard.html'"
+check "auto-close warning shown" "grep -q 'can look idle' '$ROOT/src/dashboard.html'"
+check "config push hook present" "grep -q 'function updateConfig' '$ROOT/src/dashboard.html'"
+check "applet routes autotick"   "grep -q 'autotick' '$ROOT/src/dashboard.applescript'"
 
 echo "== applet branding =="
 check "applet icon override stripped" "grep -q 'Delete :CFBundleIconName' '$LAUNCHER_SRC' && grep -q 'Assets.car' '$LAUNCHER_SRC'"
