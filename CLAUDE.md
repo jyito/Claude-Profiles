@@ -58,9 +58,14 @@ intended to go public once docs/screenshots/signing are in place.
   internal term). Disk via `du` cached 30s in `$TMPDIR` (live `du` on multi-GB
   dirs is too slow). The dispatch is guarded by a `BASH_SOURCE`==`$0` check so
   the test suite can source the file and unit-test the attribution functions.
-  Actions: `open quit force clean create remove purge mainpid defaultpid
+  Actions: `open quit force clean create remove rebadge purge mainpid defaultpid
   quitdefault forcedefault opendefault terminals closeterm throttle getconfig
-  setconfig autotick`. `clean <slug> [caches|gpu|logs|all]` deletes only
+  setconfig autotick`. `create`/`rebadge` give each wrapper a distinct Dock icon
+  via `badge_icon`: Claude's real icns → base PNG → `badge-icon.applescript`
+  compositor → iconset → `iconutil`, badging it with the profile's initial on a
+  deterministic per-slug colored disc (`badge_color_for`, 6-colour palette that
+  contrasts coral). Degrades to a plain copy of Claude's icns off-macOS/CI. The
+  badged icon is generated locally at runtime and NEVER committed (trademark). `clean <slug> [caches|gpu|logs|all]` deletes only
   regenerable Electron caches and refuses if the instance is running.
   `terminals` emits `[{dev,pid,cmd,idle}]` (idle = now − tty device mtime).
   `closeterm`/`throttle` are guarded to the instance's own tree — never an
@@ -85,6 +90,12 @@ intended to go public once docs/screenshots/signing are in place.
   grant alive across launches), then `open`s it (re-`open` focuses the existing
   instance). Bridges `terminals`/`getconfig` back to the page via
   `updateTerminals`/`updateConfig`; runs `autotick` every ~16th idle tick.
+- **`badge-icon.applescript`** — zero-dep AppleScriptObjC icon compositor called
+  by `engine.sh`'s `badge_icon`. Draws a colored disc + the profile's initial
+  onto a base icon in a headless `NSBitmapImageRep` context (no window — runs
+  under plain `osascript`). Reserved-word traps escaped: `|set|`, `|properties|`,
+  and `by` avoided. Verifiable headlessly (run it, inspect the PNG); the test
+  suite shims `osascript`, so the real render is checked directly, not in-suite.
 
 ## Hard-won lessons (do not relearn these)
 

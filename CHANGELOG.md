@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased]
+- **Per-profile Dock icons.** Each profile wrapper now gets a distinct icon —
+  Claude's real icon badged with the profile's initial on a deterministic
+  colored disc — so accounts are tellable apart in the Dock, Spotlight, and
+  ⌘-Tab while still reading as Claude. Generated zero-dependency via an
+  AppleScriptObjC compositor; `engine.sh rebadge <slug>` reapplies it to
+  existing profiles. Badged icons are produced locally and never committed.
+- New app icon for the manager itself (window-stack mark), baked zero-dependency
+  (`scripts/make-icon.sh`, `sips`).
+- CLI `clean <Name>` — clear a stopped profile's regenerable caches (running-guarded).
+- `scripts/sign.sh` — code-sign + notarize + staple the app/DMG for distribution.
+
 ## [0.3.0] — 2026-06-12
 
 ### Per-instance drill-down
