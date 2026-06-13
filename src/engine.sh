@@ -10,15 +10,14 @@ INSTANCES_DIR="${CLAUDE_PROFILES_INSTANCES_DIR:-$HOME/.claude-instances}"
 BUNDLE_ID_PREFIX="local.claude-profiles"
 DISK_CACHE="${TMPDIR:-/tmp}/claude-profiles-disk-cache"
 SETTINGS_FILE="$INSTANCES_DIR/.runtime/settings"
+BADGES_FILE="$INSTANCES_DIR/.runtime/badges"
 RES_DIR=$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd)  # where badge-icon.applescript lives
 
 bundle_id_of() { defaults read "$1/Contents/Info" CFBundleIdentifier 2>/dev/null; }
 display_name_of() { defaults read "$1/Contents/Info" CFBundleDisplayName 2>/dev/null; }
 
-badge_color_for() {  # deterministic "r g b" per slug, from a palette that contrasts the coral Claude icon
-    local n
-    n=$(printf '%s' "$1" | cksum | awk '{print $1}')
-    case $((n % 6)) in
+badge_palette() {  # "r g b" for palette index $1 — colours that contrast the coral Claude icon
+    case "$1" in
         0) printf '59 125 216' ;;   # blue
         1) printf '93 202 165' ;;   # mint
         2) printf '224 165 94' ;;   # amber
@@ -26,6 +25,19 @@ badge_color_for() {  # deterministic "r g b" per slug, from a palette that contr
         4) printf '210 95 140' ;;   # pink
         *) printf '76 169 178' ;;   # teal
     esac
+}
+badge_override_for() {  # the user's chosen palette index for slug $1, or empty
+    [ -f "$BADGES_FILE" ] && awk -v k="$1" '$1==k {print $2; exit}' "$BADGES_FILE"
+}
+badge_index_for() {  # resolved index: user override if set, else a deterministic default
+    local ov n
+    ov=$(badge_override_for "$1")
+    case "$ov" in 0|1|2|3|4|5) printf '%s' "$ov"; return ;; esac
+    n=$(printf '%s' "$1" | cksum | awk '{print $1}')
+    printf '%s' "$((n % 6))"
+}
+badge_color_for() {  # "r g b" for slug $1, honouring any per-profile override
+    badge_palette "$(badge_index_for "$1")"
 }
 
 badge_icon() {  # write a badged Claude icon to <resdir>/app.icns; degrade to a plain copy
@@ -374,6 +386,15 @@ cmd_rebadge() {  # regenerate the per-profile badged icon for an existing wrappe
     printf 'ok'
 }
 
+cmd_setbadge() {  # setbadge <slug> <index 0-5>: persist the colour choice, then re-apply the icon
+    local slug="${1:?}" idx="${2:?}"
+    case "$idx" in 0|1|2|3|4|5) ;; *) printf 'err badindex'; return 0 ;; esac
+    mkdir -p "$(dirname "$BADGES_FILE")"
+    { [ -f "$BADGES_FILE" ] && grep -v "^$slug " "$BADGES_FILE"; printf '%s %s\n' "$slug" "$idx"; } > "$BADGES_FILE.t" 2>/dev/null
+    mv "$BADGES_FILE.t" "$BADGES_FILE"
+    cmd_rebadge "$slug"
+}
+
 cmd_remove() {  # delete the wrapper app only; the data dir (saved login) is untouched
     local w; w=$(wrapper_for_slug "${1:?}") || { printf 'err not found'; return 0; }
     rm -rf "$w"
@@ -533,6 +554,7 @@ case "${1:-stats}" in
     killswitch) cmd_killswitch ;;
     remove) cmd_remove "${2:?}" ;;
     rebadge) cmd_rebadge "${2:?}" ;;
+    setbadge) cmd_setbadge "${2:?}" "${3:?}" ;;
     purge) cmd_purge "${2:?}" ;;
     getconfig) cmd_getconfig ;;
     setconfig) cmd_setconfig "${2:?}" "${3:?}" ;;
