@@ -189,12 +189,24 @@ global.setTimeout=()=>{};
 eval(js);
 const d=JSON.parse(fs.readFileSync('$WORK/stats.json','utf8'));
 updateStats(d); updateStats(d);
-console.log((grid.match(/class=\"card\"/g)||[]).length, (grid.match(/Show Window/g)||[]).length, (grid.match(/<polyline/g)||[]).length, (grid.match(/Remove profile/g)||[]).length);
+const cards=(grid.match(/class=\"card\"/g)||[]).length, sw=(grid.match(/Show Window/g)||[]).length;
+const sp=(grid.match(/<polyline/g)||[]).length, rm=(grid.match(/Remove profile/g)||[]).length;
+let drill=0;
+try {
+  const run=d.find(p=>p.slug && p.running);
+  if (run) {
+    toggleExpand(run.slug);
+    updateTerminals(run.slug,[{dev:'/dev/ttys001',pid:100,cmd:'bash -l',idle:200}]);
+    if (grid.indexOf('class=\"tterm\"')>-1 && grid.indexOf('ttys001')>-1 && grid.indexOf('expanded')>-1) drill=1;
+  }
+} catch(e){}
+console.log(cards, sw, sp, rm, drill);
 " 2>/dev/null)
     check "cards render"        "[ \"\$(echo '$R' | awk '{print \$1}')\" -ge 3 ]"
     check "Show Window buttons" "[ \"\$(echo '$R' | awk '{print \$2}')\" = 2 ]"
     check "sparklines render"   "[ \"\$(echo '$R' | awk '{print \$3}')\" -ge 4 ]"
     check "in-card remove flow"  "[ \"\$(echo '$R' | awk '{print \$4}')\" -ge 1 ]"
+    check "drill-down renders terminals" "[ \"\$(echo '$R' | awk '{print \$5}')\" = 1 ]"
 else
     echo "  - node not found, skipping JS render tests"
 fi

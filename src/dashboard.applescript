@@ -78,6 +78,14 @@ on pushStats()
 	end try
 end pushStats
 
+on pushTerminals(slug)
+	-- slug is sanitized to [a-z0-9] by the engine, so it is safe to inline.
+	try
+		set tjson to do shell script quoted form of enginePath & " terminals " & quoted form of slug
+		theWebView's evaluateJavaScript:("updateTerminals('" & slug & "'," & tjson & ")") completionHandler:(missing value)
+	end try
+end pushTerminals
+
 on idle
 	if not didSetup then return 2
 	try
@@ -103,6 +111,8 @@ on handleAction(raw)
 			do shell script quoted form of enginePath & " create " & quoted form of theName & " >/dev/null 2>&1"
 		else if verb is "focus" or verb is "focusdefault" then
 			my focusInstance(verb, slug)
+		else if verb is "terminals" then
+			my pushTerminals(slug)
 		else if verb is in {"quitall", "cleanall", "killswitch"} then
 			do shell script quoted form of enginePath & " " & verb & " >/dev/null 2>&1 &"
 		else if verb is in {"opendefault", "quitdefault", "forcedefault"} then
