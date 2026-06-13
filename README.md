@@ -92,6 +92,7 @@ flowchart TD
 - **Spaces**: "Assign to Desktop" is unreliable across instances sharing a bundle ID; drag windows to Spaces manually and macOS remembers per session.
 - **Memory**: every instance is a full Electron app. The dashboard exists partly so you can see exactly what that costs.
 - **Show Window** raises all of an instance's windows (not one specific window); per-window control would require Accessibility permissions.
+- **Running instances are all named "Claude"** in the menu bar, ⌘-Tab, and the running Dock icon — because every profile launches the real, unmodified `Claude.app`. The per-profile **badge** distinguishes the launcher icons, and **Show Window** raises a specific instance by PID. Giving each running app its own name would require a renamed copy of Claude.app per profile, which breaks its code signature, defeats auto-updates, and (verified) trips Electron's integrity checks — see [docs/branded-apps-spike.md](docs/branded-apps-spike.md). It's a deliberate trade-off of the zero-modification design.
 
 ## Roadmap
 
