@@ -103,6 +103,16 @@ check "engine remove keeps data" "mkdir -p '$WORK/instances/headless'; touch '$W
 check "engine purge erases data" "[ \"\$('$ENGINE' purge headless)\" = ok ] && [ ! -d '$WORK/instances/headless' ]"
 check "default launch exits 0"   "printf 'x\n' > '$WORK/queue'; '$L' >/dev/null 2>&1"
 
+echo "== per-profile badge icons =="
+check "badge color is deterministic" "[ \"\$(bash -c '. \"\$1\"; badge_color_for work' _ '$ENGINE')\" = \"\$(bash -c '. \"\$1\"; badge_color_for work' _ '$ENGINE')\" ]"
+check "badge color is r g b triple"  "bash -c '. \"\$1\"; badge_color_for work' _ '$ENGINE' | grep -qE '^[0-9]+ [0-9]+ [0-9]+\$'"
+check "badge falls back to plain copy" "rm -rf '$WORK/bf'; mkdir -p '$WORK/bf'; printf icnsDATA > '$WORK/srcicns'; bash -c '. \"\$1\"; RES_DIR=/nonexistent; badge_icon work \"Claude Work\" \"$WORK/srcicns\" \"$WORK/bf\"' _ '$ENGINE' 2>/dev/null; cmp -s '$WORK/srcicns' '$WORK/bf/app.icns'"
+# The real render path (sips -> osascript compositor -> iconutil) can't run here:
+# this suite shims osascript for the dialog tests, so badge_icon's compositor call
+# would hit the shim. The fallback + color tests above cover the bash logic; the
+# actual rendering is verified directly with the real osascript (see commit notes).
+check "badge compositor present"     "[ -f '$ROOT/src/badge-icon.applescript' ] && grep -q 'badge_icon' '$ROOT/src/engine.sh' && grep -q 'badge-icon.applescript' '$ROOT/scripts/build.sh'"
+
 echo "== engine stats =="
 printf '2026-06-10 08:12\n2026-06-12 09:14\n' > "$WORK/instances/business/.profile-activity"
 S=$("$ENGINE" stats)
