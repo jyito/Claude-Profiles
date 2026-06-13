@@ -113,6 +113,10 @@ on handleAction(raw)
 			my focusInstance(verb, slug)
 		else if verb is "terminals" then
 			my pushTerminals(slug)
+		else if verb is "closeterm" then
+			set tdev to ""
+			if (count of parts) > 3 then set tdev to item 4 of parts
+			do shell script quoted form of enginePath & " closeterm " & quoted form of slug & " " & quoted form of tdev & " >/dev/null 2>&1 &"
 		else if verb is in {"quitall", "cleanall", "killswitch"} then
 			do shell script quoted form of enginePath & " " & verb & " >/dev/null 2>&1 &"
 		else if verb is in {"opendefault", "quitdefault", "forcedefault"} then
