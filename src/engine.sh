@@ -175,6 +175,20 @@ EOF
 
 cmd_open()  { local w; w=$(wrapper_for_slug "$1") && "$w/Contents/MacOS/launcher" & }
 cmd_mainpid() { main_pids_for_dir "$INSTANCES_DIR/${1:?}" | head -n 1; }
+cmd_throttle() {  # lower this instance's OWN process tree CPU priority (renice +10).
+    # One-way by design: unprivileged users can't lower niceness back, so the only
+    # way to restore is to relaunch the instance. Guarded to the instance's tree —
+    # renice is never aimed at an arbitrary pid.
+    local slug="${1:?}" mains pids
+    mains=$(main_pids_for_dir "$INSTANCES_DIR/$slug")
+    [ -z "$mains" ] && { printf 'notrunning'; return 0; }
+    # shellcheck disable=SC2086
+    pids=$(tree_pids $mains)
+    # shellcheck disable=SC2086
+    renice 10 $pids >/dev/null 2>&1
+    printf 'ok'
+}
+
 cmd_closeterm() {  # close a terminal by device — refuses any device not owned by this
                    # instance's tree, so it can never touch another instance or an
                    # arbitrary process. SIGHUP goes to processes whose CONTROLLING
@@ -442,6 +456,7 @@ case "${1:-stats}" in
     mainpid) cmd_mainpid "${2:?}" ;;
     terminals) cmd_terminals "${2:?}" ;;
     closeterm) cmd_closeterm "${2:?}" "${3:?}" ;;
+    throttle) cmd_throttle "${2:?}" ;;
     defaultpid) cmd_defaultpid ;;
     create) cmd_create "${2:?}" ;;
     opendefault) cmd_open_default ;;
