@@ -142,6 +142,15 @@ check "clean frees caches"     "[ \"\$('$ENGINE' clean evex)\" = ok ] && [ ! -d 
 check "clean preserves login"  "[ -f '$WORK/instances/evex/Cookies' ]"
 check "clean refuses if running" "[ \"\$('$ENGINE' clean business)\" = running ]"
 
+echo "== per-instance clean tiers =="
+mkdir -p "$WORK/instances/tierx/Cache" "$WORK/instances/tierx/GPUCache" "$WORK/instances/tierx/logs"
+touch "$WORK/instances/tierx/Cache/c" "$WORK/instances/tierx/GPUCache/g" "$WORK/instances/tierx/logs/l" "$WORK/instances/tierx/Cookies"
+check "gpu tier removes only GPU"   "[ \"\$('$ENGINE' clean tierx gpu)\" = ok ] && [ ! -d '$WORK/instances/tierx/GPUCache' ] && [ -d '$WORK/instances/tierx/Cache' ]"
+check "caches tier removes caches"  "[ \"\$('$ENGINE' clean tierx caches)\" = ok ] && [ ! -d '$WORK/instances/tierx/Cache' ]"
+check "logs tier removes logs"      "[ \"\$('$ENGINE' clean tierx logs)\" = ok ] && [ ! -d '$WORK/instances/tierx/logs' ]"
+check "clean tier preserves login"  "[ -f '$WORK/instances/tierx/Cookies' ]"
+check "clean default (no tier) works" "mkdir -p '$WORK/instances/tierx/ShaderCache'; [ \"\$('$ENGINE' clean tierx)\" = ok ] && [ ! -d '$WORK/instances/tierx/ShaderCache' ]"
+
 echo "== bulk cleanup =="
 mkdir -p "$WORK/instances/bulkstopped/GPUCache"; dd if=/dev/zero of="$WORK/instances/bulkstopped/GPUCache/b" bs=1024 count=64 2>/dev/null
 mkdir -p "$WORK/apps/Claude BulkStopped.app/Contents"
@@ -209,13 +218,22 @@ try {
     if (grid.indexOf('class=\"tterm\"')>-1 && grid.indexOf('ttys001')>-1 && grid.indexOf('expanded')>-1 && grid.indexOf('closeTerm(')>-1) drill=1;
   }
 } catch(e){}
-console.log(cards, sw, sp, rm, drill);
+let tiers=0;
+try {
+  const stp=d.find(p=>p.slug && !p.running);
+  if (stp) {
+    expanded=null; toggleExpand(stp.slug);
+    if (grid.indexOf('tierbtn')>-1 && grid.indexOf(\"act3('clean'\")>-1) tiers=1;
+  }
+} catch(e){}
+console.log(cards, sw, sp, rm, drill, tiers);
 " 2>/dev/null)
     check "cards render"        "[ \"\$(echo '$R' | awk '{print \$1}')\" -ge 3 ]"
     check "Show Window buttons" "[ \"\$(echo '$R' | awk '{print \$2}')\" = 2 ]"
     check "sparklines render"   "[ \"\$(echo '$R' | awk '{print \$3}')\" -ge 4 ]"
     check "in-card remove flow"  "[ \"\$(echo '$R' | awk '{print \$4}')\" -ge 1 ]"
     check "drill-down renders terminals" "[ \"\$(echo '$R' | awk '{print \$5}')\" = 1 ]"
+    check "stopped drill shows clean tiers" "[ \"\$(echo '$R' | awk '{print \$6}')\" = 1 ]"
 else
     echo "  - node not found, skipping JS render tests"
 fi
