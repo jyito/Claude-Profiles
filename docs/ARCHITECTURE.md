@@ -68,11 +68,17 @@ Dialog strings escape embedded quotes and convert newlines to AppleScript
 A small data/actions backend used by both UIs.
 
 **Process attribution.** An instance's main process is found by matching its
-unique `--user-data-dir=` argument in `ps axo pid=,command=`. Electron helper
-processes (renderer, GPU) don't reliably carry that flag, so the engine walks
-the full child tree from the main PID (`tree_pids`, iterative parent-set
-expansion over a single `ps` snapshot). CPU and RSS are summed across the
-tree; PTY handles are counted via `lsof` matching `/dev/ttys`.
+`--user-data-dir=` argument in `ps axo pid=,command=` as a *complete* argv
+value — the character after the directory must be a space or end of line.
+(A substring match would let a profile whose data dir is a prefix of another's,
+e.g. `work` vs `work2`, absorb the sibling's processes and corrupt every
+per-instance metric.) Electron helper processes (renderer, GPU) don't reliably
+carry that flag, so the engine walks the full child tree from the main PID
+(`tree_pids`, iterative parent-set expansion over a single `ps` snapshot). CPU
+and RSS are summed across the tree; PTY handles are counted via `lsof` matching
+`/dev/ttys`, deduplicated by device so a tty shared between the main process
+and a helper is counted once. Each `/dev/ttys` is therefore attributed to
+exactly one instance.
 
 **Disk.** `du` over multi-gigabyte profile dirs is too slow for a 2-second
 tick, so sizes are cached for 30 seconds in `$TMPDIR`.
