@@ -54,6 +54,9 @@
   Show Window across Spaces). macOS 14+ activation handoff before Show Window.
 - Button hover / press / keyboard-focus states across the UI; a startup
   loading screen until the first stats render.
+- New app icon: a "window stack" mark (cascading app windows on the dark
+  squircle) in the dashboard palette, trademark-safe. Source SVG plus a
+  zero-dependency bake script (`scripts/make-icon.sh`, macOS `sips` only).
 
 ### Tests
 - Suite grows to 80 checks (engine sourceable for unit tests; new coverage
