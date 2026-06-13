@@ -462,19 +462,45 @@ Your saved login is NOT deleted by this step." "Cancel" "Remove App") || return 
 
 # --- main menu loop -----------------------------------------------------------
 
+runtime_applet_stale() {
+    # 0 (stale) if the saved runtime source $2 was compiled for a Resources dir
+    # other than $1 — e.g. the manager app moved (~/Applications -> /Applications).
+    # The baked path is then dead, so the applet's WebView loads a nonexistent
+    # dashboard.html and renders a blank white pane. Exact-match the baked
+    # `resourcesDir` (NOT a substring test: "/Applications/…" is a substring of
+    # "/Users/x/Applications/…", which is exactly the case that bit us).
+    [ -f "$2" ] || return 1
+    local baked
+    baked=$(sed -n 's/.*property resourcesDir : "\(.*\)".*/\1/p' "$2" | head -1)
+    [ "$baked" = "$1" ] && return 1
+    return 0
+}
+
 launch_dashboard() {
     # Compile the window host into a stay-open applet (applets run on the main
     # thread, which AppKit/WebKit require; plain osascript runs scripts on a
-    # background thread). Recompiled every launch — it takes well under a
-    # second and guarantees the embedded Resources path is always current.
+    # background thread). The compiled applet is REUSED across launches when the
+    # source is unchanged (a stable ad-hoc signature keeps the Automation grant
+    # alive) — but a reused applet bakes in the Resources path, so a moved app is
+    # self-healed below before reuse.
     local res="$(self_path)/Contents/Resources"
     local rt="$INSTANCES_DIR/.runtime"
     local applet="$rt/Claude Profiles Dashboard.app"
     mkdir -p "$rt"
 
-    # Single instance: if the dashboard is already running, focus it and stop.
-    # (Also prevents recompiling the bundle underneath a live process.)
-    if ps axo command= 2>/dev/null | grep -F "Claude Profiles Dashboard.app" | grep -qv grep; then
+    # Self-heal a moved app: a cached applet built for a Resources path that's no
+    # longer ours would load a dead dashboard.html (blank white window). Quit any
+    # such stale instance and drop the build so it recompiles against this path.
+    if runtime_applet_stale "$res" "$rt/dashboard-src.applescript"; then
+        local spid
+        spid=$(ps axo pid=,command= 2>/dev/null | grep -F "$rt/Claude Profiles Dashboard.app" | grep -v grep | awk '{print $1}')
+        # shellcheck disable=SC2086
+        [ -n "$spid" ] && kill $spid 2>/dev/null
+        rm -rf "$applet"
+        rm -f "$rt/dashboard-src.applescript"
+    # Single instance: if a current dashboard is already running, focus it and
+    # stop. (Also prevents recompiling the bundle underneath a live process.)
+    elif ps axo command= 2>/dev/null | grep -F "Claude Profiles Dashboard.app" | grep -qv grep; then
         open "$applet" 2>/dev/null
         return
     fi
@@ -568,4 +594,7 @@ main() {
     launch_dashboard
 }
 
-main "$@"
+# Run only when executed directly; sourcing (e.g. tests) loads the functions.
+if [ "${BASH_SOURCE[0]:-$0}" = "$0" ]; then
+    main "$@"
+fi

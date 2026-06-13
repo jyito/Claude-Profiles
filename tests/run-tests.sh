@@ -245,6 +245,16 @@ check "applet icon override stripped" "grep -q 'Delete :CFBundleIconName' '$LAUN
 check "applet bundle id branded"      "grep -q 'local.claude-profiles.dashboard' '$LAUNCHER_SRC'"
 check "applet reused when unchanged"  "grep -q 'cmp -s' '$LAUNCHER_SRC'"
 
+echo "== dashboard self-heal (moved app) =="
+printf 'property resourcesDir : "/Users/x/Applications/Claude Profiles.app/Contents/Resources"\n' > "$WORK/saved_old.applescript"
+# the actual incident: app now at /Applications, baked path was ~/Applications —
+# and "/Applications/…" is a SUBSTRING of "/Users/x/Applications/…", so an exact
+# match (not a substring test) is required to flag it stale.
+check "moved app flagged stale"   "bash -c '. \"\$1\" >/dev/null 2>&1; runtime_applet_stale \"/Applications/Claude Profiles.app/Contents/Resources\" \"\$2\"' _ '$LAUNCHER_SRC' '$WORK/saved_old.applescript'"
+check "matching path not stale"   "! bash -c '. \"\$1\" >/dev/null 2>&1; runtime_applet_stale \"/Users/x/Applications/Claude Profiles.app/Contents/Resources\" \"\$2\"' _ '$LAUNCHER_SRC' '$WORK/saved_old.applescript'"
+check "no cached build not stale" "! bash -c '. \"\$1\" >/dev/null 2>&1; runtime_applet_stale /any \"\$2\"' _ '$LAUNCHER_SRC' '$WORK/no_such_file'"
+check "launch_dashboard self-heals" "grep -q 'runtime_applet_stale' '$LAUNCHER_SRC'"
+
 echo "== attribution isolation (no cross-app bleed) =="
 # Two profiles whose data dirs are prefix-colliding: .../work is a substring of
 # .../work2. The old substring match folded work2's process into work's metrics.
