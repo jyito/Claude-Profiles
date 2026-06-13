@@ -185,6 +185,12 @@ check "auto-close warning shown" "grep -q 'can look idle' '$ROOT/src/dashboard.h
 check "config push hook present" "grep -q 'function updateConfig' '$ROOT/src/dashboard.html'"
 check "applet routes autotick"   "grep -q 'autotick' '$ROOT/src/dashboard.applescript'"
 
+echo "== polish =="
+check "loading screen present"  "grep -q 'id=\"loading\"' '$ROOT/src/dashboard.html'"
+check "button hover states"     "grep -q ':hover' '$ROOT/src/dashboard.html'"
+check "keyboard focus ring"     "grep -q 'focus-visible' '$ROOT/src/dashboard.html'"
+check "spinner animation"       "grep -q '@keyframes spin' '$ROOT/src/dashboard.html'"
+
 echo "== applet branding =="
 check "applet icon override stripped" "grep -q 'Delete :CFBundleIconName' '$LAUNCHER_SRC' && grep -q 'Assets.car' '$LAUNCHER_SRC'"
 check "applet bundle id branded"      "grep -q 'local.claude-profiles.dashboard' '$LAUNCHER_SRC'"
@@ -225,8 +231,8 @@ if command -v node >/dev/null 2>&1; then
 const fs=require('fs');
 const html=fs.readFileSync('$ROOT/src/dashboard.html','utf8');
 const js=html.match(/<script>([\s\S]*)<\/script>/)[1];
-let grid='',kpi='';
-global.document={getElementById:(id)=>({set innerHTML(v){if(id==='grid')grid=v;else kpi=v;},set textContent(v){},get className(){return ''},set className(v){},focus(){},value:''}),addEventListener:()=>{},title:''};
+let grid='',kpi='',loadCls='';
+global.document={getElementById:(id)=>({set innerHTML(v){if(id==='grid')grid=v;else kpi=v;},set textContent(v){},get className(){return ''},set className(v){if(id==='loading')loadCls=v;},focus(){},value:''}),addEventListener:()=>{},title:''};
 global.setTimeout=()=>{};
 eval(js);
 const d=JSON.parse(fs.readFileSync('$WORK/stats.json','utf8'));
@@ -250,7 +256,7 @@ try {
     if (grid.indexOf('tierbtn')>-1 && grid.indexOf(\"act3('clean'\")>-1) tiers=1;
   }
 } catch(e){}
-console.log(cards, sw, sp, rm, drill, tiers);
+console.log(cards, sw, sp, rm, drill, tiers, (loadCls.indexOf('hidden')>-1?1:0));
 " 2>/dev/null)
     check "cards render"        "[ \"\$(echo '$R' | awk '{print \$1}')\" -ge 3 ]"
     check "Show Window buttons" "[ \"\$(echo '$R' | awk '{print \$2}')\" = 2 ]"
@@ -258,6 +264,7 @@ console.log(cards, sw, sp, rm, drill, tiers);
     check "in-card remove flow"  "[ \"\$(echo '$R' | awk '{print \$4}')\" -ge 1 ]"
     check "drill-down renders terminals" "[ \"\$(echo '$R' | awk '{print \$5}')\" = 1 ]"
     check "stopped drill shows clean tiers" "[ \"\$(echo '$R' | awk '{print \$6}')\" = 1 ]"
+    check "loading screen hides on render"  "[ \"\$(echo '$R' | awk '{print \$7}')\" = 1 ]"
 else
     echo "  - node not found, skipping JS render tests"
 fi
