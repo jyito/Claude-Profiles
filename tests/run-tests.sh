@@ -134,6 +134,34 @@ check "applet icon override stripped" "grep -q 'Delete :CFBundleIconName' '$LAUN
 check "applet bundle id branded"      "grep -q 'local.claude-profiles.dashboard' '$LAUNCHER_SRC'"
 check "applet reused when unchanged"  "grep -q 'cmp -s' '$LAUNCHER_SRC'"
 
+echo "== attribution isolation (no cross-app bleed) =="
+# Two profiles whose data dirs are prefix-colliding: .../work is a substring of
+# .../work2. The old substring match folded work2's process into work's metrics.
+mkdir -p "$WORK/instances/work" "$WORK/instances/work2"
+cp "$WORK/shims/ps" "$WORK/shims/ps.bak"
+cat > "$WORK/shims/ps" <<PSEOF
+#!/bin/bash
+T="300 1 5.0 100000 /Applications/Claude.app/Contents/MacOS/Claude --user-data-dir=$WORK/instances/work
+301 1 5.0 100000 /Applications/Claude.app/Contents/MacOS/Claude --user-data-dir=$WORK/instances/work2"
+case "\$*" in
+  *"pid=,command="*) echo "\$T" | awk '{printf "%s ", \$1; for(i=5;i<=NF;i++) printf "%s ", \$i; print ""}' ;;
+  *"pid=,ppid="*)    echo "\$T" | awk '{print \$1, \$2}' ;;
+esac
+PSEOF
+chmod +x "$WORK/shims/ps"
+check "prefix slug matches exactly one pid" "[ \"\$(bash -c '. \"\$1\"; main_pids_for_dir \"\$2\"' _ '$ENGINE' '$WORK/instances/work' | tr -d '[:space:]')\" = 300 ]"
+check "longer slug resolves to its own pid" "[ \"\$(bash -c '. \"\$1\"; main_pids_for_dir \"\$2\"' _ '$ENGINE' '$WORK/instances/work2' | tr -d '[:space:]')\" = 301 ]"
+mv "$WORK/shims/ps.bak" "$WORK/shims/ps"
+# terminal dedup: one /dev/ttys held by main + helper must count once, not twice
+cp "$WORK/shims/lsof" "$WORK/shims/lsof.bak"
+cat > "$WORK/shims/lsof" <<'LSOFEOF'
+#!/bin/bash
+printf 'c 400 u 17u CHR /dev/ttys009\nc 401 u 18u CHR /dev/ttys009\n'
+LSOFEOF
+chmod +x "$WORK/shims/lsof"
+check "shared terminal counted once" "[ \"\$(bash -c '. \"\$1\"; pty_count_for_pids \$2 \$3' _ '$ENGINE' 400 401)\" = 1 ]"
+mv "$WORK/shims/lsof.bak" "$WORK/shims/lsof"
+
 echo "== dashboard JS =="
 if command -v node >/dev/null 2>&1; then
     "$ENGINE" stats > "$WORK/stats.json"
