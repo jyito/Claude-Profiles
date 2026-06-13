@@ -19,9 +19,11 @@ Pick one, then bake it into the iconset the build consumes:
 
 ```bash
 # Requires a rasterizer that reads SVG. Options on macOS:
-#   - rsvg-convert (brew install librsvg), or
-#   - resvg, or
-#   - qlmanage -t (built in, lower fidelity)
+#   - rsvg-convert (brew install librsvg) — cleanest, recommended; or
+#   - resvg; or
+#   - qlmanage -t (built in, zero-dep) — verified to rasterize these SVGs
+#     faithfully (correct colors/shapes), but it pads the icon into the canvas,
+#     so the output needs cropping to the squircle bounds before scaling.
 SVG=assets/icon-candidates/A-fanned-deck.svg
 for s in 16 32 64 128 256 512 1024; do
   rsvg-convert -w $s -h $s "$SVG" -o "assets/icon.iconset/icon_${s}x${s}.png"
@@ -29,6 +31,11 @@ done
 # (also produce the @2x variants: 16→32, 32→64, … per Apple's iconset naming)
 iconutil -c icns assets/icon.iconset -o assets/app.icns
 ```
+
+A clean **zero-dependency** bake (no Homebrew) is possible with `qlmanage` +
+`sips`, but qlmanage centres/pads the render, so it needs a crop-to-content
+step. That refinement is worth doing once a candidate is chosen — no point
+perfecting it for all three.
 
 The build (`scripts/build.sh`) bakes `assets/icon.iconset` → `app.icns`, which
 becomes both the manager app's icon and the source for `applet.icns`. After
