@@ -123,6 +123,18 @@ check "terminals rows carry dev"  "printf '%s' '$T' | grep -q '\"dev\":\"/dev/tt
 check "terminals rows carry idle" "printf '%s' '$T' | grep -q '\"idle\":[0-9]'"
 check "terminals rows carry cmd"  "printf '%s' '$T' | grep -q '\"cmd\":\"'"
 check "terminals empty when stopped" "[ \"\$('$ENGINE' terminals evex)\" = '[]' ]"
+# regression: real lsof truncates COMMAND to 9 chars and it may contain a space
+# ("Claude He"), shifting columns — the PID must still be read correctly.
+cp "$WORK/shims/lsof" "$WORK/shims/lsof.bak"
+cat > "$WORK/shims/lsof" <<'LSOFEOF'
+#!/bin/bash
+printf 'Claude He 100 u 17u CHR 16,5 0t0 999 /dev/ttys001\n'
+LSOFEOF
+chmod +x "$WORK/shims/lsof"
+TS=$("$ENGINE" terminals business)
+check "terminals valid JSON w/ spaced lsof cmd" "printf '%s' '$TS' | python3 -m json.tool >/dev/null"
+check "terminals reads pid past spaced cmd"     "printf '%s' '$TS' | grep -q '\"pid\":100'"
+mv "$WORK/shims/lsof.bak" "$WORK/shims/lsof"
 
 echo "== closeterm (guarded terminal close) =="
 # Only devices in THIS instance's own tree may be closed. business owns ttys001-003

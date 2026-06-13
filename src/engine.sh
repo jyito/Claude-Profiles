@@ -223,7 +223,10 @@ cmd_terminals() {  # JSON array of this instance's terminals: [{dev,pid,cmd,idle
     while IFS= read -r line; do
         case "$line" in *' /dev/ttys'*) ;; *) continue ;; esac
         dev=$(printf '%s' "$line" | awk '{print $NF}')
-        pid=$(printf '%s' "$line" | awk '{print $2}')
+        # lsof truncates COMMAND to 9 chars and it may contain a space (e.g.
+        # "Claude He"), so the PID is not reliably field 2. Take the first
+        # all-numeric field instead — that's the PID column.
+        pid=$(printf '%s' "$line" | awk '{for(i=1;i<=NF;i++) if($i ~ /^[0-9]+$/){print $i; break}}')
         case "$seen" in *" $dev "*) continue ;; esac
         seen="$seen$dev "
         cmd=$(printf '%s' "$snap" | awk -v p="$pid" '$1==p {$1=""; sub(/^ /,""); print; exit}')
