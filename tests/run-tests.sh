@@ -191,6 +191,17 @@ check "logs tier removes logs"      "[ \"\$('$ENGINE' clean tierx logs)\" = ok ]
 check "clean tier preserves login"  "[ -f '$WORK/instances/tierx/Cookies' ]"
 check "clean default (no tier) works" "mkdir -p '$WORK/instances/tierx/ShaderCache'; [ \"\$('$ENGINE' clean tierx)\" = ok ] && [ ! -d '$WORK/instances/tierx/ShaderCache' ]"
 
+echo "== cli clean =="
+mkdir -p "$WORK/apps/Claude Cleanme.app/Contents" "$WORK/instances/cleanme/GPUCache"
+printf '<plist><dict>\n<key>CFBundleIdentifier</key>\n<string>local.claude-profiles.cleanme</string>\n<key>CFBundleDisplayName</key>\n<string>Claude Cleanme</string>\n</dict></plist>\n' > "$WORK/apps/Claude Cleanme.app/Contents/Info.plist"
+dd if=/dev/zero of="$WORK/instances/cleanme/GPUCache/b" bs=1024 count=64 2>/dev/null
+touch "$WORK/instances/cleanme/Cookies"
+CLI="$ROOT/cli/claude-profiles.sh"
+check "cli clean clears caches"      "bash '$CLI' clean Cleanme >/dev/null 2>&1; [ ! -d '$WORK/instances/cleanme/GPUCache' ]"
+check "cli clean keeps login"        "[ -f '$WORK/instances/cleanme/Cookies' ]"
+check "cli clean refuses if running" "bash '$CLI' clean Business 2>&1 | grep -qi running"
+check "cli clean rejects unknown"    "bash '$CLI' clean Nope 2>&1 | grep -qi 'no profile'"
+
 echo "== bulk cleanup =="
 mkdir -p "$WORK/instances/bulkstopped/GPUCache"; dd if=/dev/zero of="$WORK/instances/bulkstopped/GPUCache/b" bs=1024 count=64 2>/dev/null
 mkdir -p "$WORK/apps/Claude BulkStopped.app/Contents"
