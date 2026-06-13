@@ -86,6 +86,12 @@
   .xbtn.armed { background:#501313; border-color:#E24B4A; color:#F7C1C1; }
   .drill .empty { color:#888780; font-size:12px; padding:6px 0; }
   .drill .hint { color:#6b6a64; font-size:11px; margin-top:8px; }
+  .throttle { display:flex; align-items:center; gap:10px; margin-top:12px;
+              border-top:.5px solid #2e2c25; padding-top:12px; }
+  .tbtn { background:transparent; border:.5px solid #3a382f; color:#D3D1C7; border-radius:7px;
+          padding:5px 12px; font-size:12px; cursor:pointer; font-family:inherit; flex:none; }
+  .tbtn:hover { border-color:#E0A579; color:#E0A579; }
+  .thint { font-size:11px; color:#6b6a64; }
   .tiers { display:grid; grid-template-columns:repeat(auto-fit, minmax(120px,1fr)); gap:8px; }
   .tierbtn { text-align:left; background:#1A1915; border:.5px solid #3a382f; border-radius:9px;
              padding:9px 11px; cursor:pointer; font-family:inherit; }
@@ -275,7 +281,10 @@ function drillPanel(p) {
          '<td class="x"><button class="xbtn' + (on ? " armed" : "") + '" onclick="closeTerm(\'' +
            slug + "','" + dev + '\')">' + (on ? "Confirm" : "Close") + "</button></td></tr>";
   }
-  return h + '</table><div class="hint">Closing sends a hangup to that terminal\'s session — anything running in it stops.</div></div>';
+  h += '</table><div class="hint">Closing sends a hangup to that terminal\'s session — anything running in it stops.</div>';
+  h += '<div class="throttle"><button class="tbtn" onclick="act(\'throttle\',\'' + slug + '\')">Throttle CPU</button>' +
+       '<span class="thint">Lowers priority until this instance is relaunched.</span></div>';
+  return h + "</div>";
 }
 function toggleNp(show) {
   var f = document.getElementById("npmodal");
@@ -355,7 +364,7 @@ function act(a, slug) {
                    force:"Force quitting…", quitdefault:"Asking Claude to quit…", forcedefault:"Force quitting Claude…",
                    clean:"Clearing caches…", remove:"Removing app…", quitall:"Quitting all profiles…",
                    cleanall:"Clearing caches on stopped profiles…", killswitch:"EMERGENCY STOP — killing all Claude instances…",
-                   purge:"Erasing saved login…"}[a] || "";
+                   throttle:"Lowering CPU priority…", purge:"Erasing saved login…"}[a] || "";
   setTimeout(function(){ t.textContent = ""; }, 2500);
 }
 function spark(arr, color) {
