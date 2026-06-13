@@ -120,6 +120,15 @@ check "terminals rows carry idle" "printf '%s' '$T' | grep -q '\"idle\":[0-9]'"
 check "terminals rows carry cmd"  "printf '%s' '$T' | grep -q '\"cmd\":\"'"
 check "terminals empty when stopped" "[ \"\$('$ENGINE' terminals evex)\" = '[]' ]"
 
+echo "== closeterm (guarded terminal close) =="
+# Only devices in THIS instance's own tree may be closed. business owns ttys001-003
+# (lsof shim for pid 100 tree); the default's ttys004 and unknown devices are refused.
+check "closeterm accepts own device"    "[ \"\$('$ENGINE' closeterm business ttys001)\" = ok ]"
+check "closeterm refuses other instance" "[ \"\$('$ENGINE' closeterm business ttys004)\" = refused ]"
+check "closeterm refuses unknown device" "[ \"\$('$ENGINE' closeterm business ttys999)\" = refused ]"
+check "closeterm refuses when stopped"   "[ \"\$('$ENGINE' closeterm evex ttys001)\" = refused ]"
+check "closeterm rejects bad device arg" "[ \"\$('$ENGINE' closeterm business notadev)\" = baddev ]"
+
 echo "== default instance launch =="
 printf '#!/bin/bash\nprintf "%%s\\\\n" "$*" >> "%s/open.log"\n' "$WORK" > "$WORK/shims/open" && chmod +x "$WORK/shims/open"
 check "opendefault launches Claude" "'$ENGINE' opendefault >/dev/null; grep -q -- '-n -a $WORK/Claude.app' '$WORK/open.log'"
@@ -197,7 +206,7 @@ try {
   if (run) {
     toggleExpand(run.slug);
     updateTerminals(run.slug,[{dev:'/dev/ttys001',pid:100,cmd:'bash -l',idle:200}]);
-    if (grid.indexOf('class=\"tterm\"')>-1 && grid.indexOf('ttys001')>-1 && grid.indexOf('expanded')>-1) drill=1;
+    if (grid.indexOf('class=\"tterm\"')>-1 && grid.indexOf('ttys001')>-1 && grid.indexOf('expanded')>-1 && grid.indexOf('closeTerm(')>-1) drill=1;
   }
 } catch(e){}
 console.log(cards, sw, sp, rm, drill);
