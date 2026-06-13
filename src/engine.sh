@@ -25,7 +25,19 @@ profile_wrappers() {
 }
 
 main_pids_for_dir() {
-    ps axo pid=,command= | awk -v d="--user-data-dir=$1" 'index($0, d) && !/awk/ {print $1}'
+    # Match --user-data-dir=<dir> as a COMPLETE argv value, not a substring.
+    # Substring matching let a profile absorb a prefix-colliding sibling's PIDs
+    # (e.g. querying "work" also matched "work2"), confusing every per-instance
+    # metric. The char after the dir must be a space (another argv token) or end
+    # of line — anything else (-, 2, /) means it's a different, longer dir.
+    ps axo pid=,command= | awk -v d="--user-data-dir=$1" '
+        !/awk/ {
+            i = index($0, d)
+            if (i > 0) {
+                c = substr($0, i + length(d), 1)
+                if (c == "" || c == " ") print $1
+            }
+        }'
 }
 
 tree_pids() {
@@ -49,8 +61,11 @@ usage_for_pids() {
 }
 
 pty_count_for_pids() {
+    # Count DISTINCT terminal devices, not lsof lines: a single /dev/ttysNN held
+    # by the Electron main process and inherited by helpers would otherwise be
+    # counted once per holder, inflating the terminal total. Dedup by device.
     local csv; csv=$(printf '%s' "$*" | tr ' ' ',')
-    lsof -p "$csv" 2>/dev/null | grep -c ' /dev/ttys' || true
+    lsof -p "$csv" 2>/dev/null | awk '$NF ~ /^\/dev\/ttys/ {print $NF}' | sort -u | wc -l | tr -d ' '
 }
 
 disk_mb() {  # cached 30s — du on multi-GB dirs is too slow for a live tick
@@ -287,6 +302,9 @@ cmd_clean() {
     printf 'ok'
 }
 
+# Dispatch only when run directly; sourcing (e.g. tests) loads the functions
+# without executing the default `stats` command.
+if [ "${BASH_SOURCE[0]:-$0}" = "$0" ]; then
 case "${1:-stats}" in
     stats) cmd_stats ;;
     open)  cmd_open  "${2:?}" ;;
@@ -305,3 +323,4 @@ case "${1:-stats}" in
     remove) cmd_remove "${2:?}" ;;
     purge) cmd_purge "${2:?}" ;;
 esac
+fi
