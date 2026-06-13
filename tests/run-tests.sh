@@ -302,7 +302,9 @@ try {
 } catch(e){}
 let lock=0;
 try { confirmStep['zz']=1; const a=uiLocked(); delete confirmStep['zz']; const b=uiLocked(); lock=(a && !b)?1:0; } catch(e){}
-console.log(cards, sw, sp, rm, drill, tiers, (loadCls.indexOf('hidden')>-1?1:0), lock);
+let avatarColor=0;
+try { const prof=d.find(p=>p.slug && p.color); if(prof && grid.indexOf('background:'+prof.color)>-1) avatarColor=1; } catch(e){}
+console.log(cards, sw, sp, rm, drill, tiers, (loadCls.indexOf('hidden')>-1?1:0), lock, avatarColor);
 " 2>/dev/null)
     check "cards render"        "[ \"\$(echo '$R' | awk '{print \$1}')\" -ge 3 ]"
     check "Show Window buttons" "[ \"\$(echo '$R' | awk '{print \$2}')\" = 2 ]"
@@ -312,6 +314,7 @@ console.log(cards, sw, sp, rm, drill, tiers, (loadCls.indexOf('hidden')>-1?1:0),
     check "stopped drill shows clean tiers" "[ \"\$(echo '$R' | awk '{print \$6}')\" = 1 ]"
     check "loading screen hides on render"  "[ \"\$(echo '$R' | awk '{print \$7}')\" = 1 ]"
     check "input lock derived from confirm state" "[ \"\$(echo '$R' | awk '{print \$8}')\" = 1 ]"
+    check "card avatar uses badge color"          "[ \"\$(echo '$R' | awk '{print \$9}')\" = 1 ]"
 else
     echo "  - node not found, skipping JS render tests"
 fi

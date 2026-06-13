@@ -175,8 +175,11 @@ $(usage_for_pids $pids)
 EOF
         ptys=$(pty_count_for_pids $pids)
     fi
-    printf '{"name":"%s","slug":"%s","running":%s,"cpu":%s,"mem":%s,"procs":%s,"ptys":%s,"disk":%s,"opens":%s,"last":"%s"}' \
-        "$1" "$2" "$running" "${cpu:-0}" "${mem:-0}" "${nproc:-0}" "${ptys:-0}" "$disk" "$opens" "$last"
+    local color
+    # shellcheck disable=SC2046
+    color=$(printf '#%02X%02X%02X' $(badge_color_for "$2"))  # same color as the Dock badge
+    printf '{"name":"%s","slug":"%s","running":%s,"cpu":%s,"mem":%s,"procs":%s,"ptys":%s,"disk":%s,"opens":%s,"last":"%s","color":"%s"}' \
+        "$1" "$2" "$running" "${cpu:-0}" "${mem:-0}" "${nproc:-0}" "${ptys:-0}" "$disk" "$opens" "$last" "$color"
 }
 
 cmd_stats() {
@@ -192,10 +195,10 @@ cmd_stats() {
 $(usage_for_pids $pids)
 EOF
         ptys=$(pty_count_for_pids $pids)
-        out+="{\"name\":\"Claude (default)\",\"slug\":\"\",\"running\":true,\"cpu\":$cpu,\"mem\":$mem,\"procs\":$nproc,\"ptys\":$ptys,\"disk\":-1,\"opens\":0,\"last\":\"\"}"
+        out+="{\"name\":\"Claude (default)\",\"slug\":\"\",\"running\":true,\"cpu\":$cpu,\"mem\":$mem,\"procs\":$nproc,\"ptys\":$ptys,\"disk\":-1,\"opens\":0,\"last\":\"\",\"color\":\"#6E6A62\"}"
         first=0
     else
-        out+='{"name":"Claude (default)","slug":"","running":false,"cpu":0,"mem":0,"procs":0,"ptys":0,"disk":-1,"opens":0,"last":""}'
+        out+='{"name":"Claude (default)","slug":"","running":false,"cpu":0,"mem":0,"procs":0,"ptys":0,"disk":-1,"opens":0,"last":"","color":"#6E6A62"}'
         first=0
     fi
     while IFS= read -r app; do
