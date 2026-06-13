@@ -12,7 +12,7 @@ Multi-account Claude Desktop for macOS. Each "profile" is a generated native
 run simultaneously. The user-facing app is a native dashboard window (dark
 UI, live per-instance CPU/MEM/PTY/disk, sparklines, Show Window focusing,
 cleanup utilities). Status: **v0.2, fully working on the maintainer's Mac**,
-34/34 tests, CI configured, private repo target `jyito/Claude-Profiles`,
+80/80 tests, CI configured, private repo target `jyito/Claude-Profiles`,
 intended to go public once docs/screenshots/signing are in place.
 
 ## Non-negotiables (PRs violating these get declined)
@@ -45,25 +45,45 @@ intended to go public once docs/screenshots/signing are in place.
 - **`engine.sh`** — data/actions backend, shared by both UIs.
   `stats` emits a JSON array per profile + the default instance.
   Process attribution: main PID found by matching `--user-data-dir=<dir>` in
-  `ps axo pid=,command=`; Electron helpers collected by walking the child
+  `ps axo pid=,command=` as a COMPLETE argv value (the char after the dir must
+  be a space or EOL) — a substring match let a profile whose data dir is a
+  prefix of another's (`work` / `work2`) absorb the sibling's PIDs and corrupt
+  every per-instance metric. Electron helpers collected by walking the child
   tree (`tree_pids`) since helpers don't carry the flag. CPU/RSS summed over
   the tree (CPU can exceed 100% — per-core semantics, same as Activity
-  Monitor). PTYs counted via `lsof` matching `/dev/ttys` — displayed as "terminals" in all UI copy (PTY is jargon; `ptys` stays as the JSON key and internal term). Disk via `du`
-  cached 30s in `$TMPDIR` (live `du` on multi-GB dirs is too slow).
+  Monitor). PTYs counted via `lsof` matching `/dev/ttys`, DEDUPED by device (a
+  tty shared by the Electron main + helpers must count once) — displayed as
+  "terminals" in all UI copy (PTY is jargon; `ptys` stays as the JSON key and
+  internal term). Disk via `du` cached 30s in `$TMPDIR` (live `du` on multi-GB
+  dirs is too slow). The dispatch is guarded by a `BASH_SOURCE`==`$0` check so
+  the test suite can source the file and unit-test the attribution functions.
   Actions: `open quit force clean create remove purge mainpid defaultpid
-  quitdefault forcedefault`. `clean` deletes only regenerable Electron caches
-  and refuses if the instance is running.
+  quitdefault forcedefault opendefault terminals closeterm throttle getconfig
+  setconfig autotick`. `clean <slug> [caches|gpu|logs|all]` deletes only
+  regenerable Electron caches and refuses if the instance is running.
+  `terminals` emits `[{dev,pid,cmd,idle}]` (idle = now − tty device mtime).
+  `closeterm`/`throttle` are guarded to the instance's own tree — never an
+  arbitrary pid. `autotick` enforces the opt-in auto-clean / auto-close
+  settings (stored under `.runtime/settings`), a cheap no-op while disabled.
 - **`dashboard.html`** — the entire UI. Dark theme (#1A1915 bg, #21201A
   cards, coral #D85A30 accent, mint #5DCAA5 running state). 30-point rolling
   sparkline history per profile. New Profile = modal over a scrim (Escape /
   scrim-click close, Enter creates). Remove = in-card two-step with typed
   DELETE. `uiLock` pauses live re-render during any form/confirm so the 2s
-  tick can't eat input. Buttons are Title Case (Apple HIG); other copy is
+  tick can't eat input (but NOT during drill-down, so live stats keep ticking
+  under an open panel). Cards expand in place (full grid width, one at a time,
+  Escape collapses): running → terminals table with per-row close + Throttle;
+  stopped → clean tiers. Settings modal drives `getconfig`/`setconfig`.
+  Buttons are Title Case (Apple HIG) with hover/press/focus-visible states; a
+  startup loading splash shows until the first stats render. Other copy is
   sentence case.
 - **`dashboard.applescript`** — window host SOURCE. The launcher substitutes
-  `__RESOURCES__` and compiles it EVERY LAUNCH with `osacompile -s` into a
-  stay-open applet at `~/.claude-instances/.runtime/`, then `open`s it
-  (re-`open` focuses the existing instance).
+  `__RESOURCES__` and compiles it with `osacompile -s` into a stay-open applet
+  at `~/.claude-instances/.runtime/`, REUSING the compiled applet when the
+  source is unchanged (a stable ad-hoc signature keeps the one-time Automation
+  grant alive across launches), then `open`s it (re-`open` focuses the existing
+  instance). Bridges `terminals`/`getconfig` back to the page via
+  `updateTerminals`/`updateConfig`; runs `autotick` every ~16th idle tick.
 
 ## Hard-won lessons (do not relearn these)
 
@@ -109,7 +129,7 @@ intended to go public once docs/screenshots/signing are in place.
 ## Build / test / release
 
 ```bash
-bash tests/run-tests.sh    # 34 tests; runs on macOS or Linux (mac tools shimmed)
+bash tests/run-tests.sh    # 80 tests; runs on macOS or Linux (mac tools shimmed)
 shellcheck -S error src/launcher src/engine.sh cli/claude-profiles.sh scripts/*.sh
 bash scripts/build.sh      # assembles dist/Claude Profiles.app (+ DMG on macOS)
 ```
@@ -143,7 +163,25 @@ NOTICE or README.
 Git history to date: initial release → NOTICE/attribution → Apache-2.0
 relicense → consistent-UI dashboard-first → applet/main-thread fix → snappy
 actions + Spaces-reliable Show Window → default-instance Quit/Force →
-New Profile modal.
+New Profile modal → stable applet identity (Dock icon + sticky Automation
+grant) + default Open → **v0.3.0 feature batch**: attribution hardening
+(no cross-app metric bleed), per-instance drill-down (terminals table + close,
+clean tiers), Throttle, opt-in auto-clean/auto-close settings, button
+reactivity + loading screen. Design spec at
+`docs/superpowers/specs/2026-06-12-v030-granular-controls-design.md`.
+
+**Awaiting maintainer Mac verification** (the applet/WebView layer the suite
+can't exercise — all built + osacompile-clean, none claimed working): Show
+Window across Spaces + the one-time Automation prompt; Dock shows the
+stacked-windows icon; drill-down round-trip (▾ Terminals populates); terminal
+Close hangup reaches a live session; clean-tier clicks; Settings open + change;
+Throttle renice. Plus: `tccutil reset AppleEvents local.claude-profiles.dashboard`
+if Show Window stays broken with no prompt.
+
+**Deferred to v0.3.1**: launch options (open-minimized isn't clean for
+Electron; auto-launch LaunchAgent is persistent system config). Icon is a
+VISUAL decision pending maintainer review (fanned deck-of-profiles direction;
+never commit Anthropic artwork).
 
 1. **Screenshots/video** (maintainer's Mac): dashboard hero with 2+ profiles
    and live sparklines; ~15s recording ending on a Show Window jump; Dock
