@@ -11,8 +11,9 @@ Multi-account Claude Desktop for macOS. Each "profile" is a generated native
 `--user-data-dir`, so each account stays permanently signed in and any number
 run simultaneously. The user-facing app is a native dashboard window (dark
 UI, live per-instance CPU/MEM/PTY/disk, sparklines, Show Window focusing,
-cleanup utilities). Status: **v0.2, fully working on the maintainer's Mac**,
-87/87 tests, CI configured, private repo target `jyito/Claude-Profiles`,
+cleanup utilities). Status: **v0.3.0 feature-complete, working on the
+maintainer's Mac** (applet-layer items pending maintainer verification — see
+State section), 87/87 tests, CI configured, private repo target `jyito/Claude-Profiles`,
 intended to go public once docs/screenshots/signing are in place.
 
 ## Non-negotiables (PRs violating these get declined)
