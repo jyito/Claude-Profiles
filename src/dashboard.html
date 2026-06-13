@@ -92,13 +92,20 @@
   .tierbtn:hover { border-color:#5F5E5A; }
   .tierbtn .t { font-size:12px; font-weight:500; color:#F1EFE8; }
   .tierbtn .d { font-size:11px; color:#888780; margin-top:1px; }
+  .setrow { background:#1A1915; border:.5px solid #3a382f; border-radius:10px; padding:12px 14px; margin-bottom:10px; }
+  .setrow .t { font-size:13px; font-weight:500; color:#F1EFE8; }
+  .setrow .d { font-size:11px; color:#888780; margin:2px 0 8px; }
+  .setrow .d.warn { color:#E0A579; }
+  .setrow select { width:100%; background:#21201A; border:.5px solid #3a382f; color:#F1EFE8;
+                   border-radius:8px; padding:7px 10px; font-size:13px; font-family:inherit; outline:none; cursor:pointer; }
+  .setrow select:focus { border-color:#D85A30; }
 </style></head><body>
 <div class="top">
   <div>
     <div class="kpi-label">Total memory in use</div>
     <div class="kpi" id="kpi">—</div>
   </div>
-  <div><button class="btn-ghost" onclick="toggleClean(true)">Cleanup</button><button class="btn-add" onclick="toggleNp(true)">＋ New Profile</button></div>
+  <div><button class="btn-ghost" onclick="openSettings()">Settings</button><button class="btn-ghost" onclick="toggleClean(true)">Cleanup</button><button class="btn-add" onclick="toggleNp(true)">＋ New Profile</button></div>
 </div>
 <div class="toast" id="toast"></div>
 <div class="scrim" id="npmodal" onclick="if(event.target===this)toggleNp(false)">
@@ -130,6 +137,35 @@
       <div class="d">Force-quits every Claude instance immediately, including the default — for when your machine is drowning. All sign-ins survive; everything reopens authenticated.</div>
     </button>
     <div class="row"><button class="ghost" onclick="toggleClean(false)">Close</button></div>
+  </div>
+</div>
+<div class="scrim" id="setmodal" onclick="if(event.target===this)toggleSet(false)">
+  <div class="modal">
+    <h2>Settings</h2>
+    <p>Automatic maintenance — both off by default. They only ever clear regenerable caches or close idle terminals; sign-ins are never touched.</p>
+    <div class="setrow">
+      <div class="t">Auto-clean stopped profiles</div>
+      <div class="d">Clears caches when a stopped profile's disk use exceeds the limit.</div>
+      <select id="set-clean" onchange="saveSetting('autoCleanThresholdMB', this.value)">
+        <option value="0">Off</option>
+        <option value="500">Over 500 MB</option>
+        <option value="1024">Over 1 GB</option>
+        <option value="2048">Over 2 GB</option>
+        <option value="5120">Over 5 GB</option>
+      </select>
+    </div>
+    <div class="setrow">
+      <div class="t">Auto-close idle terminals</div>
+      <div class="d warn">⚠ Closes a profile's terminals after they sit idle this long. A long task that prints nothing can look idle — use with care.</div>
+      <select id="set-close" onchange="saveSetting('autoCloseIdleMin', this.value)">
+        <option value="0">Off</option>
+        <option value="30">After 30 min</option>
+        <option value="60">After 1 hour</option>
+        <option value="120">After 2 hours</option>
+        <option value="240">After 4 hours</option>
+      </select>
+    </div>
+    <div class="row"><button class="ghost" onclick="toggleSet(false)">Close</button></div>
   </div>
 </div>
 <div class="grid" id="grid"></div>
@@ -225,9 +261,25 @@ document.addEventListener("keydown", function(e) {
   if (e.key === "Escape") {
     if (document.getElementById("npmodal").className.indexOf("show") > -1) toggleNp(false);
     else if (document.getElementById("cleanmodal").className.indexOf("show") > -1) toggleClean(false);
+    else if (document.getElementById("setmodal").className.indexOf("show") > -1) toggleSet(false);
     else if (expanded) { expanded = null; rerender(); }
   }
 });
+function toggleSet(show) {
+  var f = document.getElementById("setmodal");
+  if (show) { f.className = "scrim show"; uiLock = true; }
+  else { f.className = "scrim"; uiLock = false; rerender(); }
+}
+function openSettings() { toggleSet(true); document.title = "cp:getconfig"; }   // host pushes updateConfig()
+function updateConfig(c) {
+  var s = document.getElementById("set-clean"); if (s) s.value = String(c.autoCleanThresholdMB || 0);
+  var t = document.getElementById("set-close"); if (t) t.value = String(c.autoCloseIdleMin || 0);
+}
+function saveSetting(key, val) {
+  document.title = "cp:setconfig:" + key + ":" + val;
+  var t = document.getElementById("toast"); t.textContent = "Saved";
+  setTimeout(function(){ t.textContent = ""; }, 1500);
+}
 var kswArmed = false, kswTimer = null;
 function toggleClean(show) {
   var f = document.getElementById("cleanmodal");

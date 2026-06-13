@@ -9,6 +9,7 @@ APPS_DIR="${CLAUDE_PROFILES_APPS_DIR:-$HOME/Applications}"
 INSTANCES_DIR="${CLAUDE_PROFILES_INSTANCES_DIR:-$HOME/.claude-instances}"
 BUNDLE_ID_PREFIX="local.claude-profiles"
 DISK_CACHE="${TMPDIR:-/tmp}/claude-profiles-disk-cache"
+SETTINGS_FILE="$INSTANCES_DIR/.runtime/settings"
 
 bundle_id_of() { defaults read "$1/Contents/Info" CFBundleIdentifier 2>/dev/null; }
 display_name_of() { defaults read "$1/Contents/Info" CFBundleDisplayName 2>/dev/null; }
@@ -379,6 +380,56 @@ cmd_clean() {
     printf 'ok'
 }
 
+# Settings — local key/value file (never networked). Two opt-in automation knobs,
+# both default 0 = disabled. Stored as "key value" lines; emitted as JSON for the UI.
+setting_get() {  # $1 key -> integer value, or empty if unset
+    [ -f "$SETTINGS_FILE" ] && awk -v k="$1" '$1==k {print $2; exit}' "$SETTINGS_FILE"
+}
+cmd_getconfig() {
+    local ac am
+    ac=$(setting_get autoCloseIdleMin); am=$(setting_get autoCleanThresholdMB)
+    printf '{"autoCloseIdleMin":%s,"autoCleanThresholdMB":%s}' "${ac:-0}" "${am:-0}"
+}
+cmd_setconfig() {  # setconfig <key> <non-negative-integer>; validates then persists
+    local key="${1:?}" val="${2:?}" tmp
+    case "$key" in autoCloseIdleMin|autoCleanThresholdMB) ;; *) printf 'err badkey'; return 0 ;; esac
+    case "$val" in ''|*[!0-9]*) printf 'err badval'; return 0 ;; esac
+    mkdir -p "$(dirname "$SETTINGS_FILE")"
+    tmp="$SETTINGS_FILE.t"
+    { [ -f "$SETTINGS_FILE" ] && grep -v "^$key " "$SETTINGS_FILE"; printf '%s %s\n' "$key" "$val"; } > "$tmp" 2>/dev/null
+    mv "$tmp" "$SETTINGS_FILE"
+    printf 'ok'
+}
+
+cmd_autotick() {  # enforce the opt-in auto rules; a cheap no-op while both are 0.
+    # Called periodically by the dashboard applet. Only ever signals processes or
+    # deletes regenerable caches — sign-ins and data dirs are never touched.
+    local am ac slug dir d secs mt now dev
+    am=$(setting_get autoCleanThresholdMB); ac=$(setting_get autoCloseIdleMin)
+    am=${am:-0}; ac=${ac:-0}
+    [ "$am" -eq 0 ] && [ "$ac" -eq 0 ] && { printf 'ok'; return 0; }
+    if [ "$am" -gt 0 ]; then  # auto-clean stopped profiles over the disk threshold
+        for slug in $(all_profile_slugs); do
+            dir="$INSTANCES_DIR/$slug"
+            [ -n "$(main_pids_for_dir "$dir")" ] && continue
+            d=$(disk_mb "$dir")
+            [ "${d:-0}" -gt "$am" ] && cmd_clean "$slug" >/dev/null
+        done
+    fi
+    if [ "$ac" -gt 0 ]; then  # auto-close terminals idle past the threshold (opt-in, risky)
+        secs=$((ac * 60)); now=$(date +%s)
+        for slug in $(all_profile_slugs); do
+            [ -z "$(main_pids_for_dir "$INSTANCES_DIR/$slug")" ] && continue
+            instance_devices "$slug" | while IFS= read -r dev; do
+                [ -n "$dev" ] || continue
+                mt=$(stat -f %m "$dev" 2>/dev/null) || continue
+                [ -n "$mt" ] && [ $((now - mt)) -ge "$secs" ] && cmd_closeterm "$slug" "$dev" >/dev/null
+            done
+        done
+    fi
+    printf 'ok'
+}
+
 # Dispatch only when run directly; sourcing (e.g. tests) loads the functions
 # without executing the default `stats` command.
 if [ "${BASH_SOURCE[0]:-$0}" = "$0" ]; then
@@ -401,5 +452,8 @@ case "${1:-stats}" in
     killswitch) cmd_killswitch ;;
     remove) cmd_remove "${2:?}" ;;
     purge) cmd_purge "${2:?}" ;;
+    getconfig) cmd_getconfig ;;
+    setconfig) cmd_setconfig "${2:?}" "${3:?}" ;;
+    autotick) cmd_autotick ;;
 esac
 fi
