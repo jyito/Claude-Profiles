@@ -221,8 +221,12 @@ cmd_purge() {  # delete the data dir (saved login + state); dashboard gates this
     printf 'ok'
 }
 
-# Default-instance process controls. Signals only — the default data dir
-# (~/Library/Application Support/Claude) is never read or written by this tool.
+# Default-instance process controls. Signals and plain launch only — the default
+# data dir (~/Library/Application Support/Claude) is never read or written by
+# this tool. -n is required: without it, LaunchServices just activates any
+# running profile instance (same bundle id) instead of launching the default.
+# No --user-data-dir arg means Claude uses its default dir, untouched by us.
+cmd_open_default()  { local app; app=$(detect_claude_app) || { printf 'err Claude.app not found'; return 0; }; open -n -a "$app"; true; }
 cmd_quit_default()  { local m; m=$(cmd_defaultpid); [ -n "$m" ] && kill -TERM $m 2>/dev/null; true; }
 cmd_force_default() { local m; m=$(cmd_defaultpid); [ -n "$m" ] && kill -9 $(tree_pids $m) 2>/dev/null; true; }
 
@@ -292,6 +296,7 @@ case "${1:-stats}" in
     mainpid) cmd_mainpid "${2:?}" ;;
     defaultpid) cmd_defaultpid ;;
     create) cmd_create "${2:?}" ;;
+    opendefault) cmd_open_default ;;
     quitdefault) cmd_quit_default ;;
     forcedefault) cmd_force_default ;;
     quitall) cmd_quitall ;;
