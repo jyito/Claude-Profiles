@@ -402,9 +402,10 @@ function render(data) {
     if (hist[key].cpu.length > MAXPTS) { hist[key].cpu.shift(); hist[key].mem.shift(); }
     if (p.running) { totalMem += p.mem; running++; }
     var av = AV[i % AV.length];
+    var avatarBg = p.color || av[0];   // same color as this profile's Dock badge
     var initial = (p.slug ? p.name.replace(/^Claude /, "") : "C").charAt(0).toUpperCase();
     html += '<div class="card' + (expanded === p.slug ? " expanded" : "") + '"><div class="hdr">' +
-      '<div class="avatar" style="background:' + av[0] + ';color:' + av[1] + '">' + initial + "</div>" +
+      '<div class="avatar" style="background:' + avatarBg + ';color:#FBF7F0">' + initial + "</div>" +
       '<div style="flex:1"><div class="name">' + p.name.replace(/^Claude /, "").replace(/^\(/, "Claude (") + "</div>" +
       '<div class="sub' + (p.running ? " on" : "") + '"><span class="dot"></span>' +
       (p.running ? "Running · " + p.procs + " procs · " + p.ptys + " terminals"
