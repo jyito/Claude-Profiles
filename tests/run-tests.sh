@@ -55,6 +55,11 @@ case "$*" in
   *200*) printf 'c 200 u 17u CHR /dev/ttys004\n' ;;
 esac
 EOF
+cat > "$WORK/shims/stat" <<'EOF'
+#!/bin/bash
+# emulate macOS `stat -f %m <path>` → device mtime epoch (fixed, in the past)
+echo 1700000000
+EOF
 chmod +x "$WORK/shims/"*
 
 export PATH="$WORK/shims:$PATH"
@@ -105,6 +110,15 @@ check "default instance shown" "printf '%s' '$S' | grep -q 'Claude (default)'"
 check "opens counted"          "printf '%s' '$S' | grep -q '\"opens\":2'"
 check "mainpid resolves"       "[ \"\$('$ENGINE' mainpid business)\" = 100 ]"
 check "defaultpid resolves"    "[ \"\$('$ENGINE' defaultpid)\" = 200 ]"
+
+echo "== terminals (drill-down data) =="
+T=$("$ENGINE" terminals business)
+check "terminals is valid JSON"   "printf '%s' '$T' | python3 -m json.tool >/dev/null"
+check "terminals lists 3 devices" "[ \"\$(printf '%s' '$T' | python3 -c 'import sys,json; print(len(json.load(sys.stdin)))')\" = 3 ]"
+check "terminals rows carry dev"  "printf '%s' '$T' | grep -q '\"dev\":\"/dev/ttys001\"'"
+check "terminals rows carry idle" "printf '%s' '$T' | grep -q '\"idle\":[0-9]'"
+check "terminals rows carry cmd"  "printf '%s' '$T' | grep -q '\"cmd\":\"'"
+check "terminals empty when stopped" "[ \"\$('$ENGINE' terminals evex)\" = '[]' ]"
 
 echo "== default instance launch =="
 printf '#!/bin/bash\nprintf "%%s\\\\n" "$*" >> "%s/open.log"\n' "$WORK" > "$WORK/shims/open" && chmod +x "$WORK/shims/open"

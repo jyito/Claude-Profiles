@@ -68,6 +68,20 @@ pty_count_for_pids() {
     lsof -p "$csv" 2>/dev/null | awk '$NF ~ /^\/dev\/ttys/ {print $NF}' | sort -u | wc -l | tr -d ' '
 }
 
+json_str() {  # minimal JSON string escaping for arbitrary text (e.g. a command line)
+    printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g' | tr -d '\n\r\t'
+}
+
+tty_idle() {  # seconds since the terminal last produced output (its device mtime).
+    # macOS stat syntax; a terminal printing output keeps this fresh, so a busy
+    # session does not read as idle. Returns nothing if the device can't be stat'd.
+    local mt now
+    mt=$(stat -f %m "$1" 2>/dev/null) || return
+    [ -n "$mt" ] || return
+    now=$(date +%s)
+    printf '%s' "$(( now - mt ))"
+}
+
 disk_mb() {  # cached 30s — du on multi-GB dirs is too slow for a live tick
     local key="$1" now ts line size
     now=$(date +%s)
@@ -152,6 +166,34 @@ EOF
 
 cmd_open()  { local w; w=$(wrapper_for_slug "$1") && "$w/Contents/MacOS/launcher" & }
 cmd_mainpid() { main_pids_for_dir "$INSTANCES_DIR/${1:?}" | head -n 1; }
+cmd_terminals() {  # JSON array of this instance's terminals: [{dev,pid,cmd,idle}]
+    # Devices are discovered only within this instance's own process tree, so each
+    # /dev/ttysNN belongs to exactly one instance — no cross-app confusion. One row
+    # per device (first holder wins, matching the deduped terminal count).
+    local dir="$INSTANCES_DIR/${1:?}" mains pids snap csv out="[" first=1
+    mains=$(main_pids_for_dir "$dir")
+    [ -z "$mains" ] && { printf '[]'; return 0; }
+    # shellcheck disable=SC2086
+    pids=$(tree_pids $mains)
+    snap=$(ps axo pid=,command=)
+    csv=$(printf '%s' "$pids" | tr ' ' ',')
+    local seen=" " line dev pid cmd idle
+    while IFS= read -r line; do
+        case "$line" in *' /dev/ttys'*) ;; *) continue ;; esac
+        dev=$(printf '%s' "$line" | awk '{print $NF}')
+        pid=$(printf '%s' "$line" | awk '{print $2}')
+        case "$seen" in *" $dev "*) continue ;; esac
+        seen="$seen$dev "
+        cmd=$(printf '%s' "$snap" | awk -v p="$pid" '$1==p {$1=""; sub(/^ /,""); print; exit}')
+        idle=$(tty_idle "$dev"); [ -n "$idle" ] || idle=-1
+        [ "$first" -eq 0 ] && out="$out,"
+        out="$out{\"dev\":\"$dev\",\"pid\":$pid,\"cmd\":\"$(json_str "$cmd")\",\"idle\":$idle}"
+        first=0
+    done <<EOF
+$(lsof -p "$csv" 2>/dev/null)
+EOF
+    printf '%s]' "$out"
+}
 cmd_defaultpid() {
     ps axo pid=,command= | awk '/Claude\.app\/Contents\/MacOS\/Claude/ && !/--user-data-dir/ && !/Helper/ {print $1; exit}'
 }
@@ -312,6 +354,7 @@ case "${1:-stats}" in
     force) cmd_force "${2:?}" ;;
     clean) cmd_clean "${2:?}" ;;
     mainpid) cmd_mainpid "${2:?}" ;;
+    terminals) cmd_terminals "${2:?}" ;;
     defaultpid) cmd_defaultpid ;;
     create) cmd_create "${2:?}" ;;
     opendefault) cmd_open_default ;;
