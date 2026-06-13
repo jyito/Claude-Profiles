@@ -12,7 +12,7 @@ Multi-account Claude Desktop for macOS. Each "profile" is a generated native
 run simultaneously. The user-facing app is a native dashboard window (dark
 UI, live per-instance CPU/MEM/PTY/disk, sparklines, Show Window focusing,
 cleanup utilities). Status: **v0.2, fully working on the maintainer's Mac**,
-83/83 tests, CI configured, private repo target `jyito/Claude-Profiles`,
+87/87 tests, CI configured, private repo target `jyito/Claude-Profiles`,
 intended to go public once docs/screenshots/signing are in place.
 
 ## Non-negotiables (PRs violating these get declined)
@@ -129,15 +129,18 @@ intended to go public once docs/screenshots/signing are in place.
 ## Build / test / release
 
 ```bash
-bash tests/run-tests.sh    # 83 tests; runs on macOS or Linux (mac tools shimmed)
+bash tests/run-tests.sh    # 87 tests; runs on macOS or Linux (mac tools shimmed)
 shellcheck -S error src/launcher src/engine.sh cli/claude-profiles.sh scripts/*.sh
-bash scripts/make-icon.sh  # regenerate assets/icon.iconset from app-icon.svg (sips, macOS)
+bash scripts/make-icon.sh  # (macOS) regenerate assets/icon.iconset from app-icon.svg via sips
 bash scripts/build.sh      # assembles dist/Claude Profiles.app (+ DMG on macOS)
+SIGN_IDENTITY="Developer ID Application: …" NOTARY_PROFILE=notary \
+  bash scripts/sign.sh     # (release-only) sign + notarize + staple the app + DMG
 ```
 
-CI (`.github/workflows/ci.yml`) runs exactly those three on ubuntu-latest.
-Run all three before every commit — the suite has already caught its own
-author once. New engine features need a test. Changes to
+CI (`.github/workflows/ci.yml`) runs the first three (tests, shellcheck, build)
+on ubuntu-latest; `make-icon.sh` is macOS-only and `sign.sh` is release-only.
+Run tests + shellcheck + build before every commit — the suite has already
+caught its own author once. New engine features need a test. Changes to
 `dashboard.applescript` MUST be tested on real macOS (the one layer the
 suite can't run) and PRs should state which macOS versions.
 
