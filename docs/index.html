@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude Profiles — run every Claude account at once, free</title>
+<meta name="description" content="A polished, genuinely-free macOS app to run multiple Claude Desktop accounts side by side — each permanently signed in, with a live native dashboard. Open source, no subscription.">
+<!-- This page is plain static HTML for GitHub Pages (set Pages source to /docs).
+     No build step, no frameworks, no trackers. Screenshots go in docs/assets/. -->
+<style>
+  :root{
+    --bg:#1A1915; --card:#21201A; --line:#2e2c25; --text:#F1EFE8; --muted:#888780;
+    --coral:#D85A30; --coral-tint:#F0997B; --mint:#5DCAA5; --mint-tint:#9FE1CB;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--text);
+    font:16px/1.6 -apple-system,"SF Pro Text",Segoe UI,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  a{color:var(--mint-tint);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{max-width:960px;margin:0 auto;padding:0 24px}
+  .section{padding:64px 0;border-top:.5px solid var(--line)}
+  h1{font-size:46px;line-height:1.1;font-weight:600;letter-spacing:-.02em}
+  h2{font-size:28px;font-weight:600;margin-bottom:8px;letter-spacing:-.01em}
+  h3{font-size:17px;font-weight:600;margin-bottom:4px}
+  p.lead{font-size:20px;color:var(--text)}
+  .muted{color:var(--muted)}
+  /* hero */
+  .hero{padding:84px 0 64px;text-align:center}
+  .freebadge{display:inline-block;background:#10342B;color:var(--mint-tint);
+    border:.5px solid #1f5848;border-radius:999px;padding:6px 14px;font-size:13px;
+    font-weight:500;margin-bottom:22px;letter-spacing:.01em}
+  .hero p.lead{max-width:660px;margin:18px auto 30px;color:#CFCDC4}
+  .cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+  .btn{display:inline-block;border-radius:10px;padding:12px 22px;font-size:15px;
+    font-weight:500;cursor:pointer;border:.5px solid transparent}
+  .btn.primary{background:var(--coral);color:#FAECE7}
+  .btn.primary:hover{background:#E26A3E;text-decoration:none}
+  .btn.ghost{background:transparent;border-color:#3a382f;color:var(--text)}
+  .btn.ghost:hover{border-color:#5F5E5A;text-decoration:none}
+  .shot{margin-top:48px;border:.5px solid var(--line);border-radius:14px;overflow:hidden;background:var(--card)}
+  .shot img{display:block;width:100%}
+  .shot .ph{padding:64px 24px;text-align:center;color:var(--muted);font-size:14px}
+  /* grids */
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin-top:28px}
+  .feat{background:var(--card);border:.5px solid var(--line);border-radius:12px;padding:20px}
+  .feat .dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:8px;vertical-align:middle}
+  .feat p{color:#BFBDB4;font-size:14.5px;margin-top:6px}
+  /* safety list */
+  .safe{margin-top:24px;display:grid;gap:12px}
+  .safe div{background:var(--card);border:.5px solid var(--line);border-left:3px solid var(--mint);
+    border-radius:0 10px 10px 0;padding:14px 18px;font-size:15px}
+  .safe b{color:var(--mint-tint)}
+  /* table */
+  table{width:100%;border-collapse:collapse;margin-top:24px;font-size:14.5px}
+  th,td{text-align:left;padding:12px 14px;border-bottom:.5px solid var(--line)}
+  th{color:var(--muted);font-weight:500}
+  td.y{color:var(--mint-tint)}
+  td.n{color:#7a766c}
+  tr td:first-child{color:var(--text);font-weight:500}
+  .ours{background:#211c17}
+  /* code */
+  pre{background:#15140F;border:.5px solid var(--line);border-radius:12px;
+    padding:18px 20px;margin-top:18px;overflow-x:auto;font:14px/1.7 "SF Mono",ui-monospace,Menlo,monospace;color:#D7D4CB}
+  pre .c{color:var(--muted)}
+  pre .o{color:var(--coral-tint)}
+  /* faq */
+  .faq{margin-top:20px;display:grid;gap:14px}
+  .faq div{background:var(--card);border:.5px solid var(--line);border-radius:12px;padding:16px 20px}
+  .faq h3{color:var(--coral-tint)}
+  .faq p{color:#BFBDB4;font-size:15px;margin-top:4px}
+  footer{padding:48px 0 64px;border-top:.5px solid var(--line);color:var(--muted);font-size:13.5px}
+  footer .disc{background:#1f1a18;border:.5px solid #3a2a24;border-radius:10px;padding:14px 18px;margin-bottom:18px;line-height:1.6}
+  @media(max-width:600px){h1{font-size:34px}.hero{padding:56px 0 40px}.section{padding:48px 0}}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="freebadge">★ Free &amp; open source — no subscription, no catch</div>
+    <h1>Run every Claude account<br>at once.</h1>
+    <p class="lead">Claude Profiles gives each of your Claude Desktop accounts its own permanently-signed-in app, plus a live native dashboard to manage them all. On your Mac. For free.</p>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/jyito/Claude-Profiles">Get it on GitHub</a>
+      <a class="btn ghost" href="#how">How it works</a>
+    </div>
+    <div class="shot">
+      <!-- SCREENSHOT: save as docs/assets/hero-dashboard.png (≥1400px). Dashboard window, 2+ running profiles, live sparklines. -->
+      <div class="ph">[ dashboard screenshot — docs/assets/hero-dashboard.png ]</div>
+    </div>
+  </div>
+</header>
+
+<section class="section" id="why">
+  <div class="wrap">
+    <h2>One account at a time is not enough</h2>
+    <p class="lead muted">Personal plan, work plan, a client's account — Claude Desktop signs in one at a time, so you're forever logging out and back in.</p>
+    <p style="margin-top:14px;max-width:720px;color:#BFBDB4">Claude Profiles gives every account its own app icon — <b style="color:var(--text)">Claude Personal</b>, <b style="color:var(--text)">Claude Work</b>, <b style="color:var(--text)">Claude Client X</b> — each with a distinct colored badge so you can tell them apart at a glance. Open as many as you like, all at once. Each stays signed in forever.</p>
+  </div>
+</section>
+
+<section class="section" id="how">
+  <div class="wrap">
+    <h2>How it works — and why it's safe</h2>
+    <p class="lead muted">It's a thin, honest launcher around the real Claude Desktop app.</p>
+    <p style="margin-top:14px;max-width:720px;color:#BFBDB4">Claude Desktop is an Electron app. Launched with <code style="color:var(--coral-tint)">--user-data-dir=&lt;path&gt;</code>, it keeps <em>all</em> of its session state inside that folder. Claude Profiles simply gives each account its own folder and a tiny native wrapper that launches the real app pointed at it — exactly like separate browser profiles.</p>
+    <div class="safe">
+      <div><b>No credential handling, ever.</b> It never sees, stores, or transmits your passwords or tokens. Claude Desktop manages its own session in each folder.</div>
+      <div><b>No telemetry, no network.</b> Nothing phones home. The only "analytics" is a local launch-count file you can delete.</div>
+      <div><b>Never modifies Claude.app.</b> The official app's signature stays intact; its auto-updates keep working.</div>
+      <div><b>Zero dependencies.</b> Plain macOS built-ins — no Homebrew, no Node, no Python, no compilation.</div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="features">
+  <div class="wrap">
+    <h2>A real app, not a script</h2>
+    <p class="lead muted">Everything you'd want to manage a fleet of Claudes.</p>
+    <div class="grid">
+      <div class="feat"><h3><span class="dot" style="background:var(--coral)"></span>Live dashboard</h3><p>Native window showing each instance's CPU, memory, terminals, and disk, with rolling sparklines — refreshed every 2 seconds.</p></div>
+      <div class="feat"><h3><span class="dot" style="background:var(--mint)"></span>Per-profile badges</h3><p>Each account gets a distinct colored badge on its icon, so a Dock full of Claudes is instantly readable. Pick the color yourself.</p></div>
+      <div class="feat"><h3><span class="dot" style="background:var(--coral)"></span>Drill-down &amp; cleanup</h3><p>Expand a card to see live terminal sessions and close idle ones, or clear regenerable caches by tier — never your logins.</p></div>
+      <div class="feat"><h3><span class="dot" style="background:var(--mint)"></span>Show Window</h3><p>One click raises a specific instance's windows by process, even though all instances share Claude's bundle — no special permissions.</p></div>
+      <div class="feat"><h3><span class="dot" style="background:var(--coral)"></span>Throttle &amp; auto-clean</h3><p>Tame a CPU-hungry instance, or opt into automatic cache cleanup — all off by default, all local.</p></div>
+      <div class="feat"><h3><span class="dot" style="background:var(--mint)"></span>Safe by design</h3><p>Removing a profile keeps your login unless you type <code>DELETE</code>. An Emergency Stop is one click away. Sign-ins always survive.</p></div>
+    </div>
+    <div class="shot" style="margin-top:32px">
+      <!-- SCREENSHOT: save as docs/assets/drilldown.png. An expanded running card with the terminals table. -->
+      <div class="ph">[ drill-down screenshot — docs/assets/drilldown.png ]</div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="compare">
+  <div class="wrap">
+    <h2>How it compares</h2>
+    <p class="lead muted">The <code>--user-data-dir</code> trick is well known. A polished, complete app around it is not.</p>
+    <table>
+      <tr><th>&nbsp;</th><th class="ours">Claude Profiles</th><th>Other wrappers</th><th>Automator / manual</th></tr>
+      <tr><td>Run accounts simultaneously</td><td class="y ours">Yes</td><td class="y">Yes</td><td class="y">Yes</td></tr>
+      <tr><td>Native live dashboard (CPU/mem/disk)</td><td class="y ours">Yes</td><td class="n">No</td><td class="n">No</td></tr>
+      <tr><td>Per-profile distinct icons</td><td class="y ours">Yes</td><td class="n">No</td><td class="n">No</td></tr>
+      <tr><td>Drill-down, cleanup, throttle</td><td class="y ours">Yes</td><td class="n">No</td><td class="n">No</td></tr>
+      <tr><td>Raise a specific instance's windows</td><td class="y ours">Yes</td><td class="n">No</td><td class="n">No</td></tr>
+      <tr><td>Zero dependencies</td><td class="y ours">Yes</td><td class="n">Varies</td><td class="y">Yes</td></tr>
+      <tr><td>Price</td><td class="y ours">Free, open source</td><td class="y">Usually free</td><td class="y">Free</td></tr>
+    </table>
+    <p class="muted" style="margin-top:14px;font-size:13.5px">Anthropic has open feature requests for built-in multi-account support — the demand is real, it just isn't shipped yet. Until it is, this is the most complete way to do it.</p>
+  </div>
+</section>
+
+<section class="section" id="start">
+  <div class="wrap">
+    <h2>Build it in three commands</h2>
+    <p class="lead muted">macOS only. No compiler, no dependencies.</p>
+<pre><span class="c"># clone, build, run</span>
+git clone https://github.com/jyito/Claude-Profiles.git
+cd Claude-Profiles
+bash scripts/build.sh && open <span class="o">"dist/Claude Profiles.app"</span></pre>
+    <p class="muted" style="margin-top:14px;font-size:14px">Or grab a release build. First launch of a downloaded app is right-click → Open (it's unsigned for now). Profiles the app creates locally open normally.</p>
+  </div>
+</section>
+
+<section class="section" id="faq">
+  <div class="wrap">
+    <h2>Questions</h2>
+    <div class="faq">
+      <div><h3>Is it really free?</h3><p>Yes — Apache-2.0 licensed, source on GitHub, no subscription, no upsell, no account required. You should not have to pay for something this simple. That's the whole point.</p></div>
+      <div><h3>Is it safe with my logins?</h3><p>It never touches your credentials. Each account's session lives in its own folder, managed by Claude Desktop itself — the same mechanism browsers use for profiles. No network, no telemetry.</p></div>
+      <div><h3>Is this an official Anthropic product?</h3><p>No. It's an unofficial, independent community tool. It doesn't modify Claude Desktop and isn't affiliated with or endorsed by Anthropic.</p></div>
+      <div><h3>Why do running windows still say "Claude"?</h3><p>Because each profile launches the real, unmodified Claude.app — which is exactly what keeps it safe and auto-updating. The per-profile badge and Show Window tell instances apart instead.</p></div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="disc"><b>Unofficial.</b> This is a community tool, not an Anthropic product, and is not affiliated with or endorsed by Anthropic. "Claude" is a trademark of Anthropic, PBC. Claude Profiles is a thin launcher around the official Claude Desktop app; it never modifies it.</div>
+    <p>Apache-2.0 · <a href="https://github.com/jyito/Claude-Profiles">github.com/jyito/Claude-Profiles</a> · Built with macOS built-ins and no trackers.</p>
+  </div>
+</footer>
+
+</body>
+</html>
