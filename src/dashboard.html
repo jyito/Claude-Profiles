@@ -165,7 +165,7 @@ function act(a, slug) {
   document.title = "cp:" + a + (slug ? ":" + slug : "");
   var t = document.getElementById("toast");
   t.textContent = {create:"Creating profile…", open:"Launching…", focus:"Bringing windows forward…",
-                   focusdefault:"Bringing windows forward…", quit:"Asking instance to quit…",
+                   focusdefault:"Bringing windows forward…", opendefault:"Launching Claude…", quit:"Asking instance to quit…",
                    force:"Force quitting…", quitdefault:"Asking Claude to quit…", forcedefault:"Force quitting Claude…",
                    clean:"Clearing caches…", remove:"Removing app…", quitall:"Quitting all profiles…",
                    cleanall:"Clearing caches on stopped profiles…", killswitch:"EMERGENCY STOP — killing all Claude instances…",
@@ -236,7 +236,7 @@ function render(data) {
                 '<button onclick="act(\'quitdefault\')">Quit</button>' +
                 '<button onclick="act(\'forcedefault\')">Force Quit</button>';
       } else {
-        html += '<button disabled style="opacity:.4">Not running</button>';
+        html += '<button class="primary" onclick="act(\'opendefault\')">Open</button>';
       }
     }
     html += "</div>";

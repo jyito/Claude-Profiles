@@ -479,7 +479,20 @@ launch_dashboard() {
         return
     fi
 
-    sed "s|__RESOURCES__|$res|g" "$res/dashboard.applescript" > "$rt/dashboard-src.applescript"
+    sed "s|__RESOURCES__|$res|g" "$res/dashboard.applescript" > "$rt/dashboard-src.new"
+    # Reuse the compiled applet when the source hasn't changed. Recompiling
+    # re-signs the bundle (fresh ad-hoc signature), and TCC keys the Automation
+    # grant for the Show Window fallback to that signature — recompiling every
+    # launch silently revoked it. html and engine.sh are read live from the
+    # manager's Resources at runtime; only .applescript changes need a rebuild.
+    # (The baked applet.icns goes stale if ONLY the icon changes — delete
+    # ~/.claude-instances/.runtime to force a rebuild in that rare case.)
+    if [ -x "$applet/Contents/MacOS/applet" ] && cmp -s "$rt/dashboard-src.new" "$rt/dashboard-src.applescript"; then
+        rm -f "$rt/dashboard-src.new"
+        open "$applet"
+        return
+    fi
+    mv "$rt/dashboard-src.new" "$rt/dashboard-src.applescript"
     if ! /usr/bin/osacompile -s -o "$applet" "$rt/dashboard-src.applescript" 2> "$rt/compile.log"; then
         show_info "The dashboard window couldn't be prepared on this Mac — using the classic menu instead. (Details: $rt/compile.log)"
         classic_menu
@@ -488,8 +501,19 @@ launch_dashboard() {
 
     # Brand the applet so the Dock shows Claude Profiles, not a generic applet.
     [ -f "$res/app.icns" ] && cp "$res/app.icns" "$applet/Contents/Resources/applet.icns" 2>/dev/null
+    # osacompile embeds an Assets.car whose CFBundleIconName entry (the stock
+    # AppleScript scroll) outranks CFBundleIconFile on modern macOS — strip
+    # both so icon resolution falls back to applet.icns above.
+    rm -f "$applet/Contents/Resources/Assets.car"
+    /usr/libexec/PlistBuddy -c "Delete :CFBundleIconName" \
+        "$applet/Contents/Info.plist" >/dev/null 2>&1 || true
     /usr/libexec/PlistBuddy -c "Set :CFBundleName Claude Profiles" \
         "$applet/Contents/Info.plist" >/dev/null 2>&1 || true
+    # iconservices caches Dock icons per bundle id; an id-less applet can
+    # inherit the cached generic icon, so give it a stable unique identity.
+    /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string local.claude-profiles.dashboard" \
+        "$applet/Contents/Info.plist" >/dev/null 2>&1 || true
+    touch "$applet"  # nudge LaunchServices to re-read the bundle
 
     # open activates the existing instance if the dashboard is already running.
     open "$applet"

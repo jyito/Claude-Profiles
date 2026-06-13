@@ -106,6 +106,11 @@ check "opens counted"          "printf '%s' '$S' | grep -q '\"opens\":2'"
 check "mainpid resolves"       "[ \"\$('$ENGINE' mainpid business)\" = 100 ]"
 check "defaultpid resolves"    "[ \"\$('$ENGINE' defaultpid)\" = 200 ]"
 
+echo "== default instance launch =="
+printf '#!/bin/bash\nprintf "%%s\\\\n" "$*" >> "%s/open.log"\n' "$WORK" > "$WORK/shims/open" && chmod +x "$WORK/shims/open"
+check "opendefault launches Claude" "'$ENGINE' opendefault >/dev/null; grep -q -- '-n -a $WORK/Claude.app' '$WORK/open.log'"
+check "opendefault button in UI"    "grep -q \"act('opendefault')\" '$ROOT/src/dashboard.html' || grep -q 'opendefault' '$ROOT/src/dashboard.html'"
+
 echo "== engine cleanup safety =="
 mkdir -p "$WORK/instances/evex/GPUCache"
 dd if=/dev/zero of="$WORK/instances/evex/GPUCache/b" bs=1024 count=256 2>/dev/null
@@ -123,6 +128,11 @@ check "cleanall cleans stopped"  "case \"\$R\" in ok*bulkstopped*) [ ! -d '$WORK
 check "cleanall skips running"   "case \"\$R\" in *business*) false ;; *) true ;; esac"
 check "cleanup modal in UI"      "grep -q 'id=\"cleanmodal\"' '$ROOT/src/dashboard.html'"
 check "killswitch arm-confirm"   "grep -q 'Click again to confirm' '$ROOT/src/dashboard.html'"
+
+echo "== applet branding =="
+check "applet icon override stripped" "grep -q 'Delete :CFBundleIconName' '$LAUNCHER_SRC' && grep -q 'Assets.car' '$LAUNCHER_SRC'"
+check "applet bundle id branded"      "grep -q 'local.claude-profiles.dashboard' '$LAUNCHER_SRC'"
+check "applet reused when unchanged"  "grep -q 'cmp -s' '$LAUNCHER_SRC'"
 
 echo "== dashboard JS =="
 if command -v node >/dev/null 2>&1; then
