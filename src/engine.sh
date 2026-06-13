@@ -362,9 +362,17 @@ cmd_killswitch() {  # emergency stop: SIGKILL every Claude instance tree, defaul
 cmd_quit()  { local m; m=$(main_pids_for_dir "$INSTANCES_DIR/$1"); [ -n "$m" ] && kill -TERM $m 2>/dev/null; true; }
 cmd_force() { local m; m=$(main_pids_for_dir "$INSTANCES_DIR/$1"); [ -n "$m" ] && kill -9 $(tree_pids $m) 2>/dev/null; true; }
 cmd_clean() {
-    local dir="$INSTANCES_DIR/${1:?}" d
+    local dir="$INSTANCES_DIR/${1:?}" tier="${2:-all}" d
     [ -n "$(main_pids_for_dir "$dir")" ] && { printf 'running'; return 0; }
-    for d in "Cache" "Code Cache" "GPUCache" "DawnGraphiteCache" "DawnWebGPUCache" "ShaderCache" "Crashpad/completed" "Crashpad/pending"; do
+    # set -- preserves "Code Cache" (has a space) without bash-4 arrays. Every tier
+    # is regenerable Electron data — sign-ins (Cookies, Local Storage) are never here.
+    case "$tier" in
+        caches) set -- "Cache" "Code Cache" ;;
+        gpu)    set -- "GPUCache" "DawnGraphiteCache" "DawnWebGPUCache" "ShaderCache" ;;
+        logs)   set -- "logs" "Crashpad/completed" "Crashpad/pending" ;;
+        *)      set -- "Cache" "Code Cache" "GPUCache" "DawnGraphiteCache" "DawnWebGPUCache" "ShaderCache" "Crashpad/completed" "Crashpad/pending" ;;
+    esac
+    for d in "$@"; do
         rm -rf "${dir:?}/$d" 2>/dev/null
     done
     rm -f "$DISK_CACHE"
@@ -379,7 +387,7 @@ case "${1:-stats}" in
     open)  cmd_open  "${2:?}" ;;
     quit)  cmd_quit  "${2:?}" ;;
     force) cmd_force "${2:?}" ;;
-    clean) cmd_clean "${2:?}" ;;
+    clean) cmd_clean "${2:?}" "${3:-}" ;;
     mainpid) cmd_mainpid "${2:?}" ;;
     terminals) cmd_terminals "${2:?}" ;;
     closeterm) cmd_closeterm "${2:?}" "${3:?}" ;;
