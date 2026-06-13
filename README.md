@@ -53,7 +53,7 @@ Grab the latest release (`Claude-Profiles.zip` or `.dmg`), then see [docs/INSTAL
 git clone https://github.com/jyito/Claude-Profiles.git
 cd Claude-Profiles
 bash scripts/build.sh        # assembles dist/Claude Profiles.app (+ DMG on macOS)
-bash tests/run-tests.sh      # 80-check suite, runs on macOS or Linux
+bash tests/run-tests.sh      # 87-check suite, runs on macOS or Linux
 ```
 
 There is no compile step — `build.sh` just assembles the bundle from `src/`.
