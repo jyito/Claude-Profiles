@@ -1,5 +1,12 @@
 # App icon candidates
 
+> **Chosen: B (window stack).** It's baked and shipping — the source lives at
+> `assets/app-icon.svg` (rendered at full macOS-grid proportions) and
+> `scripts/make-icon.sh` regenerates the iconset. To switch to A or C, copy that
+> candidate's design into `app-icon.svg` at 1024 proportions and re-run the
+> script. The 160-unit files below are the original gallery sketches.
+
+
 Three trademark-safe directions for the Claude Profiles app icon, in the
 dashboard palette (coral `#D85A30`, mint `#5DCAA5`, warm gray, on the dark
 `#1A1915` squircle). **None reproduce Anthropic's Claude mark** — the asterisk
