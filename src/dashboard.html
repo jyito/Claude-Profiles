@@ -86,6 +86,12 @@
   .xbtn.armed { background:#501313; border-color:#E24B4A; color:#F7C1C1; }
   .drill .empty { color:#888780; font-size:12px; padding:6px 0; }
   .drill .hint { color:#6b6a64; font-size:11px; margin-top:8px; }
+  .tiers { display:grid; grid-template-columns:repeat(auto-fit, minmax(120px,1fr)); gap:8px; }
+  .tierbtn { text-align:left; background:#1A1915; border:.5px solid #3a382f; border-radius:9px;
+             padding:9px 11px; cursor:pointer; font-family:inherit; }
+  .tierbtn:hover { border-color:#5F5E5A; }
+  .tierbtn .t { font-size:12px; font-weight:500; color:#F1EFE8; }
+  .tierbtn .d { font-size:11px; color:#888780; margin-top:1px; }
 </style></head><body>
 <div class="top">
   <div>
@@ -146,11 +152,26 @@ function closeTerm(slug, dev) {   // two-step: first click arms, second confirms
     rerender();
   }
 }
+function profileBySlug(slug) {
+  if (lastData) for (var i = 0; i < lastData.length; i++) if (lastData[i].slug === slug) return lastData[i];
+  return null;
+}
 function toggleExpand(slug) {
   if (expanded === slug) { expanded = null; }
-  else { expanded = slug; act("terminals", slug); }   // ask the host for this profile's terminals
+  else {
+    expanded = slug;
+    var p = profileBySlug(slug);
+    if (p && p.running) act("terminals", slug);   // terminals only exist for running instances
+  }
   rerender();
 }
+function act3(a, slug, arg) {   // three-part action: cp:verb:slug:arg
+  document.title = "cp:" + a + ":" + slug + ":" + arg;
+  var t = document.getElementById("toast");
+  t.textContent = a === "clean" ? "Clearing " + arg + "…" : "";
+  setTimeout(function(){ t.textContent = ""; }, 2500);
+}
+function fmtDisk(mb) { return mb >= 1024 ? (mb / 1024).toFixed(1) + " GB" : mb + " MB"; }
 function updateTerminals(slug, arr) {   // pushed by the host after `engine terminals <slug>`
   terminals[slug] = arr;
   if (expanded === slug) rerender();
@@ -166,8 +187,21 @@ function esc(s) {
   return ("" + (s == null ? "" : s)).replace(/&/g, "&amp;").replace(/</g, "&lt;")
     .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
-function drillPanel(slug) {
-  var rows = terminals[slug];
+function tierBtn(slug, tier, title, desc) {
+  return '<button class="tierbtn" onclick="act3(\'clean\',\'' + slug + "','" + tier + '\')">' +
+         '<div class="t">' + title + '</div><div class="d">' + desc + "</div></button>";
+}
+function drillPanel(p) {
+  if (!p.running) {
+    var c = '<div class="drill"><h4>Cleanup — regenerable caches only, sign-in untouched</h4><div class="tiers">' +
+      tierBtn(p.slug, "caches", "Caches", "Web &amp; code caches") +
+      tierBtn(p.slug, "gpu", "GPU", "Shader &amp; GPU caches") +
+      tierBtn(p.slug, "logs", "Logs", "Crash reports &amp; logs") +
+      tierBtn(p.slug, "all", "Everything", "All of the above") + "</div>";
+    if (p.disk >= 0) c += '<div class="hint">Using ' + fmtDisk(p.disk) + " on disk.</div>";
+    return c + "</div>";
+  }
+  var slug = p.slug, rows = terminals[slug];
   var h = '<div class="drill"><h4>Terminals — live sessions in this profile</h4>';
   if (!rows) return h + '<div class="empty">Loading…</div></div>';
   if (!rows.length) return h + '<div class="empty">No active terminals.</div></div>';
@@ -260,9 +294,12 @@ function updateStats(data) {
   lastData = data;
   if (uiLock) return;
   render(data);
-  // keep an open drill-down live: ask for fresh terminals each tick, but never
-  // clobber a command the user just queued (title already starts with cp:).
-  if (expanded && document.title.indexOf("cp:") !== 0) document.title = "cp:terminals:" + expanded;
+  // keep an open running drill-down live: ask for fresh terminals each tick, but
+  // never clobber a command the user just queued (title already starts with cp:).
+  if (expanded && document.title.indexOf("cp:") !== 0) {
+    for (var j = 0; j < data.length; j++)
+      if (data[j].slug === expanded && data[j].running) { document.title = "cp:terminals:" + expanded; break; }
+  }
 }
 function render(data) {
   var totalMem = 0, running = 0, html = "";
@@ -305,8 +342,7 @@ function render(data) {
           '<div class="acts"><button class="danger" style="flex:1;border-radius:7px;padding:6px 0;font-size:12px;cursor:pointer" onclick="finishPurge(\'' + p.slug + '\')">Confirm</button>' +
           '<button onclick="delete confirmStep[\'' + p.slug + '\'];uiLock=false;rerender()">Keep Login</button></div><div style="display:none">';
       } else {
-        html += '<button class="primary" onclick="act(\'open\',\'' + p.slug + '\')">Open</button>' +
-                '<button onclick="act(\'clean\',\'' + p.slug + '\')">Clean Caches</button>';
+        html += '<button class="primary" onclick="act(\'open\',\'' + p.slug + '\')">Open</button>';
       }
     } else {
       if (p.running) {
@@ -318,11 +354,12 @@ function render(data) {
       }
     }
     html += "</div>";
-    if (p.slug && p.running) {
-      html += '<button class="expander" onclick="toggleExpand(\'' + p.slug + '\')">' +
-              (expanded === p.slug ? "▴ Hide terminals" : "▾ Terminals" + (p.ptys ? " (" + p.ptys + ")" : "")) +
-              "</button>";
-      if (expanded === p.slug) html += drillPanel(p.slug);
+    if (p.slug && (p.running || !confirmStep[p.slug])) {
+      var lbl = p.running
+        ? (expanded === p.slug ? "▴ Hide terminals" : "▾ Terminals" + (p.ptys ? " (" + p.ptys + ")" : ""))
+        : (expanded === p.slug ? "▴ Hide cleanup" : "▾ Cleanup");
+      html += '<button class="expander" onclick="toggleExpand(\'' + p.slug + '\')">' + lbl + "</button>";
+      if (expanded === p.slug) html += drillPanel(p);
     }
     if (p.slug && !p.running && !confirmStep[p.slug]) {
       html += '<button class="linkbtn" onclick="startRemove(\'' + p.slug + '\')">Remove profile…</button>';
