@@ -80,7 +80,9 @@ on pushStats()
 end pushStats
 
 on pushTerminals(slug)
-	-- slug is sanitized to [a-z0-9] by the engine, so it is safe to inline.
+	-- slug originates from the page, which only ever emits engine-created
+	-- [a-z0-9] slugs, so inlining it into the JS string literal is safe. tjson is
+	-- the engine's `terminals` stdout, which always emits a JSON array.
 	try
 		set tjson to do shell script quoted form of enginePath & " terminals " & quoted form of slug
 		theWebView's evaluateJavaScript:("updateTerminals('" & slug & "'," & tjson & ")") completionHandler:(missing value)
@@ -113,11 +115,12 @@ on idle
 end idle
 
 on handleAction(raw)
-	set parts to my splitText(raw, ":")
-	set verb to item 2 of parts
-	set slug to ""
-	if (count of parts) > 2 then set slug to item 3 of parts
 	try
+		set parts to my splitText(raw, ":")
+		if (count of parts) < 2 then return
+		set verb to item 2 of parts
+		set slug to ""
+		if (count of parts) > 2 then set slug to item 3 of parts
 		if verb is "create" then
 			set theName to my joinFrom(parts, 3, ":")
 			do shell script quoted form of enginePath & " create " & quoted form of theName & " >/dev/null 2>&1"
