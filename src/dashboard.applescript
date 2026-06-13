@@ -105,7 +105,7 @@ on handleAction(raw)
 			my focusInstance(verb, slug)
 		else if verb is in {"quitall", "cleanall", "killswitch"} then
 			do shell script quoted form of enginePath & " " & verb & " >/dev/null 2>&1 &"
-		else if verb is "quitdefault" or verb is "forcedefault" then
+		else if verb is in {"opendefault", "quitdefault", "forcedefault"} then
 			do shell script quoted form of enginePath & " " & verb & " >/dev/null 2>&1 &"
 		else if verb is in {"open", "quit", "force", "clean", "remove", "purge"} then
 			do shell script quoted form of enginePath & " " & verb & " " & quoted form of slug & " >/dev/null 2>&1 &"
@@ -123,6 +123,12 @@ on focusInstance(verb, slug)
 		if pidText is "" then return
 		set theApp to current application's NSRunningApplication's runningApplicationWithProcessIdentifier:(pidText as integer)
 		if theApp is not missing value then
+			-- macOS 14+ cooperative activation: yield our active status to the
+			-- target first so the polite request below is actually honored.
+			-- (Selector is 14+-only; the try keeps older macOS working.)
+			try
+				(current application's NSApplication's sharedApplication())'s yieldActivationToApplication:theApp
+			end try
 			theApp's activateWithOptions:3
 			delay 0.3
 			if not ((theApp's isActive()) as boolean) then

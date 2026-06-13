@@ -12,7 +12,7 @@ Multi-account Claude Desktop for macOS. Each "profile" is a generated native
 run simultaneously. The user-facing app is a native dashboard window (dark
 UI, live per-instance CPU/MEM/PTY/disk, sparklines, Show Window focusing,
 cleanup utilities). Status: **v0.2, fully working on the maintainer's Mac**,
-28/28 tests, CI configured, private repo target `jyito/Claude-Profiles`,
+34/34 tests, CI configured, private repo target `jyito/Claude-Profiles`,
 intended to go public once docs/screenshots/signing are in place.
 
 ## Non-negotiables (PRs violating these get declined)
@@ -89,6 +89,13 @@ intended to go public once docs/screenshots/signing are in place.
   whose unix id is N) to true` — triggers a ONE-TIME Automation permission
   prompt, the only permission in the project. Also user-dependent: Desktop &
   Dock → "switch to a Space with open windows" affects the jump.
+- **Replacing an applet's `applet.icns` is NOT enough to brand its Dock
+  icon.** osacompile embeds an `Assets.car` and sets `CFBundleIconName`,
+  which outranks `CFBundleIconFile` on modern macOS — the Dock keeps showing
+  the stock AppleScript scroll. `launch_dashboard` must delete the
+  `CFBundleIconName` key and `Assets.car` after compiling (and sets a unique
+  `CFBundleIdentifier`, since iconservices caches per bundle id). Don't
+  "clean up" that block.
 - **`kill` is a bash builtin** — PATH shims can't intercept it; that's why
   the test suite doesn't exercise quit/force, by design. Keep it that way.
 - **Locally generated/built bundles carry no quarantine** — no Gatekeeper
@@ -102,7 +109,7 @@ intended to go public once docs/screenshots/signing are in place.
 ## Build / test / release
 
 ```bash
-bash tests/run-tests.sh    # 28 tests; runs on macOS or Linux (mac tools shimmed)
+bash tests/run-tests.sh    # 34 tests; runs on macOS or Linux (mac tools shimmed)
 shellcheck -S error src/launcher src/engine.sh cli/claude-profiles.sh scripts/*.sh
 bash scripts/build.sh      # assembles dist/Claude Profiles.app (+ DMG on macOS)
 ```
