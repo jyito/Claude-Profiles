@@ -112,6 +112,11 @@ check "badge falls back to plain copy" "rm -rf '$WORK/bf'; mkdir -p '$WORK/bf'; 
 # would hit the shim. The fallback + color tests above cover the bash logic; the
 # actual rendering is verified directly with the real osascript (see commit notes).
 check "badge compositor present"     "[ -f '$ROOT/src/badge-icon.applescript' ] && grep -q 'badge_icon' '$ROOT/src/engine.sh' && grep -q 'badge-icon.applescript' '$ROOT/scripts/build.sh'"
+mkdir -p "$WORK/instances/.runtime"
+printf 'ovslug 3\n' > "$WORK/instances/.runtime/badges"
+check "badge override changes color"  "[ \"\$(bash -c '. \"\$1\"; badge_color_for ovslug' _ '$ENGINE')\" = '124 92 196' ]"
+check "setbadge rejects bad index"    "[ \"\$(bash -c '. \"\$1\"; cmd_setbadge ovslug 9' _ '$ENGINE')\" = 'err badindex' ]"
+rm -f "$WORK/instances/.runtime/badges"
 
 echo "== engine stats =="
 printf '2026-06-10 08:12\n2026-06-12 09:14\n' > "$WORK/instances/business/.profile-activity"
@@ -304,7 +309,9 @@ let lock=0;
 try { confirmStep['zz']=1; const a=uiLocked(); delete confirmStep['zz']; const b=uiLocked(); lock=(a && !b)?1:0; } catch(e){}
 let avatarColor=0;
 try { const prof=d.find(p=>p.slug && p.color); if(prof && grid.indexOf('background:'+prof.color)>-1) avatarColor=1; } catch(e){}
-console.log(cards, sw, sp, rm, drill, tiers, (loadCls.indexOf('hidden')>-1?1:0), lock, avatarColor);
+let swatches=0;
+try { if(grid.indexOf('class=\"swatch')>-1 && grid.indexOf('setbadge')>-1) swatches=1; } catch(e){}
+console.log(cards, sw, sp, rm, drill, tiers, (loadCls.indexOf('hidden')>-1?1:0), lock, avatarColor, swatches);
 " 2>/dev/null)
     check "cards render"        "[ \"\$(echo '$R' | awk '{print \$1}')\" -ge 3 ]"
     check "Show Window buttons" "[ \"\$(echo '$R' | awk '{print \$2}')\" = 2 ]"
@@ -315,6 +322,7 @@ console.log(cards, sw, sp, rm, drill, tiers, (loadCls.indexOf('hidden')>-1?1:0),
     check "loading screen hides on render"  "[ \"\$(echo '$R' | awk '{print \$7}')\" = 1 ]"
     check "input lock derived from confirm state" "[ \"\$(echo '$R' | awk '{print \$8}')\" = 1 ]"
     check "card avatar uses badge color"          "[ \"\$(echo '$R' | awk '{print \$9}')\" = 1 ]"
+    check "drill-down shows badge swatches"       "[ \"\$(echo '$R' | awk '{print \$10}')\" = 1 ]"
 else
     echo "  - node not found, skipping JS render tests"
 fi
