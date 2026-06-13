@@ -201,7 +201,13 @@
 </div>
 <div class="grid" id="grid"></div>
 <script>
-var hist = {}, MAXPTS = 30, uiLock = false, confirmStep = {}, lastData = null;
+var hist = {}, MAXPTS = 30, confirmStep = {}, lastData = null;
+function uiLocked() {   // derive the input lock from live state — never a stale boolean
+  var ids = ["npmodal", "cleanmodal", "setmodal"], i, m;
+  for (i = 0; i < ids.length; i++) { m = document.getElementById(ids[i]); if (m && m.className.indexOf("show") > -1) return true; }
+  for (i in confirmStep) if (confirmStep.hasOwnProperty(i)) return true;
+  return false;
+}
 var expanded = null, terminals = {}, closeArmed = null;
 function closeTerm(slug, dev) {   // two-step: first click arms, second confirms (live session)
   var k = slug + "/" + dev;
@@ -288,8 +294,8 @@ function drillPanel(p) {
 }
 function toggleNp(show) {
   var f = document.getElementById("npmodal");
-  if (show) { f.className = "scrim show"; uiLock = true; document.getElementById("npname").focus(); }
-  else { f.className = "scrim"; document.getElementById("npname").value = ""; uiLock = false; rerender(); }
+  if (show) { f.className = "scrim show"; document.getElementById("npname").focus(); }
+  else { f.className = "scrim"; document.getElementById("npname").value = ""; rerender(); }
 }
 document.addEventListener("keydown", function(e) {
   if (e.key === "Escape") {
@@ -301,8 +307,8 @@ document.addEventListener("keydown", function(e) {
 });
 function toggleSet(show) {
   var f = document.getElementById("setmodal");
-  if (show) { f.className = "scrim show"; uiLock = true; }
-  else { f.className = "scrim"; uiLock = false; rerender(); }
+  if (show) { f.className = "scrim show"; }
+  else { f.className = "scrim"; rerender(); }
 }
 function openSettings() { toggleSet(true); document.title = "cp:getconfig"; }   // host pushes updateConfig()
 function updateConfig(c) {
@@ -317,8 +323,8 @@ function saveSetting(key, val) {
 var kswArmed = false, kswTimer = null;
 function toggleClean(show) {
   var f = document.getElementById("cleanmodal");
-  if (show) { f.className = "scrim show"; uiLock = true; }
-  else { f.className = "scrim"; uiLock = false; disarmKsw(); rerender(); }
+  if (show) { f.className = "scrim show"; }
+  else { f.className = "scrim"; disarmKsw(); rerender(); }
 }
 function disarmKsw() {
   kswArmed = false; if (kswTimer) clearTimeout(kswTimer);
@@ -346,13 +352,13 @@ function createProfile() {
   toggleNp(false);
   act("create", name);
 }
-function startRemove(slug)  { confirmStep[slug] = 1; uiLock = true; rerender(); }
-function cancelRemove(slug) { delete confirmStep[slug]; uiLock = false; rerender(); }
+function startRemove(slug)  { confirmStep[slug] = 1; rerender(); }
+function cancelRemove(slug) { delete confirmStep[slug]; rerender(); }
 function confirmRemove(slug) { act("remove", slug); confirmStep[slug] = 2; rerender(); }
 function finishPurge(slug) {
   var v = (document.getElementById("purge-" + slug) || {value:""}).value;
   if (v === "DELETE") { act("purge", slug); }
-  delete confirmStep[slug]; uiLock = false; rerender();
+  delete confirmStep[slug]; rerender();
 }
 function rerender() { if (lastData) render(lastData); }
 var AV = [["#712B13","#F5C4B3"],["#26215C","#CECBF6"],["#04342C","#9FE1CB"],["#4B1528","#F4C0D1"],["#042C53","#B5D4F4"]];
@@ -378,7 +384,7 @@ function spark(arr, color) {
 }
 function updateStats(data) {
   lastData = data;
-  if (uiLock) return;
+  if (uiLocked()) return;
   render(data);
   // keep an open running drill-down live: ask for fresh terminals each tick, but
   // never clobber a command the user just queued (title already starts with cp:).
@@ -426,7 +432,7 @@ function render(data) {
         html += '</div><div class="confirm">App removed. Erase the saved login and data too? Type DELETE to confirm, or Keep it for later.' +
           '<input id="purge-' + p.slug + '" placeholder="Type DELETE to erase permanently">' +
           '<div class="acts"><button class="danger" style="flex:1;border-radius:7px;padding:6px 0;font-size:12px;cursor:pointer" onclick="finishPurge(\'' + p.slug + '\')">Confirm</button>' +
-          '<button onclick="delete confirmStep[\'' + p.slug + '\'];uiLock=false;rerender()">Keep Login</button></div><div style="display:none">';
+          '<button onclick="delete confirmStep[\'' + p.slug + '\'];rerender()">Keep Login</button></div><div style="display:none">';
       } else {
         html += '<button class="primary" onclick="act(\'open\',\'' + p.slug + '\')">Open</button>';
       }
