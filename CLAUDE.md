@@ -130,6 +130,16 @@ intended to go public once docs/screenshots/signing are in place.
   "clean up" that block.
 - **`kill` is a bash builtin** — PATH shims can't intercept it; that's why
   the test suite doesn't exercise quit/force, by design. Keep it that way.
+- **A cached applet can outlive the install path it was compiled for** → blank
+  white dashboard. The runtime applet bakes the manager's Resources path into
+  `loadFileURL:`; if the app moves (`~/Applications` → `/Applications`), the
+  reused applet loads a dead `dashboard.html` and WKWebView paints nothing (no
+  error). `launch_dashboard` self-heals via `runtime_applet_stale` —
+  **exact-match** the baked `resourcesDir` (NOT substring: `/Applications/…` is
+  a substring of `/Users/x/Applications/…`, the exact case that bit us) and
+  recompile on mismatch. Recovery for users: `rm -rf ~/.claude-instances/.runtime`.
+  White (not the dark `#1A1915` splash) = document never loaded; a JS error
+  would still paint the splash. See `docs/postmortems/2026-06-13-white-screen-on-launch.md`.
 - **Locally generated/built bundles carry no quarantine** — no Gatekeeper
   friction for the maintainer or for wrappers the app generates. DOWNLOADED
   zips/DMGs are quarantined: right-click → Open until Developer ID signing +
