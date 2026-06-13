@@ -99,7 +99,32 @@
   .setrow select { width:100%; background:#21201A; border:.5px solid #3a382f; color:#F1EFE8;
                    border-radius:8px; padding:7px 10px; font-size:13px; font-family:inherit; outline:none; cursor:pointer; }
   .setrow select:focus { border-color:#D85A30; }
+  /* --- button reactivity: hover / press / keyboard focus --- */
+  button { transition: background-color .12s ease, border-color .12s ease, color .12s ease, transform .06s ease; }
+  .btn-add:hover { background:#E26A3E; }
+  .btn-add:active { transform:scale(.97); }
+  .btn-ghost:hover { border-color:#5F5E5A; color:#F1EFE8; }
+  .btn-ghost:active { transform:scale(.97); }
+  .acts button:hover { border-color:#5F5E5A; color:#F1EFE8; }
+  .acts button.primary:hover { background:#335C4D; color:#BFF0DC; }
+  .modal .go:hover { background:#E26A3E; }
+  .modal .ghost:hover { border-color:#5F5E5A; color:#F1EFE8; }
+  .modal button:active { transform:scale(.97); }
+  .cleanrow:active { transform:scale(.992); }
+  .expander:active { transform:scale(.99); }
+  .linkbtn:active { transform:scale(.99); }
+  button:focus-visible { outline:2px solid #D85A30; outline-offset:2px; }
+  select:focus-visible { outline:2px solid #D85A30; outline-offset:1px; }
+  /* --- startup loading screen (hidden once first stats render) --- */
+  .loading { position:fixed; inset:0; background:#1A1915; z-index:20;
+             display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; }
+  .loading.hidden { display:none; }
+  .spinner { width:26px; height:26px; border:3px solid #3a382f; border-top-color:#D85A30;
+             border-radius:50%; animation:spin .8s linear infinite; }
+  .lmsg { font-size:13px; color:#888780; letter-spacing:.02em; }
+  @keyframes spin { to { transform:rotate(360deg); } }
 </style></head><body>
+<div id="loading" class="loading"><div class="spinner"></div><div class="lmsg">Starting Claude Profiles…</div></div>
 <div class="top">
   <div>
     <div class="kpi-label">Total memory in use</div>
@@ -421,5 +446,6 @@ function render(data) {
   document.getElementById("grid").innerHTML = html;
   document.getElementById("kpi").innerHTML = Math.round(totalMem).toLocaleString() +
     ' <small>MB across ' + running + " running</small>";
+  var l = document.getElementById("loading"); if (l) l.className = "loading hidden";
 }
 </script></body></html>
