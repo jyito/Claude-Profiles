@@ -92,6 +92,14 @@
           padding:5px 12px; font-size:12px; cursor:pointer; font-family:inherit; flex:none; }
   .tbtn:hover { border-color:#E0A579; color:#E0A579; }
   .thint { font-size:11px; color:#6b6a64; }
+  .badgepick { display:flex; align-items:center; gap:12px; margin-top:12px;
+               border-top:.5px solid #2e2c25; padding-top:12px; }
+  .bplabel { font-size:11px; color:#888780; }
+  .swatches { display:flex; gap:8px; }
+  .swatch { width:22px; height:22px; border-radius:50%; border:2px solid transparent;
+            cursor:pointer; padding:0; transition:transform .06s ease; }
+  .swatch:hover { transform:scale(1.12); }
+  .swatch.on { border-color:#F1EFE8; }
   .tiers { display:grid; grid-template-columns:repeat(auto-fit, minmax(120px,1fr)); gap:8px; }
   .tierbtn { text-align:left; background:#1A1915; border:.5px solid #3a382f; border-radius:9px;
              padding:9px 11px; cursor:pointer; font-family:inherit; }
@@ -241,8 +249,18 @@ function toggleExpand(slug) {
 function act3(a, slug, arg) {   // three-part action: cp:verb:slug:arg
   document.title = "cp:" + a + ":" + slug + ":" + arg;
   var t = document.getElementById("toast");
-  t.textContent = a === "clean" ? "Clearing " + arg + "…" : "";
+  t.textContent = a === "clean" ? "Clearing " + arg + "…" : (a === "setbadge" ? "Updating badge…" : "");
   setTimeout(function(){ t.textContent = ""; }, 2500);
+}
+var PALETTE = ["#3B7DD8", "#5DCAA5", "#E0A55E", "#7C5CC4", "#D25F8C", "#4CA9B2"];  // matches engine badge_palette
+function badgeSwatches(p) {
+  var h = '<div class="badgepick"><span class="bplabel">Badge color</span><div class="swatches">';
+  for (var i = 0; i < PALETTE.length; i++) {
+    var on = (p.color || "").toUpperCase() === PALETTE[i];
+    h += '<button class="swatch' + (on ? " on" : "") + '" style="background:' + PALETTE[i] +
+         '" onclick="act3(\'setbadge\',\'' + p.slug + "'," + i + ')" aria-label="Badge color ' + (i + 1) + '"></button>';
+  }
+  return h + "</div></div>";
 }
 function fmtDisk(mb) { return mb >= 1024 ? (mb / 1024).toFixed(1) + " GB" : mb + " MB"; }
 function updateTerminals(slug, arr) {   // pushed by the host after `engine terminals <slug>`
@@ -272,6 +290,7 @@ function drillPanel(p) {
       tierBtn(p.slug, "logs", "Logs", "Crash reports &amp; logs") +
       tierBtn(p.slug, "all", "Everything", "All of the above") + "</div>";
     if (p.disk >= 0) c += '<div class="hint">Using ' + fmtDisk(p.disk) + " on disk.</div>";
+    c += badgeSwatches(p);
     return c + "</div>";
   }
   var slug = p.slug, rows = terminals[slug];
@@ -290,6 +309,7 @@ function drillPanel(p) {
   h += '</table><div class="hint">Closing sends a hangup to that terminal\'s session — anything running in it stops.</div>';
   h += '<div class="throttle"><button class="tbtn" onclick="act(\'throttle\',\'' + slug + '\')">Throttle CPU</button>' +
        '<span class="thint">Lowers priority until this instance is relaunched.</span></div>';
+  h += badgeSwatches(p);
   return h + "</div>";
 }
 function toggleNp(show) {
