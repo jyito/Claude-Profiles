@@ -2,11 +2,20 @@
 
 Run multiple Claude accounts side by side on one Mac — each in its own Claude Desktop instance, permanently signed in, with a native dashboard for live resource monitoring and one-click management.
 
+<!-- HERO IMAGE — save as assets/hero-dashboard.png (≥1400px wide). Capture the dashboard window ONLY (⌘⇧5 → window) with 2+ running profiles and live sparklines. Earlier captures leaked Messages content — crop tight to the window. -->
+![The Claude Profiles dashboard — multiple accounts, live per-instance stats](assets/hero-dashboard.png)
+
+<!-- DEMO VIDEO — drag a ~15s screen recording into the GitHub editor here once captured (ends on a Show Window jump). GitHub hosts the upload and rewrites this to a player. Keep the line below as the fallback link until then. -->
+> 🎥 **[Demo video coming soon]** — a 15-second tour ending on a one-click Show Window jump.
+
 > **Unofficial.** This is a community tool, not an Anthropic product, and is not affiliated with or endorsed by Anthropic. "Claude" is a trademark of Anthropic, PBC. The tool is a thin launcher around the official Claude Desktop app; it never modifies it.
 
 ## Why
 
 Claude Desktop signs in one account at a time. If you have a personal Max plan and a business Max plan (or client accounts), switching means logging out and back in, constantly. Claude Profiles gives every account its own app icon — `Claude Business`, `Claude Personal`, `Claude Client X` — in your Dock, Spotlight, and Launchpad. Open as many as you like, simultaneously. Each stays signed in forever.
+
+<!-- SCREENSHOT — save as assets/dock.png (≥800px wide). Your Dock showing several distinct Claude profile icons running at once. -->
+![Several Claude profiles running at once in the Dock](assets/dock.png)
 
 ## How it works (and why it's safe)
 
@@ -22,9 +31,14 @@ That means:
 ## Features
 
 - **One-click profiles** — create a profile from a dialog; a native app appears instantly with the real Claude icon. Sign in once; it's permanent.
-- **Live dashboard** — a native window (NSWindow + WKWebView, spun up by `osascript`) showing each instance's CPU, memory, process count, PTY handles, and disk, with rolling sparklines, refreshed every 2 seconds.
+- **Live dashboard** — a native window (NSWindow + WKWebView, spun up by `osascript`) showing each instance's CPU, memory, process count, terminals, and disk, with rolling sparklines, refreshed every 2 seconds. Stats are strictly per-instance: one account's numbers can never bleed into another's.
+- **Per-instance drill-down** — expand any card in place. A *running* profile reveals a live table of its terminal sessions (device, command, idle time) with one-click close; a *stopped* profile reveals granular cleanup tiers — Caches / GPU / Logs / Everything. A **Throttle** control lowers a CPU-hogging instance's priority without quitting it.
+
+  <!-- SCREENSHOT — save as assets/drilldown.png (≥1000px wide). An expanded running card showing the terminals table; crop to the card. -->
+  ![A running profile expanded to its live terminals table](assets/drilldown.png)
+- **Automatic maintenance (opt-in)** — Settings can auto-clear caches on stopped profiles over a size limit and auto-close terminals idle past a threshold. Both are off by default and local-only.
 - **Show Window** — with many instances and many windows, one click raises every window of a *specific* instance. It targets the process by PID via `NSRunningApplication`, which works even though all instances share Claude's bundle identifier — and needs no Accessibility permissions.
-- **Cleanup utilities** — graceful quit, force-quit of a full process tree (releases stuck PTYs), and per-profile cache clearing that only ever deletes regenerable Electron caches. It refuses to run against a live instance and never touches sign-ins.
+- **Cleanup utilities** — graceful quit, force-quit of a full process tree (releases stuck terminals), per-profile cache clearing, and an Emergency Stop killswitch. Cache clearing only ever deletes regenerable Electron caches; it refuses to run against a live instance and never touches sign-ins.
 - **Safe removal** — deleting a profile's app takes one confirmation; deleting its saved login requires literally typing `DELETE`.
 - **Graceful degradation** — if the dashboard window can't open on a given macOS version, the app automatically falls back to a native-dialog interface with the same capabilities.
 - **CLI for power users** — `cli/claude-profiles.sh` mirrors everything for scripting, plus a `code-alias` command for per-account [Claude Code](https://docs.claude.com/en/docs/claude-code/overview) config dirs (`CLAUDE_CONFIG_DIR`).
@@ -39,7 +53,7 @@ Grab the latest release (`Claude-Profiles.zip` or `.dmg`), then see [docs/INSTAL
 git clone https://github.com/jyito/Claude-Profiles.git
 cd Claude-Profiles
 bash scripts/build.sh        # assembles dist/Claude Profiles.app (+ DMG on macOS)
-bash tests/run-tests.sh      # 22-test suite, runs on macOS or Linux
+bash tests/run-tests.sh      # 80-check suite, runs on macOS or Linux
 ```
 
 There is no compile step — `build.sh` just assembles the bundle from `src/`.
@@ -57,7 +71,19 @@ tests/      Linux-compatible suite with shimmed macOS tools
 
 ## Architecture in one paragraph
 
-A profile is a generated `.app` bundle whose entire executable is a short bash script: `open -n -a Claude.app --args --user-data-dir=~/.claude-instances/<slug>`. The manager app is the same kind of bundle, with a menu. The dashboard is a WKWebView in an NSWindow created by AppleScriptObjC through plain `osascript`; the page's buttons communicate to native code by setting `document.title` (polled every 0.5 s — a block-free, subclass-free bridge), and native pushes JSON stats back with `evaluateJavaScript`. Stats come from `engine.sh`, which attributes processes to instances by their `--user-data-dir` argument and walks the child tree for helpers. Full detail in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+A profile is a generated `.app` bundle whose entire executable is a short bash script: `open -n -a Claude.app --args --user-data-dir=~/.claude-instances/<slug>`. The manager app is the same kind of bundle, with a menu. The dashboard is a WKWebView in an NSWindow created by AppleScriptObjC through plain `osascript`; the page's buttons communicate to native code by setting `document.title` (polled every 0.25 s — a block-free, subclass-free bridge), and native pushes JSON stats back with `evaluateJavaScript`. Stats come from `engine.sh`, which attributes processes to instances by their `--user-data-dir` argument and walks the child tree for helpers. Full detail in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+```mermaid
+flowchart TD
+    U([You]) -->|click| DASH["Dashboard window<br/>NSWindow + WKWebView"]
+    DASH <-->|"document.title bridge<br/>· evaluateJavaScript push"| APPLET["Stay-open applet<br/>AppleScriptObjC, main thread"]
+    LAUNCH["launcher (bash)"] -->|"osacompile -s<br/>(reused if unchanged)"| APPLET
+    APPLET -->|stats · actions| ENGINE["engine.sh<br/>bash · macOS built-ins only"]
+    ENGINE -->|ps · lsof · du| PROCS[("Running Claude<br/>process trees")]
+    ENGINE -->|reads / cleans caches| DIRS[("~/.claude-instances/&lt;slug&gt;<br/>per-profile data dir")]
+    APPLET -.->|launch| WRAP["Profile wrapper .app<br/>open -n -a Claude.app --user-data-dir=…"]
+    WRAP -->|spawns| PROCS
+```
 
 ## Known limitations
 
