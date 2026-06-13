@@ -60,6 +60,10 @@ cat > "$WORK/shims/stat" <<'EOF'
 # emulate macOS `stat -f %m <path>` → device mtime epoch (fixed, in the past)
 echo 1700000000
 EOF
+cat > "$WORK/shims/renice" <<EOF
+#!/bin/bash
+printf '%s\n' "\$*" >> "$WORK/renice.log"
+EOF
 chmod +x "$WORK/shims/"*
 
 export PATH="$WORK/shims:$PATH"
@@ -128,6 +132,13 @@ check "closeterm refuses other instance" "[ \"\$('$ENGINE' closeterm business tt
 check "closeterm refuses unknown device" "[ \"\$('$ENGINE' closeterm business ttys999)\" = refused ]"
 check "closeterm refuses when stopped"   "[ \"\$('$ENGINE' closeterm evex ttys001)\" = refused ]"
 check "closeterm rejects bad device arg" "[ \"\$('$ENGINE' closeterm business notadev)\" = baddev ]"
+
+echo "== throttle (CPU priority) =="
+rm -f "$WORK/renice.log"
+check "throttle renices own tree"     "[ \"\$('$ENGINE' throttle business)\" = ok ] && grep -q '^10 100' '$WORK/renice.log'"
+check "throttle refuses when stopped" "[ \"\$('$ENGINE' throttle evex)\" = notrunning ]"
+check "throttle button in UI"         "grep -q 'Throttle CPU' '$ROOT/src/dashboard.html'"
+check "applet routes throttle"        "grep -q 'throttle' '$ROOT/src/dashboard.applescript'"
 
 echo "== settings & auto-clean =="
 check "getconfig defaults to zero"   "[ \"\$('$ENGINE' getconfig)\" = '{\"autoCloseIdleMin\":0,\"autoCleanThresholdMB\":0}' ]"
@@ -245,7 +256,7 @@ try {
   if (run) {
     toggleExpand(run.slug);
     updateTerminals(run.slug,[{dev:'/dev/ttys001',pid:100,cmd:'bash -l',idle:200}]);
-    if (grid.indexOf('class=\"tterm\"')>-1 && grid.indexOf('ttys001')>-1 && grid.indexOf('expanded')>-1 && grid.indexOf('closeTerm(')>-1) drill=1;
+    if (grid.indexOf('class=\"tterm\"')>-1 && grid.indexOf('ttys001')>-1 && grid.indexOf('expanded')>-1 && grid.indexOf('closeTerm(')>-1 && grid.indexOf(\"act('throttle'\")>-1) drill=1;
   }
 } catch(e){}
 let tiers=0;

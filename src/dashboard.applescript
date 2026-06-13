@@ -143,7 +143,7 @@ on handleAction(raw)
 			set tier to ""
 			if (count of parts) > 3 then set tier to item 4 of parts
 			do shell script quoted form of enginePath & " clean " & quoted form of slug & " " & quoted form of tier & " >/dev/null 2>&1 &"
-		else if verb is in {"open", "quit", "force", "remove", "purge"} then
+		else if verb is in {"open", "quit", "force", "remove", "purge", "throttle"} then
 			do shell script quoted form of enginePath & " " & verb & " " & quoted form of slug & " >/dev/null 2>&1 &"
 		end if
 	end try
