@@ -16,6 +16,7 @@
 #   claude-profiles open <Name>      launch a profile from the terminal
 #   claude-profiles clean <Name>     clear a stopped profile's regenerable caches (keeps login)
 #   claude-profiles code-alias <Name>  (optional) append a Claude Code alias to ~/.zshrc
+#   claude-profiles remote <Name>    run a profile's Claude Code session in screen, to SSH into
 #
 # Requirements: macOS built-ins only (bash, open, defaults, du, sips optional).
 
@@ -383,11 +384,45 @@ cmd_code_alias() {
 }
 
 # ---------------------------------------------------------------------------
+# remote — run a profile's Claude Code session in a detached `screen` you can
+# SSH into from another device. The app opens NO network connection itself;
+# this is your own SSH channel into your own Mac (zero-network principle intact).
+# ---------------------------------------------------------------------------
+
+cmd_remote() {
+    local name="${1:-}"
+    [ -n "$name" ] || die "usage: claude-profiles remote <Name>"
+    command -v screen >/dev/null 2>&1 || die "screen not found (it ships with macOS)"
+    local slug session cfg claude_bin host user
+    slug=$(slugify "$name")
+    [ -n "$slug" ] || die "profile name must contain at least one letter or number"
+    session="claude-$slug"
+    cfg="$HOME/.claude-code-instances/$slug"
+    claude_bin=$(command -v claude 2>/dev/null) || claude_bin="claude"
+    mkdir -p "$cfg"
+
+    if screen -ls 2>/dev/null | grep -qE "[.]$session[[:space:]]"; then
+        printf "Session '%s' is already running.\n" "$session"
+    else
+        screen -dmS "$session" bash -lc "CLAUDE_CONFIG_DIR='$cfg' '$claude_bin'"
+        printf "Started a Claude Code session for profile '%s' (screen: %s).\n" "$name" "$session"
+    fi
+
+    host="$(scutil --get LocalHostName 2>/dev/null).local"
+    user=$(whoami)
+    printf '\nAttach on this Mac:\n  screen -r %s          (detach without quitting: Ctrl-A then D)\n' "$session"
+    printf '\nAttach from another device (e.g. an SSH app on your iPad):\n  ssh %s@%s -t "screen -r %s"\n' "$user" "$host" "$session"
+    printf '\nRequires Remote Login: System Settings > General > Sharing > Remote Login.\n'
+    printf 'To reach your Mac off its local network, use Tailscale or a VPN.\n'
+    printf 'List sessions:  screen -ls   ·   Quit one:  screen -X -S %s quit\n' "$session"
+}
+
+# ---------------------------------------------------------------------------
 # main
 # ---------------------------------------------------------------------------
 
 usage() {
-    sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 main() {
@@ -400,8 +435,9 @@ main() {
         open)       cmd_open "$@" ;;
         clean)      cmd_clean "$@" ;;
         code-alias) cmd_code_alias "$@" ;;
+        remote)     cmd_remote "$@" ;;
         -h|--help|help|"") usage ;;
-        *) die "unknown command '$cmd' (try: add, list, remove, open, clean, code-alias)" ;;
+        *) die "unknown command '$cmd' (try: add, list, remove, open, clean, code-alias, remote)" ;;
     esac
 }
 
