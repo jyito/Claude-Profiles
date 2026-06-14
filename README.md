@@ -41,7 +41,7 @@ That means:
 - **Cleanup utilities** — graceful quit, force-quit of a full process tree (releases stuck terminals), per-profile cache clearing, and an Emergency Stop killswitch. Cache clearing only ever deletes regenerable Electron caches; it refuses to run against a live instance and never touches sign-ins.
 - **Safe removal** — deleting a profile's app takes one confirmation; deleting its saved login requires literally typing `DELETE`.
 - **Graceful degradation** — if the dashboard window can't open on a given macOS version, the app automatically falls back to a native-dialog interface with the same capabilities.
-- **CLI for power users** — `cli/claude-profiles.sh` mirrors everything for scripting, plus a `code-alias` command for per-account [Claude Code](https://docs.claude.com/en/docs/claude-code/overview) config dirs (`CLAUDE_CONFIG_DIR`).
+- **CLI for power users** — `cli/claude-profiles.sh` mirrors everything for scripting, plus a `code-alias` command for per-account [Claude Code](https://docs.claude.com/en/docs/claude-code/overview) config dirs, and a `remote` command that runs a profile's Claude Code session in `screen` so you can **SSH into it from your iPad** — real remote sessions with no network server (see [docs/REMOTE.md](docs/REMOTE.md)).
 
 ## Install (users)
 
