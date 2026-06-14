@@ -401,7 +401,7 @@ cmd_remote() {
     claude_bin=$(command -v claude 2>/dev/null) || claude_bin="claude"
     mkdir -p "$cfg"
 
-    if screen -ls 2>/dev/null | grep -qE "[.]$session[[:space:]]"; then
+    if screen -ls 2>/dev/null | grep -qE "[.]${session}[[:space:]]"; then
         printf "Session '%s' is already running.\n" "$session"
     else
         screen -dmS "$session" bash -lc "CLAUDE_CONFIG_DIR='$cfg' '$claude_bin'"
