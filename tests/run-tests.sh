@@ -64,6 +64,17 @@ cat > "$WORK/shims/renice" <<EOF
 #!/bin/bash
 printf '%s\n' "\$*" >> "$WORK/renice.log"
 EOF
+cat > "$WORK/shims/screen" <<EOF
+#!/bin/bash
+case "\$*" in
+  *-ls*)  cat "$WORK/screen-sessions" 2>/dev/null || echo "No Sockets found." ;;
+  *-dmS*) printf '%s\n' "\$*" >> "$WORK/screen.log" ;;
+esac
+EOF
+cat > "$WORK/shims/scutil" <<'EOF'
+#!/bin/bash
+echo "testmac"
+EOF
 # `open` MUST be shimmed before any launcher run: on a dev Mac, launch_dashboard
 # would otherwise osacompile + `open` a real stay-open dashboard applet, which
 # survives $WORK cleanup and orphans in the Dock. The shim just logs the args.
@@ -220,6 +231,17 @@ check "cli clean clears caches"      "bash '$CLI' clean Cleanme >/dev/null 2>&1;
 check "cli clean keeps login"        "[ -f '$WORK/instances/cleanme/Cookies' ]"
 check "cli clean refuses if running" "bash '$CLI' clean Business 2>&1 | grep -qi running"
 check "cli clean rejects unknown"    "bash '$CLI' clean Nope 2>&1 | grep -qi 'no profile'"
+
+echo "== cli remote (ssh-able Claude Code session) =="
+rm -f "$WORK/screen.log" "$WORK/screen-sessions"
+RR=$(bash "$CLI" remote Work 2>&1)
+check "cli remote starts a screen session" "[ -f '$WORK/screen.log' ] && grep -q 'claude-work' '$WORK/screen.log'"
+check "cli remote shows ssh attach line"   "printf '%s' \"\$RR\" | grep -qE 'ssh .*-t .*screen -r claude-work'"
+check "cli remote shows local attach line" "printf '%s' \"\$RR\" | grep -q 'screen -r claude-work'"
+check "cli remote needs a name"            "bash '$CLI' remote 2>&1 | grep -qi usage"
+printf '\t12345.claude-work\t(Detached)\n' > "$WORK/screen-sessions"
+check "cli remote reuses running session"  "bash '$CLI' remote Work 2>&1 | grep -qi 'already running'"
+rm -f "$WORK/screen-sessions"
 
 echo "== bulk cleanup =="
 mkdir -p "$WORK/instances/bulkstopped/GPUCache"; dd if=/dev/zero of="$WORK/instances/bulkstopped/GPUCache/b" bs=1024 count=64 2>/dev/null
