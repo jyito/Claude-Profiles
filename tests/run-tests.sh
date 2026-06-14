@@ -64,6 +64,10 @@ cat > "$WORK/shims/renice" <<EOF
 #!/bin/bash
 printf '%s\n' "\$*" >> "$WORK/renice.log"
 EOF
+# `open` MUST be shimmed before any launcher run: on a dev Mac, launch_dashboard
+# would otherwise osacompile + `open` a real stay-open dashboard applet, which
+# survives $WORK cleanup and orphans in the Dock. The shim just logs the args.
+printf '#!/bin/bash\nprintf "%%s\\\\n" "$*" >> "%s/open.log"\n' "$WORK" > "$WORK/shims/open"
 chmod +x "$WORK/shims/"*
 
 export PATH="$WORK/shims:$PATH"
@@ -185,7 +189,7 @@ check "autotick cleans over-threshold stopped profile" "'$ENGINE' setconfig auto
 "$ENGINE" setconfig autoCleanThresholdMB 0 >/dev/null
 
 echo "== default instance launch =="
-printf '#!/bin/bash\nprintf "%%s\\\\n" "$*" >> "%s/open.log"\n' "$WORK" > "$WORK/shims/open" && chmod +x "$WORK/shims/open"
+rm -f "$WORK/open.log"   # the `open` shim is set up at the top; isolate this check
 check "opendefault launches Claude" "'$ENGINE' opendefault >/dev/null; grep -q -- '-n -a $WORK/Claude.app' '$WORK/open.log'"
 check "opendefault button in UI"    "grep -q \"act('opendefault')\" '$ROOT/src/dashboard.html' || grep -q 'opendefault' '$ROOT/src/dashboard.html'"
 
