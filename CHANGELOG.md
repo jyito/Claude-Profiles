@@ -1,6 +1,15 @@
 # Changelog
 
 ## [Unreleased]
+- **Much snappier dashboard (performance fix).** The 2s live-stats refresh no
+  longer freezes the window. Two causes were fixed: (1) the stats sweep ran
+  **synchronously on the applet's main thread**, blocking the WebView for ~0.4s
+  out of every 2s — it now runs in the background and the UI reads the last
+  completed snapshot (atomic file swap), so the main thread never waits on it;
+  (2) `engine.sh stats` spawned a full-system `ps` per profile per metric (4+
+  per tick, scaling with profile count) — it now takes **one** `ps` snapshot per
+  tick and shares it across all helpers (O(1) instead of O(profiles)). `lsof`
+  calls also gained `-nP` to skip host/port name resolution.
 - **Per-profile Dock icons.** Each profile wrapper now gets a distinct icon —
   Claude's real icon badged with the profile's initial on a deterministic
   colored disc — so accounts are tellable apart in the Dock, Spotlight, and

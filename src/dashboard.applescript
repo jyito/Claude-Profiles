@@ -23,6 +23,7 @@ property enginePath : "__RESOURCES__/engine.sh"
 property pollTimer : missing value
 property didSetup : false
 property idleCount : 0
+property statsTmp : "" -- path the background `stats` run writes to (set in setupWindow)
 
 on run
 	try
@@ -55,6 +56,14 @@ on setupWindow()
 	activate
 	-- actions poll at 250ms so clicks feel instant; stats stay on the 2s idle tick
 	set pollTimer to current application's NSTimer's scheduledTimerWithTimeInterval:0.25 target:me selector:"checkBridge:" userInfo:(missing value) repeats:true
+	-- Where the background `stats` run drops its JSON. A full stats sweep takes
+	-- ~0.4s; running it synchronously on this (main) thread every 2s froze the
+	-- WKWebView ~20% of the time. pushStats now reads the previous result and
+	-- launches the next in the background, so the main thread never waits on it.
+	set statsTmp to (do shell script "echo \"${TMPDIR:-/tmp/}\"") & "claude-profiles.stats.json"
+	try
+		do shell script quoted form of enginePath & " stats > " & quoted form of (statsTmp & ".tmp") & " 2>/dev/null && mv " & quoted form of (statsTmp & ".tmp") & " " & quoted form of statsTmp & " &"
+	end try
 end setupWindow
 
 on checkBridge:aTimer
@@ -73,9 +82,17 @@ on checkBridge:aTimer
 end checkBridge:
 
 on pushStats()
+	-- Read the most recently completed snapshot (atomic mv guarantees we never
+	-- read a half-written file; may be absent on the very first tick) and push it
+	-- to the page — a sub-millisecond cat, not the ~0.4s sweep.
 	try
-		set statsJSON to do shell script quoted form of enginePath & " stats"
-		theWebView's evaluateJavaScript:("updateStats(" & statsJSON & ")") completionHandler:(missing value)
+		set statsJSON to do shell script "cat " & quoted form of statsTmp & " 2>/dev/null || true"
+		if statsJSON is not "" then theWebView's evaluateJavaScript:("updateStats(" & statsJSON & ")") completionHandler:(missing value)
+	end try
+	-- Kick off the next sweep in the background; the trailing & returns control
+	-- immediately, so this handler does not block the main thread.
+	try
+		do shell script quoted form of enginePath & " stats > " & quoted form of (statsTmp & ".tmp") & " 2>/dev/null && mv " & quoted form of (statsTmp & ".tmp") & " " & quoted form of statsTmp & " &"
 	end try
 end pushStats
 

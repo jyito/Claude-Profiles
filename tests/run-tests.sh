@@ -42,6 +42,9 @@ T="100 1 12.5 524288 /Applications/Claude.app/Contents/MacOS/Claude --user-data-
 200 1 2.0 393216 /Applications/Claude.app/Contents/MacOS/Claude
 201 200 0.5 98304 /Applications/Claude.app/Contents/Frameworks/Claude Helper (Renderer).app"
 case "\$*" in
+  # The combined snapshot cmd_stats captures once per tick. Must precede the
+  # narrower pid=,ppid= case, which is a substring of this query.
+  *"pid=,ppid=,command="*) echo "\$T" | awk '{printf "%s %s ", \$1, \$2; for(i=5;i<=NF;i++) printf "%s ", \$i; print ""}' ;;
   *"pid=,command="*) echo "\$T" | awk '{printf "%s ", \$1; for(i=5;i<=NF;i++) printf "%s ", \$i; print ""}' ;;
   *"pid=,ppid="*)    echo "\$T" | awk '{print \$1, \$2}' ;;
   *"-o pcpu=,rss= -p"*) p="\${@: -1}"; echo "\$T" | awk -v p=",\$p," '{ if (index(p, ","\$1",")) print \$3, \$4 }' ;;
