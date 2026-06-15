@@ -79,7 +79,11 @@ on checkBridge:aTimer
 		if rawTitle starts with "cp:" then
 			theWebView's evaluateJavaScript:"document.title='Claude Profiles'" completionHandler:(missing value)
 			my handleAction(rawTitle)
-			my pushStats()
+			-- Refresh stats after a real user action, but NOT after the drill-down's
+			-- own auto terminals refresh: pushStats -> updateStats re-arms the
+			-- cp:terminals title, which this 250ms bridge would catch and spin at
+			-- ~4Hz — the churn that made an open terminals panel laggy.
+			if rawTitle does not start with "cp:terminals" then my pushStats()
 		end if
 	end try
 end checkBridge:
