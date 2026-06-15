@@ -24,6 +24,7 @@ property pollTimer : missing value
 property didSetup : false
 property idleCount : 0
 property statsTmp : "" -- path the background `stats` run writes to (set in setupWindow)
+property termPrefix : "" -- prefix for per-slug background `terminals` output files
 
 on run
 	try
@@ -60,7 +61,9 @@ on setupWindow()
 	-- ~0.4s; running it synchronously on this (main) thread every 2s froze the
 	-- WKWebView ~20% of the time. pushStats now reads the previous result and
 	-- launches the next in the background, so the main thread never waits on it.
-	set statsTmp to (do shell script "echo \"${TMPDIR:-/tmp/}\"") & "claude-profiles.stats.json"
+	set tmpDir to (do shell script "echo \"${TMPDIR:-/tmp/}\"")
+	set statsTmp to tmpDir & "claude-profiles.stats.json"
+	set termPrefix to tmpDir & "claude-profiles.term."
 	try
 		do shell script quoted form of enginePath & " stats > " & quoted form of (statsTmp & ".tmp") & " 2>/dev/null && mv " & quoted form of (statsTmp & ".tmp") & " " & quoted form of statsTmp & " &"
 	end try
@@ -98,11 +101,22 @@ end pushStats
 
 on pushTerminals(slug)
 	-- slug originates from the page, which only ever emits engine-created
-	-- [a-z0-9] slugs, so inlining it into the JS string literal is safe. tjson is
-	-- the engine's `terminals` stdout, which always emits a JSON array.
+	-- [a-z0-9] slugs, so inlining it into the JS string literal (and the temp
+	-- path) is safe. tjson is the engine's `terminals` stdout, a JSON array.
+	-- An open drill-down re-requests this EVERY 2s tick; running the ~0.2s
+	-- `terminals` sweep synchronously on the main thread froze the panel. So:
+	-- read the last completed result (instant); on the FIRST request for a slug
+	-- (no file yet) fetch once synchronously so the table paints immediately on
+	-- open; then always launch the next sweep in the background.
 	try
-		set tjson to do shell script quoted form of enginePath & " terminals " & quoted form of slug
-		theWebView's evaluateJavaScript:("updateTerminals('" & slug & "'," & tjson & ")") completionHandler:(missing value)
+		set f to termPrefix & slug & ".json"
+		set tjson to do shell script "cat " & quoted form of f & " 2>/dev/null || true"
+		if tjson is "" then set tjson to do shell script quoted form of enginePath & " terminals " & quoted form of slug & " 2>/dev/null || true"
+		if tjson is not "" then theWebView's evaluateJavaScript:("updateTerminals('" & slug & "'," & tjson & ")") completionHandler:(missing value)
+	end try
+	try
+		set f to termPrefix & slug & ".json"
+		do shell script quoted form of enginePath & " terminals " & quoted form of slug & " > " & quoted form of (f & ".tmp") & " 2>/dev/null && mv " & quoted form of (f & ".tmp") & " " & quoted form of f & " &"
 	end try
 end pushTerminals
 
