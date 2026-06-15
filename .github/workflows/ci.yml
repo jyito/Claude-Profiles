@@ -1,17 +1,75 @@
 name: CI
+
 on:
-  push: { branches: [main] }
+  push:
+    branches: [main]
   pull_request:
+
+# Least privilege by default; no job here needs more than read.
+permissions:
+  contents: read
+
+# One run per ref. Cancel superseded PR runs; let main runs finish.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  test:
+  lint:
+    name: lint (shellcheck + actionlint)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: step-security/harden-runner@cb605e52c26070c328afc4562f0b4ada7618a84e # v2.10.4
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: shellcheck
+        run: shellcheck -S error src/launcher src/engine.sh cli/claude-profiles.sh scripts/*.sh
+      - name: actionlint (lint the workflows themselves)
         run: |
-          sudo apt-get install -y shellcheck
-          shellcheck -S error src/launcher src/engine.sh cli/claude-profiles.sh scripts/*.sh
-      - name: test suite
+          curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash -o /tmp/dl-actionlint.bash
+          bash /tmp/dl-actionlint.bash 1.7.12
+          ./actionlint -color
+
+  test:
+    name: test suite (linux, shimmed)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: step-security/harden-runner@cb605e52c26070c328afc4562f0b4ada7618a84e # v2.10.4
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: run suite
         run: bash tests/run-tests.sh
-      - name: build assembles
-        run: bash scripts/build.sh && test -f "dist/Claude-Profiles.zip"
+
+  build:
+    name: build assembles
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: step-security/harden-runner@cb605e52c26070c328afc4562f0b4ada7618a84e # v2.10.4
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: assemble bundle + zip
+        run: |
+          bash scripts/build.sh
+          test -f "dist/Claude-Profiles.zip"
+
+  secrets:
+    name: secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: step-security/harden-runner@cb605e52c26070c328afc4562f0b4ada7618a84e # v2.10.4
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0 # gitleaks scans the full commit history
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
