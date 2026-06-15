@@ -547,6 +547,31 @@ cmd_autotick() {  # enforce the opt-in auto rules; a cheap no-op while both are 
     printf 'ok'
 }
 
+cmd_remoteinfo() {  # start/reuse a profile's Claude Code screen session; emit JSON for the dashboard
+    local slug="${1:?}" session cfg claude_bin host user ts_ip already=false
+    command -v screen >/dev/null 2>&1 || { printf '{"error":"screen not found (it ships with macOS)"}'; return 0; }
+    session="claude-$slug"
+    cfg="$HOME/.claude-code-instances/$slug"
+    claude_bin=$(command -v claude 2>/dev/null) || claude_bin="claude"
+    mkdir -p "$cfg"
+    if screen -ls 2>/dev/null | grep -qE "[.]${session}[[:space:]]"; then
+        already=true
+    else
+        screen -dmS "$session" bash -lc "CLAUDE_CONFIG_DIR='$cfg' '$claude_bin'"
+    fi
+    host="$(scutil --get LocalHostName 2>/dev/null).local"
+    user=$(whoami)
+    ts_ip=""
+    command -v tailscale >/dev/null 2>&1 && ts_ip=$(tailscale ip -4 2>/dev/null | head -n1)
+    printf '{"slug":"%s","session":"%s","user":"%s","host":"%s","tailscaleIp":"%s","alreadyRunning":%s}' \
+        "$(json_str "$slug")" "$(json_str "$session")" "$(json_str "$user")" "$(json_str "$host")" "$(json_str "$ts_ip")" "$already"
+}
+
+cmd_copy() {  # put text on the clipboard for the dashboard's Copy buttons (macOS only)
+    command -v pbcopy >/dev/null 2>&1 || return 0
+    printf '%s' "${1:-}" | pbcopy
+}
+
 # Dispatch only when run directly; sourcing (e.g. tests) loads the functions
 # without executing the default `stats` command.
 if [ "${BASH_SOURCE[0]:-$0}" = "$0" ]; then
@@ -575,5 +600,7 @@ case "${1:-stats}" in
     getconfig) cmd_getconfig ;;
     setconfig) cmd_setconfig "${2:?}" "${3:?}" ;;
     autotick) cmd_autotick ;;
+    remoteinfo) cmd_remoteinfo "${2:?}" ;;
+    copy) cmd_copy "${2:-}" ;;
 esac
 fi
