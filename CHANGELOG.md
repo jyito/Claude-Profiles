@@ -21,6 +21,11 @@
   running↔stopped, or you expand/confirm something); on a steady tick it patches
   just the numbers and sparkline points in place. An open terminals panel
   likewise patches only its own table, not the whole grid.
+- **Scroll jank fix.** The transient toast banner used `position: sticky`, which
+  can force WebKit off threaded (GPU) scrolling onto the main thread — repainting
+  the whole window every scroll frame, so the dashboard scrolled poorly even with
+  little content. It's now `position: fixed`, keeping toasts visible without the
+  scroll penalty.
 - **Per-profile Dock icons.** Each profile wrapper now gets a distinct icon —
   Claude's real icon badged with the profile's initial on a deterministic
   colored disc — so accounts are tellable apart in the Dock, Spotlight, and
