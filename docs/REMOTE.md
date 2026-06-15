@@ -16,11 +16,10 @@ channel is yours.
 
 1. **Turn on Remote Login** (SSH) on your Mac:
    System Settings → General → Sharing → **Remote Login** → on.
-2. **(To reach it from anywhere, not just your home Wi-Fi)** install
-   [Tailscale](https://tailscale.com) on your Mac and your iPad — it gives your
-   Mac a stable name you can SSH to from any network, with no port-forwarding.
-   On a trusted local network you can skip this.
-3. On your iPad, install an SSH terminal app (Blink Shell, Termius, a-Shell).
+2. On your device, install an SSH terminal app (Blink Shell, Termius, a-Shell).
+3. **To reach your Mac from outside your home network,** set up Tailscale — see
+   [From anywhere: Tailscale](#from-anywhere-tailscale-optional-recommended)
+   below. On the same Wi-Fi you can skip it.
 
 ## Use it
 
@@ -55,6 +54,32 @@ then D** (it keeps running on your Mac), reattach later from anywhere.
   `CLAUDE_CONFIG_DIR` (`~/.claude-code-instances/<slug>`), so accounts stay
   separate. Sign Claude Code into the matching account once.
 - List sessions: `screen -ls`. Quit one: `screen -X -S claude-work quit`.
+
+## From anywhere: Tailscale (optional, recommended)
+
+On the **same Wi-Fi**, the `you@your-mac.local` line above is all you need. To
+reach your Mac from a *different* network — cellular, a café, the office — your
+home router's NAT blocks the incoming connection. [Tailscale](https://tailscale.com)
+is the clean fix: a free, encrypted peer-to-peer network that traverses NAT with
+**no port-forwarding and nothing exposed to the public internet**. (The
+alternative — opening port 22 on your router — puts SSH on the open internet and
+fails entirely behind carrier-grade NAT, which most home ISPs now use.)
+
+Tailscale is **not** a dependency of Claude Profiles — the app opens no socket
+and works without it. It's simply the SSH transport you choose for off-network
+access; the secure channel stays yours.
+
+1. **Mac:** install Tailscale (download from [tailscale.com](https://tailscale.com),
+   or `brew install --cask tailscale`), open it, and sign in (Google / GitHub /
+   email — no separate password to manage).
+2. **Device (iPad/phone/laptop):** install Tailscale and sign in with the **same**
+   account. Both devices now share one private network.
+3. On the Mac, run `cli/claude-profiles.sh remote <Profile>`. With Tailscale up,
+   it automatically prints an **"Any network (via Tailscale)"** attach line using
+   your Mac's stable Tailscale address (`100.x.y.z`). Use that line from your SSH
+   app — from anywhere.
+
+The router never needs touching, and the address stays stable across networks.
 
 ## What this does and doesn't cover
 
