@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [0.4.0] — 2026-06-15
 - **Much snappier dashboard (performance fix).** The 2s live-stats refresh no
   longer freezes the window. Two causes were fixed: (1) the stats sweep ran
   **synchronously on the applet's main thread**, blocking the WebView for ~0.4s
