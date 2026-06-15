@@ -254,7 +254,38 @@ TS
 chmod +x "$WORK/shims/tailscale"
 check "cli remote shows tailscale any-network line" "bash '$CLI' remote Work 2>&1 | grep -qE 'ssh .*@100[.]64[.]1[.]2 -t .*screen -r claude-work'"
 rm -f "$WORK/shims/tailscale"
-check "cli remote hints tailscale when absent"      "bash '$CLI' remote Work 2>&1 | grep -qi 'install Tailscale'"
+# Restricted PATH so a real (system-installed) tailscale can't shadow the "absent"
+# case — the dashboard dev's Mac may well have Tailscale installed.
+check "cli remote hints tailscale when absent"      "PATH=\"$WORK/shims:/usr/bin:/bin\" bash '$CLI' remote Work 2>&1 | grep -qi 'install Tailscale'"
+
+echo "== engine remoteinfo (UI JSON) =="
+rm -f "$WORK/screen.log" "$WORK/screen-sessions"
+# Restricted PATH so a system-installed tailscale can't make the "absent" case flaky.
+RI=$(PATH="$WORK/shims:/usr/bin:/bin" "$ENGINE" remoteinfo work)
+check "remoteinfo is valid JSON"        "printf '%s' '$RI' | python3 -m json.tool >/dev/null"
+check "remoteinfo starts the session"   "grep -q 'claude-work' '$WORK/screen.log'"
+check "remoteinfo emits session+host"   "printf '%s' '$RI' | grep -q '\"session\":\"claude-work\"' && printf '%s' '$RI' | grep -q '\"host\":'"
+check "remoteinfo tailscaleIp empty when absent" "printf '%s' '$RI' | grep -q '\"tailscaleIp\":\"\"'"
+printf '\t9.claude-work\t(Detached)\n' > "$WORK/screen-sessions"
+check "remoteinfo alreadyRunning on reuse" "printf '%s' \"\$('$ENGINE' remoteinfo work)\" | grep -q '\"alreadyRunning\":true'"
+rm -f "$WORK/screen-sessions"
+cat > "$WORK/shims/tailscale" <<'TS'
+#!/bin/bash
+[ "$*" = "ip -4" ] && echo "100.64.1.2"
+TS
+chmod +x "$WORK/shims/tailscale"
+check "remoteinfo includes tailscale ip" "printf '%s' \"\$('$ENGINE' remoteinfo work)\" | grep -q '\"tailscaleIp\":\"100.64.1.2\"'"
+rm -f "$WORK/shims/tailscale"
+
+echo "== engine copy (clipboard bridge) =="
+cat > "$WORK/shims/pbcopy" <<PB
+#!/bin/bash
+cat > "$WORK/pbcopy.out"
+PB
+chmod +x "$WORK/shims/pbcopy"
+"$ENGINE" copy 'ssh me@mac.local -t "screen -r claude-work"'
+check "copy pipes text to pbcopy" "[ -f '$WORK/pbcopy.out' ] && grep -q 'screen -r claude-work' '$WORK/pbcopy.out'"
+rm -f "$WORK/shims/pbcopy" "$WORK/pbcopy.out"
 
 echo "== bulk cleanup =="
 mkdir -p "$WORK/instances/bulkstopped/GPUCache"; dd if=/dev/zero of="$WORK/instances/bulkstopped/GPUCache/b" bs=1024 count=64 2>/dev/null
