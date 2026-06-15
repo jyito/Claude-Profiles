@@ -9,7 +9,11 @@
   (2) `engine.sh stats` spawned a full-system `ps` per profile per metric (4+
   per tick, scaling with profile count) — it now takes **one** `ps` snapshot per
   tick and shares it across all helpers (O(1) instead of O(profiles)). `lsof`
-  calls also gained `-nP` to skip host/port name resolution.
+  calls also gained `-nP` to skip host/port name resolution. An open terminals
+  drill-down (which re-requests `terminals <slug>` every tick) got the same
+  background treatment: it now reads the last completed result and refreshes in
+  the background, with a one-time synchronous fetch on first open so the table
+  still paints instantly.
 - **Per-profile Dock icons.** Each profile wrapper now gets a distinct icon —
   Claude's real icon badged with the profile's initial on a deterministic
   colored disc — so accounts are tellable apart in the Dock, Spotlight, and
