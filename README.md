@@ -1,5 +1,11 @@
 # Claude Profiles
 
+[![CI](https://github.com/jyito/Claude-Profiles/actions/workflows/ci.yml/badge.svg)](https://github.com/jyito/Claude-Profiles/actions/workflows/ci.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/jyito/Claude-Profiles/badge)](https://scorecard.dev/viewer/?uri=github.com/jyito/Claude-Profiles)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-D85A30.svg)](LICENSE)
+[![Dependencies: none](https://img.shields.io/badge/dependencies-none-5DCAA5.svg)](#how-it-works-and-why-its-safe)
+[![Platform: macOS](https://img.shields.io/badge/platform-macOS-1A1915.svg)](#requirements)
+
 Run multiple Claude accounts side by side on one Mac — each in its own Claude Desktop instance, permanently signed in, with a native dashboard for live resource monitoring and one-click management.
 
 <!-- HERO IMAGE — save as assets/hero-dashboard.png (≥1400px wide). Capture the dashboard window ONLY (⌘⇧5 → window) with 2+ running profiles and live sparklines. Earlier captures leaked Messages content — crop tight to the window. -->

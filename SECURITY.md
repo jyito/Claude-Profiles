@@ -13,5 +13,9 @@ under the Security tab) rather than a public issue. We'll acknowledge within
   is a critical finding.
 - Interesting attack surface: profile-name templating into bash/AppleScript/
   plists (sanitization in `src/launcher`), `rm -rf` paths in cache cleanup
-  (`src/engine.sh`), and the `document.title` action bridge
-  (`src/dashboard.applescript`).
+  (`src/engine.sh`, every one `${var:?}`-guarded), and the `document.title`
+  action bridge (`src/dashboard.applescript`).
+- Process-signal / cache-deletion paths (`closeterm`, `throttle`, `clean`,
+  `autotick`) are guarded to each instance's **own** process tree / data dir —
+  they can never target an arbitrary PID or another instance. The `remote`
+  command opens no socket; it relies on the user's own SSH (Remote Login).

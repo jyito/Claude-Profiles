@@ -1,0 +1,34 @@
+name: Feature request
+description: Suggest an improvement to Claude Profiles
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before suggesting, note the project's hard constraints — requests that
+        require any of these can't be accepted:
+        **no credential handling · no network I/O · no runtime dependencies ·
+        never modifies Claude.app · macOS built-ins only.**
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: The use case, not just the feature. What are you trying to do?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What you'd like to see. Sketches/mockups welcome.
+    validations:
+      required: false
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Fits the project constraints
+      options:
+        - label: This needs no network access, no new dependencies, and no credential handling
+          required: true
+        - label: This doesn't require modifying the Claude.app bundle
+          required: true
