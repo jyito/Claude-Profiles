@@ -34,7 +34,7 @@ die()  { err "$*"; exit 1; }
 # ---------------------------------------------------------------------------
 
 slugify() {
-    # lowercase alphanumeric only: "Sequoia Port" -> "sequoiaport"
+    # lowercase alphanumeric only: "Work Account" -> "workaccount"
     printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9'
 }
 

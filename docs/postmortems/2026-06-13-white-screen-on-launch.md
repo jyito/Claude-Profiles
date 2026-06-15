@@ -33,7 +33,7 @@ WebView painted nothing.
 | — | App moved/reinstalled to `/Applications/Claude Profiles.app`; `~/Applications` copy removed. The stale runtime applet was left in place. |
 | T0 | User launches the app → blank white window. Reports it as critical. |
 | T0+ | Investigation: worktree `dashboard.html`/JS both parse cleanly (ruled out a syntax/render error). |
-| T0+ | Found the cached applet's substituted source bakes `resourcesDir = "/Users/jito/Applications/Claude Profiles.app/Contents/Resources"`; that path no longer exists (app is at `/Applications/...`). Root cause confirmed. |
+| T0+ | Found the cached applet's substituted source bakes `resourcesDir = "/Users/<you>/Applications/Claude Profiles.app/Contents/Resources"`; that path no longer exists (app is at `/Applications/...`). Root cause confirmed. |
 | T1 | Recovery: `rm -rf ~/.claude-instances/.runtime` + relaunch from `/Applications`, forcing a recompile with the correct path. |
 | T2 | Dashboard renders correctly. Resolved. |
 | T3 | Hardening landed: `launch_dashboard` now self-heals a moved app (see Resolution). |

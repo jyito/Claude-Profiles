@@ -9,7 +9,8 @@
 Run multiple Claude accounts side by side on one Mac — each in its own Claude Desktop instance, permanently signed in, with a native dashboard for live resource monitoring and one-click management.
 
 <!-- HERO IMAGE — save as assets/hero-dashboard.png (≥1400px wide). Capture the dashboard window ONLY (⌘⇧5 → window) with 2+ running profiles and live sparklines. Earlier captures leaked Messages content — crop tight to the window. -->
-![The Claude Profiles dashboard — multiple accounts, live per-instance stats](assets/hero-dashboard.png)
+<!-- ![The Claude Profiles dashboard — multiple accounts, live per-instance stats](assets/hero-dashboard.png) — uncomment once the screenshot exists -->
+
 
 <!-- DEMO VIDEO — drag a ~15s screen recording into the GitHub editor here once captured (ends on a Show Window jump). GitHub hosts the upload and rewrites this to a player. Keep the line below as the fallback link until then. -->
 > 🎥 **[Demo video coming soon]** — a 15-second tour ending on a one-click Show Window jump.
@@ -21,7 +22,8 @@ Run multiple Claude accounts side by side on one Mac — each in its own Claude 
 Claude Desktop signs in one account at a time. If you have a personal Max plan and a business Max plan (or client accounts), switching means logging out and back in, constantly. Claude Profiles gives every account its own app icon — `Claude Business`, `Claude Personal`, `Claude Client X` — in your Dock, Spotlight, and Launchpad. Open as many as you like, simultaneously. Each stays signed in forever.
 
 <!-- SCREENSHOT — save as assets/dock.png (≥800px wide). Your Dock showing several distinct Claude profile icons running at once. -->
-![Several Claude profiles running at once in the Dock](assets/dock.png)
+<!-- ![Several Claude profiles running at once in the Dock](assets/dock.png) — uncomment once the screenshot exists -->
+
 
 ## How it works (and why it's safe)
 
@@ -41,7 +43,7 @@ That means:
 - **Per-instance drill-down** — expand any card in place. A *running* profile reveals a live table of its terminal sessions (device, command, idle time) with one-click close; a *stopped* profile reveals granular cleanup tiers — Caches / GPU / Logs / Everything. A **Throttle** control lowers a CPU-hogging instance's priority without quitting it.
 
   <!-- SCREENSHOT — save as assets/drilldown.png (≥1000px wide). An expanded running card showing the terminals table; crop to the card. -->
-  ![A running profile expanded to its live terminals table](assets/drilldown.png)
+  <!-- ![A running profile expanded to its live terminals table](assets/drilldown.png) — uncomment once the screenshot exists -->
 - **Automatic maintenance (opt-in)** — Settings can auto-clear caches on stopped profiles over a size limit and auto-close terminals idle past a threshold. Both are off by default and local-only.
 - **Show Window** — with many instances and many windows, one click raises every window of a *specific* instance. It targets the process by PID via `NSRunningApplication`, which works even though all instances share Claude's bundle identifier — and needs no Accessibility permissions.
 - **Cleanup utilities** — graceful quit, force-quit of a full process tree (releases stuck terminals), per-profile cache clearing, and an Emergency Stop killswitch. Cache clearing only ever deletes regenerable Electron caches; it refuses to run against a live instance and never touches sign-ins.
