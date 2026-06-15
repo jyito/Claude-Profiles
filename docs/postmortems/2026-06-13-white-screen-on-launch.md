@@ -1,7 +1,7 @@
 # Postmortem — Dashboard launches to a blank white window
 
 - **Date:** 2026-06-13
-- **Author:** Justin Ito (with Claude)
+- **Author:** jyito (with Claude)
 - **Status:** Resolved — immediate fix applied; **hardening (action #1) now landed**
 - **Severity:** High — the manager app was unusable (no dashboard rendered)
 
