@@ -38,13 +38,18 @@ Started a Claude Code session for profile 'Work' (screen: claude-work).
 Attach on this Mac:
   screen -r claude-work          (detach without quitting: Ctrl-A then D)
 
-Attach from another device (e.g. an SSH app on your iPad):
+Same network (e.g. an SSH app on your iPad):
   ssh you@your-mac.local -t "screen -r claude-work"
+
+Any network (via Tailscale):
+  ssh you@100.x.y.z -t "screen -r claude-work"
 ```
 
-From your iPad's SSH app, run that `ssh … screen -r claude-work` line and you're
-in the live session — type, get responses, detach with **Ctrl-A then D** (it
-keeps running on your Mac), reattach later from anywhere.
+If Tailscale is running on your Mac, `remote` automatically prints the
+works-from-anywhere line too (using your Tailscale address); otherwise it points
+you at installing it. From your device's SSH app, run the line that fits where
+you are — you're in the live session — type, get responses, detach with **Ctrl-A
+then D** (it keeps running on your Mac), reattach later from anywhere.
 
 - Each profile gets its own session (`claude-<slug>`) using that profile's
   `CLAUDE_CONFIG_DIR` (`~/.claude-code-instances/<slug>`), so accounts stay

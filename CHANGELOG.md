@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+- **`remote` reaches any device, anywhere.** When Tailscale is running, `remote`
+  now auto-prints a works-from-any-network SSH attach line (using your Tailscale
+  address) alongside the same-network one; when it's absent, it points you at
+  installing it. Still zero-server — the app opens no socket; SSH is your own
+  channel. (Genericized the example host in `docs/REMOTE.md`.)
 
 ## [0.4.0] — 2026-06-15
 - **Much snappier dashboard (performance fix).** The 2s live-stats refresh no
