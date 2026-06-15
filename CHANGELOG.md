@@ -14,6 +14,13 @@
   background treatment: it now reads the last completed result and refreshes in
   the background, with a one-time synchronous fetch on first open so the table
   still paints instantly.
+- **Smooth scrolling — the grid no longer rebuilds every tick.** The dashboard
+  used to recreate every card's DOM via `innerHTML` on each 2s refresh, which
+  reset scroll position and hover state mid-gesture. It now rebuilds only when
+  the card *structure* changes (a profile appears/disappears, flips
+  running↔stopped, or you expand/confirm something); on a steady tick it patches
+  just the numbers and sparkline points in place. An open terminals panel
+  likewise patches only its own table, not the whole grid.
 - **Per-profile Dock icons.** Each profile wrapper now gets a distinct icon —
   Claude's real icon badged with the profile's initial on a deterministic
   colored disc — so accounts are tellable apart in the Dock, Spotlight, and

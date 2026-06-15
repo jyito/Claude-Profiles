@@ -209,7 +209,7 @@
 </div>
 <div class="grid" id="grid"></div>
 <script>
-var hist = {}, MAXPTS = 30, confirmStep = {}, lastData = null;
+var hist = {}, MAXPTS = 30, confirmStep = {}, lastData = null, lastSig = null;
 function uiLocked() {   // derive the input lock from live state — never a stale boolean
   var ids = ["npmodal", "cleanmodal", "setmodal"], i, m;
   for (i = 0; i < ids.length; i++) { m = document.getElementById(ids[i]); if (m && m.className.indexOf("show") > -1) return true; }
@@ -265,7 +265,12 @@ function badgeSwatches(p) {
 function fmtDisk(mb) { return mb >= 1024 ? (mb / 1024).toFixed(1) + " GB" : mb + " MB"; }
 function updateTerminals(slug, arr) {   // pushed by the host after `engine terminals <slug>`
   terminals[slug] = arr;
-  if (expanded === slug) rerender();
+  // Patch ONLY the open drill panel, not the whole grid — an open panel refreshes
+  // every 2s tick, and a full grid rebuild each time was resetting scroll/hover.
+  if (expanded === slug) {
+    var el = document.getElementById("drill-" + (slug || "_default")), p = profileBySlug(slug);
+    if (el && p) el.innerHTML = drillInner(p); else rerender();
+  }
 }
 function fmtIdle(s) {
   if (s == null || s < 0) return "—";
@@ -282,21 +287,25 @@ function tierBtn(slug, tier, title, desc) {
   return '<button class="tierbtn" onclick="act3(\'clean\',\'' + slug + "','" + tier + '\')">' +
          '<div class="t">' + title + '</div><div class="d">' + desc + "</div></button>";
 }
+// Outer container carries a stable id so updateTerminals can patch just the inner
+// content (drillInner) without rebuilding the whole card grid.
 function drillPanel(p) {
+  return '<div class="drill" id="drill-' + (p.slug || "_default") + '">' + drillInner(p) + "</div>";
+}
+function drillInner(p) {
   if (!p.running) {
-    var c = '<div class="drill"><h4>Cleanup — regenerable caches only, sign-in untouched</h4><div class="tiers">' +
+    var c = '<h4>Cleanup — regenerable caches only, sign-in untouched</h4><div class="tiers">' +
       tierBtn(p.slug, "caches", "Caches", "Web &amp; code caches") +
       tierBtn(p.slug, "gpu", "GPU", "Shader &amp; GPU caches") +
       tierBtn(p.slug, "logs", "Logs", "Crash reports &amp; logs") +
       tierBtn(p.slug, "all", "Everything", "All of the above") + "</div>";
     if (p.disk >= 0) c += '<div class="hint">Using ' + fmtDisk(p.disk) + " on disk.</div>";
-    c += badgeSwatches(p);
-    return c + "</div>";
+    return c + badgeSwatches(p);
   }
   var slug = p.slug, rows = terminals[slug];
-  var h = '<div class="drill"><h4>Terminals — live sessions in this profile</h4>';
-  if (!rows) return h + '<div class="empty">Loading…</div></div>';
-  if (!rows.length) return h + '<div class="empty">No active terminals.</div></div>';
+  var h = '<h4>Terminals — live sessions in this profile</h4>';
+  if (!rows) return h + '<div class="empty">Loading…</div>';
+  if (!rows.length) return h + '<div class="empty">No active terminals.</div>';
   h += '<table class="tterm"><tr><th>Device</th><th>Command</th><th>Idle</th><th></th></tr>';
   for (var i = 0; i < rows.length; i++) {
     var r = rows[i], dev = r.dev.replace("/dev/", ""), on = closeArmed === slug + "/" + dev;
@@ -309,8 +318,7 @@ function drillPanel(p) {
   h += '</table><div class="hint">Closing sends a hangup to that terminal\'s session — anything running in it stops.</div>';
   h += '<div class="throttle"><button class="tbtn" onclick="act(\'throttle\',\'' + slug + '\')">Throttle CPU</button>' +
        '<span class="thint">Lowers priority until this instance is relaunched.</span></div>';
-  h += badgeSwatches(p);
-  return h + "</div>";
+  return h + badgeSwatches(p);
 }
 function toggleNp(show) {
   var f = document.getElementById("npmodal");
@@ -380,7 +388,10 @@ function finishPurge(slug) {
   if (v === "DELETE") { act("purge", slug); }
   delete confirmStep[slug]; rerender();
 }
-function rerender() { if (lastData) render(lastData); }
+// User actions always force a full rebuild (lastSig reset) — they're infrequent
+// and must always reflect structural changes. The 2s tick goes through render(),
+// which only rebuilds when structure changed and otherwise patches in place.
+function rerender() { if (lastData) { lastSig = null; render(lastData); } }
 var AV = [["#712B13","#F5C4B3"],["#26215C","#CECBF6"],["#04342C","#9FE1CB"],["#4B1528","#F4C0D1"],["#042C53","#B5D4F4"]];
 function act(a, slug) {
   document.title = "cp:" + a + (slug ? ":" + slug : "");
@@ -413,13 +424,65 @@ function updateStats(data) {
       if (data[j].slug === expanded && data[j].running) { document.title = "cp:terminals:" + expanded; break; }
   }
 }
+// The sub-line text (running stats / stopped summary) and the expander label —
+// the parts that change every tick. Live-patched in place so the DOM structure
+// (and the user's scroll/hover) survives the 2s refresh.
+function subText(p) {
+  return p.running ? "Running · " + p.procs + " procs · " + p.ptys + " terminals"
+                   : "Stopped" + (p.opens ? " · opened " + p.opens + "× · last " + p.last : "");
+}
+function expLabel(p) {
+  return p.running ? (expanded === p.slug ? "▴ Hide terminals" : "▾ Terminals" + (p.ptys ? " (" + p.ptys + ")" : ""))
+                   : (expanded === p.slug ? "▴ Hide cleanup" : "▾ Cleanup");
+}
+function setKpi(totalMem, running) {
+  document.getElementById("kpi").innerHTML = Math.round(totalMem).toLocaleString() +
+    ' <small>MB across ' + running + " running</small>";
+}
+// Everything that affects DOM STRUCTURE (not the live numbers). When this is
+// unchanged between ticks we patch in place instead of rebuilding the grid.
+function structureSig(data) {
+  var s = [];
+  for (var i = 0; i < data.length; i++) {
+    var p = data[i];
+    s.push((p.slug || "_default") + "|" + (p.running ? 1 : 0) + "|" +
+           (expanded === p.slug ? 1 : 0) + "|" + (confirmStep[p.slug] || 0));
+  }
+  return s.join(";") + "#" + (closeArmed || "");
+}
 function render(data) {
-  var totalMem = 0, running = 0, html = "";
+  // Accumulate sparkline history every tick regardless of render path.
   for (var i = 0; i < data.length; i++) {
     var p = data[i], key = p.slug || "_default";
     if (!hist[key]) hist[key] = { cpu: [], mem: [] };
     hist[key].cpu.push(p.cpu); hist[key].mem.push(p.mem);
     if (hist[key].cpu.length > MAXPTS) { hist[key].cpu.shift(); hist[key].mem.shift(); }
+  }
+  var sig = structureSig(data);
+  if (sig !== lastSig) { lastSig = sig; fullRender(data); } else livePatch(data);
+}
+// Steady-state tick: no profile appeared/disappeared and no card changed shape,
+// so just update the numbers + sparklines in place. The grid DOM (and scroll
+// position, hover, focus) is left untouched.
+function livePatch(data) {
+  var totalMem = 0, running = 0;
+  for (var i = 0; i < data.length; i++) {
+    var p = data[i], key = p.slug || "_default";
+    if (!p.running) continue;
+    totalMem += p.mem; running++;
+    var cv = document.getElementById("cpuval-" + key); if (cv) cv.textContent = p.cpu.toFixed(1);
+    var mv = document.getElementById("memval-" + key); if (mv) mv.textContent = Math.round(p.mem);
+    var cs = document.getElementById("cpuspk-" + key); if (cs) cs.innerHTML = spark(hist[key].cpu, "#F0997B");
+    var ms = document.getElementById("memspk-" + key); if (ms) ms.innerHTML = spark(hist[key].mem, "#9FE1CB");
+    var sb = document.getElementById("sub-" + key); if (sb) sb.innerHTML = '<span class="dot"></span>' + subText(p);
+    var ex = document.getElementById("exp-" + key); if (ex) ex.innerHTML = expLabel(p);
+  }
+  setKpi(totalMem, running);
+}
+function fullRender(data) {
+  var totalMem = 0, running = 0, html = "";
+  for (var i = 0; i < data.length; i++) {
+    var p = data[i], key = p.slug || "_default";
     if (p.running) { totalMem += p.mem; running++; }
     var av = AV[i % AV.length];
     var avatarBg = p.color || av[0];   // same color as this profile's Dock badge
@@ -427,16 +490,15 @@ function render(data) {
     html += '<div class="card' + (expanded === p.slug ? " expanded" : "") + '"><div class="hdr">' +
       '<div class="avatar" style="background:' + avatarBg + ';color:#FBF7F0">' + initial + "</div>" +
       '<div style="flex:1"><div class="name">' + p.name.replace(/^Claude /, "").replace(/^\(/, "Claude (") + "</div>" +
-      '<div class="sub' + (p.running ? " on" : "") + '"><span class="dot"></span>' +
-      (p.running ? "Running · " + p.procs + " procs · " + p.ptys + " terminals"
-                 : "Stopped" + (p.opens ? " · opened " + p.opens + "× · last " + p.last : "")) +
-      "</div></div></div>";
+      '<div class="sub' + (p.running ? " on" : "") + '" id="sub-' + key + '"><span class="dot"></span>' +
+      subText(p) + "</div></div></div>";
     if (p.running) {
-      html += '<div class="charts"><div><div class="ml">CPU ' + p.cpu.toFixed(1) + "%</div>" +
-        spark(hist[key].cpu, "#F0997B") + '</div><div><div class="ml">Memory ' + Math.round(p.mem) + " MB</div>" +
-        spark(hist[key].mem, "#9FE1CB") + "</div></div>";
+      html += '<div class="charts"><div><div class="ml">CPU <span id="cpuval-' + key + '">' + p.cpu.toFixed(1) + "</span>%</div>" +
+        '<span id="cpuspk-' + key + '">' + spark(hist[key].cpu, "#F0997B") + '</span></div>' +
+        '<div><div class="ml">Memory <span id="memval-' + key + '">' + Math.round(p.mem) + " MB</span></div>" +
+        '<span id="memspk-' + key + '">' + spark(hist[key].mem, "#9FE1CB") + "</span></div></div>";
     } else {
-      html += '<div class="meta">' + (p.disk >= 0 ? "Disk " + (p.disk >= 1024 ? (p.disk/1024).toFixed(1) + " GB" : p.disk + " MB") : "") + "</div>";
+      html += '<div class="meta">' + (p.disk >= 0 ? "Disk " + fmtDisk(p.disk) : "") + "</div>";
     }
     html += '<div class="acts">';
     if (p.slug) {
@@ -468,10 +530,7 @@ function render(data) {
     }
     html += "</div>";
     if (p.slug && (p.running || !confirmStep[p.slug])) {
-      var lbl = p.running
-        ? (expanded === p.slug ? "▴ Hide terminals" : "▾ Terminals" + (p.ptys ? " (" + p.ptys + ")" : ""))
-        : (expanded === p.slug ? "▴ Hide cleanup" : "▾ Cleanup");
-      html += '<button class="expander" onclick="toggleExpand(\'' + p.slug + '\')">' + lbl + "</button>";
+      html += '<button class="expander" id="exp-' + key + '" onclick="toggleExpand(\'' + p.slug + '\')">' + expLabel(p) + "</button>";
       if (expanded === p.slug) html += drillPanel(p);
     }
     if (p.slug && !p.running && !confirmStep[p.slug]) {
@@ -480,8 +539,7 @@ function render(data) {
     html += "</div>";
   }
   document.getElementById("grid").innerHTML = html;
-  document.getElementById("kpi").innerHTML = Math.round(totalMem).toLocaleString() +
-    ' <small>MB across ' + running + " running</small>";
+  setKpi(totalMem, running);
   var l = document.getElementById("loading"); if (l) l.className = "loading hidden";
 }
 </script></body></html>
