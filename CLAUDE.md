@@ -112,6 +112,18 @@ intended to go public once docs/screenshots/signing are in place.
   needed), resets it, dispatches. Native→JS via
   `evaluateJavaScript:completionHandler:(missing value)` (fire-and-forget is
   block-free). Stats push on the applet's `on idle` every 2s.
+- **The title bridge can feed back on itself — don't push stats after the page's
+  OWN auto-refresh.** An open drill-down keeps itself live by having `updateStats`
+  set `document.title = "cp:terminals:<slug>"` each tick. `checkBridge` (250ms)
+  dispatches that title and used to also call `pushStats` afterward — but
+  `pushStats` runs `updateStats`, which re-sets the `cp:terminals` title, which
+  the next poll catches, re-pushes… so the whole refresh+rebuild cycle ran at
+  ~4Hz whenever a terminals panel was open (and only then — that's the tell). The
+  fix: in `checkBridge`, only `pushStats` for real user actions, i.e. skip it when
+  `rawTitle starts with "cp:terminals"`. Any new self-arming `cp:` verb needs the
+  same exclusion. (The dashboard also defers DOM updates while the user is
+  actively scrolling, and `render()` patches in place unless structure changed —
+  see the in-place-patch note in dashboard.html.)
 - **Show Window targets a PID, not a bundle ID** — all instances share
   Claude's bundle ID. `NSRunningApplication
   runningApplicationWithProcessIdentifier:` + `activateWithOptions:3`,

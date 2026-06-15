@@ -21,11 +21,17 @@
   running↔stopped, or you expand/confirm something); on a steady tick it patches
   just the numbers and sparkline points in place. An open terminals panel
   likewise patches only its own table, not the whole grid.
+- **Fixed lag while a terminals panel was open (the big one).** A feedback loop
+  in the JS↔native title bridge: an open drill-down keeps itself live by setting
+  `document.title = "cp:terminals:<slug>"` each tick, and the 250ms bridge poller
+  was responding by kicking off another full stats push — which re-set the title,
+  which the next poll caught… so the refresh+rebuild cycle ran ~4× per second
+  whenever a panel was open. The bridge now skips that follow-up push for the
+  panel's own auto-refresh, dropping it back to the intended 2s cadence. The
+  dashboard also defers DOM updates while you're actively scrolling.
 - **Scroll jank fix.** The transient toast banner used `position: sticky`, which
-  can force WebKit off threaded (GPU) scrolling onto the main thread — repainting
-  the whole window every scroll frame, so the dashboard scrolled poorly even with
-  little content. It's now `position: fixed`, keeping toasts visible without the
-  scroll penalty.
+  can force WebKit off threaded (GPU) scrolling onto the main thread. It's now
+  `position: fixed`, keeping toasts visible without the scroll penalty.
 - **Per-profile Dock icons.** Each profile wrapper now gets a distinct icon —
   Claude's real icon badged with the profile's initial on a deterministic
   colored disc — so accounts are tellable apart in the Dock, Spotlight, and
