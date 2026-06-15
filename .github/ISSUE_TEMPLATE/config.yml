@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/jyito/Claude-Profiles/security/advisories/new
+    about: Report security issues privately via GitHub's vulnerability reporting — never in a public issue.
+  - name: Question / discussion
+    url: https://github.com/jyito/Claude-Profiles/discussions
+    about: For usage questions and ideas that aren't yet a concrete bug or feature request.

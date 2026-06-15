@@ -1,0 +1,60 @@
+name: Bug report
+description: Something in Claude Profiles isn't working as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Please don't include screenshots that show other
+        app windows (Messages, Mail) — crop tight to the Claude Profiles window.
+        **Security issues:** don't file them here — use private vulnerability
+        reporting (see SECURITY.md).
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what actually happened.
+      placeholder: I clicked Show Window on a profile and…
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Create a profile named …
+        2. Launch it
+        3. …
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: e.g. macOS 15.1 (Sequoia)
+    validations:
+      required: true
+  - type: input
+    id: app-version
+    attributes:
+      label: Claude Profiles version
+      description: Shown in the dashboard, or the release/commit you built from.
+      placeholder: e.g. v0.3.0
+    validations:
+      required: true
+  - type: input
+    id: install-path
+    attributes:
+      label: Install location
+      description: A blank/white dashboard is often a stale runtime applet after moving the app.
+      placeholder: e.g. ~/Applications/Claude Profiles.app
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant output
+      description: Any terminal output from the launcher/engine. Will be rendered as code.
+      render: shell
+    validations:
+      required: false

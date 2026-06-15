@@ -1,0 +1,3 @@
+# Default owner for everything in the repo. Combined with branch protection
+# (require review), this routes all changes through the maintainer.
+* @jyito
