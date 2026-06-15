@@ -70,9 +70,12 @@
                    padding:6px 10px; font-size:12px; font-family:inherit; outline:none; margin:8px 0; }
   .confirm .danger { background:#501313; color:#F7C1C1; border:none; }
   .card.expanded { grid-column:1 / -1; }
-  .expander { background:none; border:none; color:#888780; font-size:11px; cursor:pointer;
-              font-family:inherit; padding:8px 0 0; width:100%; text-align:center; }
-  .expander:hover { color:#D3D1C7; }
+  .cardrow { display:flex; gap:8px; margin-top:8px; }
+  .cardbtn { flex:1; background:transparent; border:.5px solid #3a382f; color:#D3D1C7;
+             border-radius:7px; padding:6px 0; font-size:12px; cursor:pointer; font-family:inherit;
+             transition: background-color .12s ease, border-color .12s ease, color .12s ease, transform .06s ease; }
+  .cardbtn:hover { border-color:#5F5E5A; color:#F1EFE8; }
+  .cardbtn:active { transform:scale(.99); }
   .drill { margin-top:12px; border-top:.5px solid #2e2c25; padding-top:12px; }
   .drill h4 { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:#888780;
               font-weight:500; margin:0 0 8px; }
@@ -129,7 +132,6 @@
   .modal .ghost:hover { border-color:#5F5E5A; color:#F1EFE8; }
   .modal button:active { transform:scale(.97); }
   .cleanrow:active { transform:scale(.992); }
-  .expander:active { transform:scale(.99); }
   .linkbtn:active { transform:scale(.99); }
   button:focus-visible { outline:2px solid #D85A30; outline-offset:2px; }
   select:focus-visible { outline:2px solid #D85A30; outline-offset:1px; }
@@ -444,17 +446,14 @@ function updateStats(data) {
       if (data[j].slug === expanded && data[j].running) { document.title = "cp:terminals:" + expanded; break; }
   }
 }
-// The sub-line text (running stats / stopped summary) and the expander label —
-// the parts that change every tick. Live-patched in place so the DOM structure
-// (and the user's scroll/hover) survives the 2s refresh.
+// The sub-line text (running stats / stopped summary) — the part that changes
+// every tick. Live-patched in place so the DOM structure (and the user's
+// scroll/hover) survives the 2s refresh.
 function subText(p) {
   return p.running ? "Running · " + p.procs + " procs · " + p.ptys + " terminals"
                    : "Stopped" + (p.opens ? " · opened " + p.opens + "× · last " + p.last : "");
 }
-function expLabel(p) {
-  return p.running ? (expanded === p.slug ? "▴ Hide terminals" : "▾ Terminals" + (p.ptys ? " (" + p.ptys + ")" : ""))
-                   : (expanded === p.slug ? "▴ Hide cleanup" : "▾ Cleanup");
-}
+function expLabel(p) { return expanded === p.slug ? "− Details" : "+ Details"; }
 function setKpi(totalMem, running) {
   document.getElementById("kpi").innerHTML = Math.round(totalMem).toLocaleString() +
     ' <small>MB across ' + running + " running</small>";
@@ -495,7 +494,6 @@ function livePatch(data) {
     var cs = document.getElementById("cpuspk-" + key); if (cs) cs.innerHTML = spark(hist[key].cpu, "#F0997B");
     var ms = document.getElementById("memspk-" + key); if (ms) ms.innerHTML = spark(hist[key].mem, "#9FE1CB");
     var sb = document.getElementById("sub-" + key); if (sb) sb.innerHTML = '<span class="dot"></span>' + subText(p);
-    var ex = document.getElementById("exp-" + key); if (ex) ex.innerHTML = expLabel(p);
   }
   setKpi(totalMem, running);
 }
@@ -550,7 +548,10 @@ function fullRender(data) {
     }
     html += "</div>";
     if (p.slug && (p.running || !confirmStep[p.slug])) {
-      html += '<button class="expander" id="exp-' + key + '" onclick="toggleExpand(\'' + p.slug + '\')">' + expLabel(p) + "</button>";
+      html += '<div class="cardrow">' +
+        '<button class="cardbtn" onclick="act(\'remote\',\'' + p.slug + '\')">Remote</button>' +
+        '<button class="cardbtn" id="exp-' + key + '" onclick="toggleExpand(\'' + p.slug + '\')">' + expLabel(p) + '</button>' +
+        '</div>';
       if (expanded === p.slug) html += drillPanel(p);
     }
     if (p.slug && !p.running && !confirmStep[p.slug]) {

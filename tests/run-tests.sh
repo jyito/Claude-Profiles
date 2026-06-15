@@ -400,7 +400,9 @@ let avatarColor=0;
 try { const prof=d.find(p=>p.slug && p.color); const g4=(E['grid']||{}).innerHTML||''; if(prof && g4.indexOf('background:'+prof.color)>-1) avatarColor=1; } catch(e){}
 let swatches=0;
 try { const g5=(E['grid']||{}).innerHTML||''; if(g5.indexOf('class=\"swatch')>-1 && g5.indexOf('setbadge')>-1) swatches=1; } catch(e){}
-console.log(cards, sw, sp, rm, drill, tiers, (loadCls.indexOf('hidden')>-1?1:0), lock, avatarColor, swatches);
+let remotebtn=0, detailsbtn=0;
+try { const g6=(E['grid']||{}).innerHTML||''; if(g6.indexOf(\"act('remote'\")>-1) remotebtn=1; if(g6.indexOf('+ Details')>-1) detailsbtn=1; } catch(e){}
+console.log(cards, sw, sp, rm, drill, tiers, (loadCls.indexOf('hidden')>-1?1:0), lock, avatarColor, swatches, remotebtn, detailsbtn);
 " 2>/dev/null)
     check "cards render"        "[ \"\$(echo '$R' | awk '{print \$1}')\" -ge 3 ]"
     check "Show Window buttons" "[ \"\$(echo '$R' | awk '{print \$2}')\" = 2 ]"
@@ -412,6 +414,8 @@ console.log(cards, sw, sp, rm, drill, tiers, (loadCls.indexOf('hidden')>-1?1:0),
     check "input lock derived from confirm state" "[ \"\$(echo '$R' | awk '{print \$8}')\" = 1 ]"
     check "card avatar uses badge color"          "[ \"\$(echo '$R' | awk '{print \$9}')\" = 1 ]"
     check "drill-down shows badge swatches"       "[ \"\$(echo '$R' | awk '{print \$10}')\" = 1 ]"
+    check "card shows Remote button"              "[ \"\$(echo '$R' | awk '{print \$11}')\" = 1 ]"
+    check "card shows + Details button"           "[ \"\$(echo '$R' | awk '{print \$12}')\" = 1 ]"
 else
     echo "  - node not found, skipping JS render tests"
 fi
