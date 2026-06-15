@@ -83,7 +83,7 @@ on checkBridge:aTimer
 			-- own auto terminals refresh: pushStats -> updateStats re-arms the
 			-- cp:terminals title, which this 250ms bridge would catch and spin at
 			-- ~4Hz — the churn that made an open terminals panel laggy.
-			if rawTitle does not start with "cp:terminals" then my pushStats()
+			if rawTitle does not start with "cp:terminals" and rawTitle does not start with "cp:remote" and rawTitle does not start with "cp:copy" then my pushStats()
 		end if
 	end try
 end checkBridge:
@@ -131,6 +131,16 @@ on pushConfig()
 	end try
 end pushConfig
 
+on pushRemote(slug)
+	-- slug is page-originated [a-z0-9]; rjson is engine's remoteinfo JSON object.
+	-- remoteinfo starts/reuses the profile's Claude Code screen session, so this
+	-- has a side effect by design (the user asked to make it remotely reachable).
+	try
+		set rjson to do shell script quoted form of enginePath & " remoteinfo " & quoted form of slug
+		theWebView's evaluateJavaScript:("updateRemote(" & rjson & ")") completionHandler:(missing value)
+	end try
+end pushRemote
+
 on idle
 	if not didSetup then return 2
 	try
@@ -163,6 +173,12 @@ on handleAction(raw)
 			my focusInstance(verb, slug)
 		else if verb is "terminals" then
 			my pushTerminals(slug)
+		else if verb is "remote" then
+			my pushRemote(slug)
+		else if verb is "copy" then
+			-- everything after cp:copy: is the text to copy (may contain spaces)
+			set ctext to my joinFrom(parts, 3, ":")
+			do shell script quoted form of enginePath & " copy " & quoted form of ctext & " >/dev/null 2>&1 &"
 		else if verb is "closeterm" then
 			set tdev to ""
 			if (count of parts) > 3 then set tdev to item 4 of parts
