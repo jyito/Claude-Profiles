@@ -86,13 +86,23 @@ profile_wrappers() {
     done
 }
 
+# PS_SNAP: an optional, caller-scoped `ps axo pid=,ppid=,command=` snapshot.
+# A full-system `ps` costs ~65ms; cmd_stats used to spawn one PER profile PER
+# helper (4+ per tick), so the 2s refresh blocked the applet's main thread for
+# ~0.5s and got worse with every profile. cmd_stats now captures ONE snapshot
+# and the helpers below reuse it via bash dynamic scoping. When PS_SNAP is unset
+# (standalone calls, the test suite's shimmed ps) they fall back to their own ps,
+# so behavior is unchanged. The snapshot carries command= AND ppid=, so both the
+# argv match and the parent-tree walk read from the same single capture.
 main_pids_for_dir() {
     # Match --user-data-dir=<dir> as a COMPLETE argv value, not a substring.
     # Substring matching let a profile absorb a prefix-colliding sibling's PIDs
     # (e.g. querying "work" also matched "work2"), confusing every per-instance
     # metric. The char after the dir must be a space (another argv token) or end
     # of line — anything else (-, 2, /) means it's a different, longer dir.
-    ps axo pid=,command= | awk -v d="--user-data-dir=$1" '
+    # awk prints $1 (pid is always the first column) so a 2-col or 3-col snapshot
+    # both work.
+    printf '%s\n' "${PS_SNAP:-$(ps axo pid=,command=)}" | awk -v d="--user-data-dir=$1" '
         !/awk/ {
             i = index($0, d)
             if (i > 0) {
@@ -103,11 +113,13 @@ main_pids_for_dir() {
 }
 
 tree_pids() {
-    local snap all="$*" grew=1
-    snap=$(ps axo pid=,ppid=)
+    local snap all="$*" grew=1 pid ppid rest
+    # `rest` absorbs the command column when reading a 3-col PS_SNAP, so pid/ppid
+    # stay clean (a bare `read pid ppid` would dump the command into ppid).
+    snap="${PS_SNAP:-$(ps axo pid=,ppid=)}"
     while [ "$grew" -eq 1 ]; do
         grew=0
-        while read -r pid ppid; do
+        while read -r pid ppid rest; do
             case " $all " in *" $pid "*) continue ;; esac
             case " $all " in *" $ppid "*) all="$all $pid"; grew=1 ;; esac
         done <<EOF
@@ -127,7 +139,7 @@ pty_count_for_pids() {
     # by the Electron main process and inherited by helpers would otherwise be
     # counted once per holder, inflating the terminal total. Dedup by device.
     local csv; csv=$(printf '%s' "$*" | tr ' ' ',')
-    lsof -p "$csv" 2>/dev/null | awk '$NF ~ /^\/dev\/ttys/ {print $NF}' | sort -u | wc -l | tr -d ' '
+    lsof -nP -p "$csv" 2>/dev/null | awk '$NF ~ /^\/dev\/ttys/ {print $NF}' | sort -u | wc -l | tr -d ' '
 }
 
 instance_devices() {  # the /dev/ttysNN devices owned by slug $1's process tree, deduped
@@ -135,7 +147,7 @@ instance_devices() {  # the /dev/ttysNN devices owned by slug $1's process tree,
     mains=$(main_pids_for_dir "$INSTANCES_DIR/$1"); [ -z "$mains" ] && return
     # shellcheck disable=SC2086
     pids=$(tree_pids $mains); csv=$(printf '%s' "$pids" | tr ' ' ',')
-    lsof -p "$csv" 2>/dev/null | awk '$NF ~ /^\/dev\/ttys/ {print $NF}' | sort -u
+    lsof -nP -p "$csv" 2>/dev/null | awk '$NF ~ /^\/dev\/ttys/ {print $NF}' | sort -u
 }
 
 json_str() {  # minimal JSON string escaping for arbitrary text (e.g. a command line)
@@ -196,9 +208,13 @@ EOF
 
 cmd_stats() {
     local out="[" first=1 app name slug
+    # One full-system ps for the whole tick. Every helper called below reads this
+    # via dynamic scope instead of spawning its own ps (see PS_SNAP note above).
+    local PS_SNAP
+    PS_SNAP=$(ps axo pid=,ppid=,command=)
     # default instance
     local def
-    def=$(ps axo pid=,command= | awk '/Claude\.app\/Contents\/MacOS\/Claude/ && !/--user-data-dir/ && !/Helper/ {print $1; exit}')
+    def=$(printf '%s\n' "$PS_SNAP" | awk '/Claude\.app\/Contents\/MacOS\/Claude/ && !/--user-data-dir/ && !/Helper/ {print $1; exit}')
     if [ -n "$def" ]; then
         local pids cpu mem nproc ptys
         # shellcheck disable=SC2086
@@ -299,7 +315,7 @@ cmd_terminals() {  # JSON array of this instance's terminals: [{dev,pid,cmd,idle
         out="$out{\"dev\":\"$dev\",\"pid\":$pid,\"cmd\":\"$(json_str "$cmd")\",\"idle\":$idle}"
         first=0
     done <<EOF
-$(lsof -p "$csv" 2>/dev/null)
+$(lsof -nP -p "$csv" 2>/dev/null)
 EOF
     printf '%s]' "$out"
 }
