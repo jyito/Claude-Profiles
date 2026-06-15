@@ -245,6 +245,16 @@ check "cli remote needs a name"            "bash '$CLI' remote 2>&1 | grep -qi u
 printf '\t12345.claude-work\t(Detached)\n' > "$WORK/screen-sessions"
 check "cli remote reuses running session"  "bash '$CLI' remote Work 2>&1 | grep -qi 'already running'"
 rm -f "$WORK/screen-sessions"
+# When Tailscale is present, remote prints an any-network attach line using the
+# Tailscale IP; when absent, it prints the install hint instead.
+cat > "$WORK/shims/tailscale" <<'TS'
+#!/bin/bash
+[ "$*" = "ip -4" ] && echo "100.64.1.2"
+TS
+chmod +x "$WORK/shims/tailscale"
+check "cli remote shows tailscale any-network line" "bash '$CLI' remote Work 2>&1 | grep -qE 'ssh .*@100[.]64[.]1[.]2 -t .*screen -r claude-work'"
+rm -f "$WORK/shims/tailscale"
+check "cli remote hints tailscale when absent"      "bash '$CLI' remote Work 2>&1 | grep -qi 'install Tailscale'"
 
 echo "== bulk cleanup =="
 mkdir -p "$WORK/instances/bulkstopped/GPUCache"; dd if=/dev/zero of="$WORK/instances/bulkstopped/GPUCache/b" bs=1024 count=64 2>/dev/null

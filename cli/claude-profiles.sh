@@ -411,9 +411,16 @@ cmd_remote() {
     host="$(scutil --get LocalHostName 2>/dev/null).local"
     user=$(whoami)
     printf '\nAttach on this Mac:\n  screen -r %s          (detach without quitting: Ctrl-A then D)\n' "$session"
-    printf '\nAttach from another device (e.g. an SSH app on your iPad):\n  ssh %s@%s -t "screen -r %s"\n' "$user" "$host" "$session"
+    printf '\nSame network (e.g. an SSH app on your iPad):\n  ssh %s@%s -t "screen -r %s"\n' "$user" "$host" "$session"
+    # If Tailscale is up, print a copy-paste attach line that works from ANY
+    # network — no port-forwarding, still your own private channel (no server
+    # the app runs). Degrades silently when Tailscale isn't installed.
+    if command -v tailscale >/dev/null 2>&1; then
+        ts_ip=$(tailscale ip -4 2>/dev/null | head -n1)
+        [ -n "$ts_ip" ] && printf '\nAny network (via Tailscale):\n  ssh %s@%s -t "screen -r %s"\n' "$user" "$ts_ip" "$session"
+    fi
     printf '\nRequires Remote Login: System Settings > General > Sharing > Remote Login.\n'
-    printf 'To reach your Mac off its local network, use Tailscale or a VPN.\n'
+    command -v tailscale >/dev/null 2>&1 || printf 'To reach your Mac from outside your home network, install Tailscale (free) on both devices.\n'
     printf 'List sessions:  screen -ls   ·   Quit one:  screen -X -S %s quit\n' "$session"
 }
 
