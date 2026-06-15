@@ -319,21 +319,29 @@ if command -v node >/dev/null 2>&1; then
 const fs=require('fs');
 const html=fs.readFileSync('$ROOT/src/dashboard.html','utf8');
 const js=html.match(/<script>([\s\S]*)<\/script>/)[1];
-let grid='',kpi='',loadCls='';
-global.document={getElementById:(id)=>({set innerHTML(v){if(id==='grid')grid=v;else kpi=v;},set textContent(v){},get className(){return ''},set className(v){if(id==='loading')loadCls=v;},focus(){},value:''}),addEventListener:()=>{},title:''};
+// Per-id element registry so we can observe livePatch's in-place updates (it
+// writes to cpuspk-/sub-/etc. by id), not just the grid innerHTML.
+const E={};
+global.document={getElementById:(id)=>{ if(!E[id]) E[id]={innerHTML:'',textContent:'',className:'',value:'',focus(){}}; return E[id]; },addEventListener:()=>{},title:''};
 global.setTimeout=()=>{};
 eval(js);
 const d=JSON.parse(fs.readFileSync('$WORK/stats.json','utf8'));
-updateStats(d); updateStats(d);
+updateStats(d); updateStats(d);   // 2nd tick is a livePatch (structure unchanged)
+const grid=(E['grid']||{}).innerHTML||'', loadCls=(E['loading']||{}).className||'';
+const allHtml=Object.keys(E).map(k=>E[k].innerHTML||'').join('');
 const cards=(grid.match(/class=\"card\"/g)||[]).length, sw=(grid.match(/Show Window/g)||[]).length;
-const sp=(grid.match(/<polyline/g)||[]).length, rm=(grid.match(/Remove profile/g)||[]).length;
+// Sparklines only get a polyline once hist has 2 points — which happens on the
+// 2nd tick via livePatch into the cpuspk-/memspk- elements, so this verifies the
+// in-place patch actually ran.
+const sp=(allHtml.match(/<polyline/g)||[]).length, rm=(grid.match(/Remove profile/g)||[]).length;
 let drill=0;
 try {
   const run=d.find(p=>p.slug && p.running);
   if (run) {
     toggleExpand(run.slug);
     updateTerminals(run.slug,[{dev:'/dev/ttys001',pid:100,cmd:'bash -l',idle:200}]);
-    if (grid.indexOf('class=\"tterm\"')>-1 && grid.indexOf('ttys001')>-1 && grid.indexOf('expanded')>-1 && grid.indexOf('closeTerm(')>-1 && grid.indexOf(\"act('throttle'\")>-1) drill=1;
+    const dh=(E['drill-'+run.slug]||{}).innerHTML||'', g2=(E['grid']||{}).innerHTML||'';
+    if (dh.indexOf('class=\"tterm\"')>-1 && dh.indexOf('ttys001')>-1 && g2.indexOf('expanded')>-1 && dh.indexOf('closeTerm(')>-1 && dh.indexOf(\"act('throttle'\")>-1) drill=1;
   }
 } catch(e){}
 let tiers=0;
@@ -341,15 +349,16 @@ try {
   const stp=d.find(p=>p.slug && !p.running);
   if (stp) {
     expanded=null; toggleExpand(stp.slug);
-    if (grid.indexOf('tierbtn')>-1 && grid.indexOf(\"act3('clean'\")>-1) tiers=1;
+    const g3=(E['grid']||{}).innerHTML||'';
+    if (g3.indexOf('tierbtn')>-1 && g3.indexOf(\"act3('clean'\")>-1) tiers=1;
   }
 } catch(e){}
 let lock=0;
 try { confirmStep['zz']=1; const a=uiLocked(); delete confirmStep['zz']; const b=uiLocked(); lock=(a && !b)?1:0; } catch(e){}
 let avatarColor=0;
-try { const prof=d.find(p=>p.slug && p.color); if(prof && grid.indexOf('background:'+prof.color)>-1) avatarColor=1; } catch(e){}
+try { const prof=d.find(p=>p.slug && p.color); const g4=(E['grid']||{}).innerHTML||''; if(prof && g4.indexOf('background:'+prof.color)>-1) avatarColor=1; } catch(e){}
 let swatches=0;
-try { if(grid.indexOf('class=\"swatch')>-1 && grid.indexOf('setbadge')>-1) swatches=1; } catch(e){}
+try { const g5=(E['grid']||{}).innerHTML||''; if(g5.indexOf('class=\"swatch')>-1 && g5.indexOf('setbadge')>-1) swatches=1; } catch(e){}
 console.log(cards, sw, sp, rm, drill, tiers, (loadCls.indexOf('hidden')>-1?1:0), lock, avatarColor, swatches);
 " 2>/dev/null)
     check "cards render"        "[ \"\$(echo '$R' | awk '{print \$1}')\" -ge 3 ]"
