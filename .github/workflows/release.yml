@@ -1,0 +1,96 @@
+name: Release
+
+# Cut a release by pushing a version tag: `git tag v0.4.0 && git push --tags`.
+# Gates on the full macOS test matrix, builds the artifacts, optionally signs +
+# notarizes (only when the Apple signing secrets exist), attaches SLSA build
+# provenance, and publishes a GitHub Release with notes from CHANGELOG.md.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  # Block the release on the same macOS matrix CI uses.
+  test:
+    uses: ./.github/workflows/ci-macos.yml
+
+  release:
+    needs: test
+    runs-on: macos-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write # create the release
+      id-token: write # OIDC for build provenance
+      attestations: write # write the provenance attestation
+    # Lifted to job env so the sign step can gate on it — `secrets` isn't
+    # allowed in an `if:` condition, but `env` is.
+    env:
+      SIGN_IDENTITY: ${{ secrets.SIGN_IDENTITY }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: build (icon + app + DMG + zip)
+        run: |
+          bash scripts/make-icon.sh
+          bash scripts/build.sh
+
+      - name: sign + notarize (only when signing secrets are present)
+        if: ${{ env.SIGN_IDENTITY != '' }}
+        env:
+          NOTARY_PROFILE: notary
+          P12_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PW: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          security create-keychain -p "" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "" "$KEYCHAIN"
+          echo "$P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple: -k "" "$KEYCHAIN" >/dev/null
+          security list-keychains -d user -s "$KEYCHAIN" login.keychain-db
+          xcrun notarytool store-credentials "$NOTARY_PROFILE" \
+            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PW" --keychain "$KEYCHAIN"
+          bash scripts/sign.sh
+          security delete-keychain "$KEYCHAIN"
+
+      - name: release notes from CHANGELOG
+        run: |
+          set -euo pipefail
+          ver="${GITHUB_REF_NAME#v}"
+          awk -v v="$ver" '
+            $0 ~ "^## \\[" v "\\]" {f=1; next}
+            f && /^## \[/ {exit}
+            f {print}
+          ' CHANGELOG.md > notes.md || true
+          if [ ! -s notes.md ]; then echo "(no CHANGELOG section for $ver; using auto-generated notes)" > notes.md; fi
+
+      - name: attest build provenance (SLSA)
+        if: ${{ github.event.repository.private == false }}
+        uses: actions/attest-build-provenance@520d128f165991a6c774bcb264f323e3d70747f4 # v2.2.0
+        with:
+          subject-path: |
+            dist/Claude-Profiles.dmg
+            dist/Claude-Profiles.zip
+
+      - name: publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -s notes.md ] && ! grep -q "auto-generated notes" notes.md; then
+            gh release create "$GITHUB_REF_NAME" \
+              dist/Claude-Profiles.dmg dist/Claude-Profiles.zip \
+              --title "$GITHUB_REF_NAME" --notes-file notes.md
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              dist/Claude-Profiles.dmg dist/Claude-Profiles.zip \
+              --title "$GITHUB_REF_NAME" --generate-notes
+          fi
