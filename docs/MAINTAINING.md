@@ -66,6 +66,14 @@ Releases are tag-driven. From a clean `main`:
 Unsigned artifacts still ship — they just carry a Gatekeeper quarantine prompt
 on download (right-click → Open). Signing removes that friction.
 
+> **First public release — verify the gated steps.** While the repo is private,
+> the `attest build provenance` step (Release) and the whole Scorecard workflow
+> (incl. `upload-artifact`) are gated off and never run, so CI can't exercise
+> them. Dependabot may bump these actions across major versions unverified
+> (e.g. `attest-build-provenance` v2→v4, `upload-artifact` v4→v7). On the first
+> public release, watch those two steps specifically and pin back a major if one
+> breaks.
+
 ### Signing secrets (optional)
 The sign+notarize step is gated on `SIGN_IDENTITY` being set and is skipped
 cleanly when it is absent, so the pipeline works before you have a Developer ID.
