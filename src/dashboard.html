@@ -30,7 +30,11 @@
   .acts button.primary { background:#2A4A3E; border:none; color:#9FE1CB; }
   .acts button:active { transform:scale(.98); }
   .meta { font-size:12px; color:#888780; margin-bottom:10px; padding:6px 0; }
-  .toast { position:sticky; top:0; font-size:12px; color:#9FE1CB; margin-bottom:8px; min-height:16px; }
+  /* Fixed, not sticky: a sticky element forces WebKit off threaded (GPU) scrolling
+     onto the main thread, which repaints the whole viewport every scroll frame —
+     the dashboard-only scroll jank. Fixed keeps the toast visible without that. */
+  .toast { position:fixed; top:14px; right:16px; font-size:12px; color:#9FE1CB; z-index:9; pointer-events:none; }
+  .toast:empty { display:none; }
   .scrim { position:fixed; inset:0; background:rgba(10,9,7,.6); display:none;
            align-items:center; justify-content:center; z-index:10; }
   .scrim.show { display:flex; }
