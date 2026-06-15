@@ -1,0 +1,16 @@
+version: 2
+updates:
+  # The only "dependencies" this zero-dependency project has are the pinned
+  # GitHub Actions. Keep their SHAs current automatically (this is what
+  # permanently prevents action deprecations like the checkout@v4 / Node-20 one).
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: ci
+    groups:
+      actions:
+        patterns:
+          - "*"
