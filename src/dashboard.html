@@ -157,6 +157,20 @@
              border-radius:50%; animation:spin .8s linear infinite; }
   .lmsg { font-size:13px; color:#888780; letter-spacing:.02em; }
   @keyframes spin { to { transform:rotate(360deg); } }
+  /* --- terminal-handle (/dev/ptmx) leak warnings --- */
+  .sysbanner { margin:0 22px 0; padding:11px 15px; border-radius:9px; font-size:12.5px; line-height:1.45;
+               background:#3a2a14; color:#F0C674; border:1px solid #6b4e1f; }
+  .sysbanner.hidden { display:none; }
+  .sysbanner b { color:#F7D98A; }
+  .leakwarn { margin:11px 0 0; padding:9px 11px; border-radius:8px; font-size:12px; line-height:1.42;
+              background:#3a2a14; color:#F0C674; border:1px solid #6b4e1f;
+              display:flex; align-items:center; gap:10px; }
+  .leakwarn.armed { display:block; }
+  .leakwarn .leakn { font-weight:600; color:#F7D98A; }
+  .leakbtn { margin-left:auto; flex:none; background:#E0A33E; color:#1A1915; border:none;
+             border-radius:6px; padding:5px 12px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; }
+  .leakbtn:hover { background:#EDB454; }
+  .leakbtn:active { transform:translateY(1px); }
 </style></head><body>
 <div id="loading" class="loading"><div class="spinner"></div><div class="lmsg">Starting Claude Profiles…</div></div>
 <div class="top">
@@ -166,6 +180,7 @@
   </div>
   <div><button class="btn-ghost" onclick="openSettings()">Settings</button><button class="btn-ghost" onclick="toggleClean(true)">Cleanup</button><button class="btn-add" onclick="toggleNp(true)">＋ New Profile</button></div>
 </div>
+<div id="sysbanner" class="sysbanner hidden"></div>
 <div class="toast" id="toast"></div>
 <div class="scrim" id="npmodal" onclick="if(event.target===this)toggleNp(false)">
   <div class="modal">
@@ -277,7 +292,22 @@ function uiLocked() {   // derive the input lock from live state — never a sta
   for (i in confirmStep) if (confirmStep.hasOwnProperty(i)) return true;
   return false;
 }
-var expanded = null, terminals = {}, closeArmed = null;
+var expanded = null, terminals = {}, closeArmed = null, restartArmed = null;
+// Claude Desktop leaks /dev/ptmx master fds (one per terminal session, never
+// closed). Past this many on a single instance we surface a restart prompt;
+// past 80% of the system ceiling (ptmxMax) we raise the top banner — both are
+// the SAME underlying bug, just per-instance vs. system-wide.
+var LEAK_PER = 50;
+function armRestart(slug) {   // first click arms the per-card warning's Restart button
+  restartArmed = slug;
+  setTimeout(function(){ if (restartArmed === slug) { restartArmed = null; rerender(); } }, 4000);
+  rerender();
+}
+function doRestart(slug) {     // second click: cycle the instance (frees the leaked handles)
+  restartArmed = null;
+  act("restart", slug);
+  rerender();
+}
 function closeTerm(slug, dev) {   // two-step: first click arms, second confirms (live session)
   var k = slug + "/" + dev;
   if (closeArmed === k) {
@@ -510,6 +540,7 @@ function act(a, slug) {
                    clean:"Clearing caches…", remove:"Removing app…", quitall:"Quitting all profiles…",
                    cleanall:"Clearing caches on stopped profiles…", killswitch:"EMERGENCY STOP — killing all Claude instances…",
                    throttle:"Lowering CPU priority…", purge:"Erasing saved login…",
+                   restart:"Restarting to free leaked handles…",
                    remote:"Preparing remote access…"}[a] || "";
   setTimeout(function(){ t.textContent = ""; }, 2500);
 }
@@ -542,6 +573,37 @@ function subText(p) {
                    : "Stopped" + (p.opens ? " · opened " + p.opens + "× · last " + p.last : "");
 }
 function expLabel(p) { return expanded === effSlug(p) ? "− Details" : "+ Details"; }
+function leaking(p) { return p.running && (p.ptmx || 0) >= LEAK_PER; }
+// Per-card amber warning for an instance leaking terminal handles, with a
+// two-step Restart (the only way to reclaim them — you can't free another
+// process's fds from outside). Honest framing: it's a Claude Desktop bug.
+function leakWarning(p) {
+  if (!leaking(p)) return "";
+  var slug = effSlug(p);
+  if (restartArmed === slug) {
+    return '<div class="leakwarn armed">Restart this instance now? Its windows close and reopen — your login is kept.' +
+      '<div class="acts" style="margin-top:8px">' +
+      '<button class="danger" style="flex:1;border-radius:7px;padding:6px 0;font-size:12px;cursor:pointer" onclick="doRestart(\'' + slug + '\')">Restart Now</button>' +
+      '<button onclick="restartArmed=null;rerender()">Cancel</button></div></div>';
+  }
+  return '<div class="leakwarn">⚠ Holding <span class="leakn" id="leakn-' + slug + '">' + p.ptmx +
+    '</span> system terminal handles macOS won’t reclaim — a Claude Desktop leak that can wedge your Mac. Restarting frees them.' +
+    '<button class="leakbtn" onclick="armRestart(\'' + slug + '\')">Restart</button></div>';
+}
+// Top banner when the machine-wide /dev/ptmx pool is running out (any instance
+// shares the same ceiling). Hidden when there's plenty of headroom.
+function setBanner(data) {
+  var el = document.getElementById("sysbanner");
+  if (!el) return;
+  var total = 0, max = 0;
+  for (var i = 0; i < data.length; i++) { total += (data[i].ptmx || 0); if (data[i].ptmxMax > max) max = data[i].ptmxMax; }
+  if (max > 0 && total >= 0.8 * max) {
+    el.innerHTML = '⚠ <b>' + total + ' of ' + max + '</b> system terminal handles are in use — Claude Desktop is leaking them and your Mac can wedge near the limit. Restart a flagged instance below to free handles.';
+    el.className = "sysbanner";
+  } else {
+    el.className = "sysbanner hidden";
+  }
+}
 function setKpi(totalMem, running) {
   document.getElementById("kpi").innerHTML = Math.round(totalMem).toLocaleString() +
     ' <small>MB across ' + running + " running</small>";
@@ -553,9 +615,10 @@ function structureSig(data) {
   for (var i = 0; i < data.length; i++) {
     var p = data[i];
     s.push((p.slug || "_default") + "|" + (p.running ? 1 : 0) + "|" +
-           (expanded === effSlug(p) ? 1 : 0) + "|" + (confirmStep[p.slug] || 0));
+           (expanded === effSlug(p) ? 1 : 0) + "|" + (confirmStep[p.slug] || 0) + "|" +
+           (leaking(p) ? 1 : 0));
   }
-  return s.join(";") + "#" + (closeArmed || "");
+  return s.join(";") + "#" + (closeArmed || "") + "#" + (restartArmed || "");
 }
 function render(data) {
   // Accumulate sparkline history every tick regardless of render path.
@@ -582,8 +645,10 @@ function livePatch(data) {
     var cs = document.getElementById("cpuspk-" + key); if (cs) cs.innerHTML = spark(hist[key].cpu, "#F0997B");
     var ms = document.getElementById("memspk-" + key); if (ms) ms.innerHTML = spark(hist[key].mem, "#9FE1CB");
     var sb = document.getElementById("sub-" + key); if (sb) sb.innerHTML = '<span class="dot"></span>' + subText(p);
+    var ln = document.getElementById("leakn-" + (p.slug || "default")); if (ln) ln.textContent = p.ptmx;
   }
   setKpi(totalMem, running);
+  setBanner(data);
 }
 function fullRender(data) {
   var totalMem = 0, running = 0, html = "";
@@ -606,6 +671,7 @@ function fullRender(data) {
     } else {
       html += '<div class="meta">' + (p.disk >= 0 ? "Disk " + fmtDisk(p.disk) : "") + "</div>";
     }
+    html += leakWarning(p);
     html += '<div class="acts">';
     if (p.slug) {
       if (p.running) {
@@ -658,6 +724,7 @@ function fullRender(data) {
   }
   document.getElementById("grid").innerHTML = html;
   setKpi(totalMem, running);
+  setBanner(data);
   var l = document.getElementById("loading"); if (l) l.className = "loading hidden";
 }
 </script></body></html>

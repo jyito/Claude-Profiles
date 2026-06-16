@@ -61,9 +61,16 @@ intended to go public once docs/screenshots/signing are in place.
   internal term). Disk via `du` cached 30s in `$TMPDIR` (live `du` on multi-GB
   dirs is too slow). The dispatch is guarded by a `BASH_SOURCE`==`$0` check so
   the test suite can source the file and unit-test the attribution functions.
-  Actions: `open quit force clean create remove rebadge purge mainpid defaultpid
-  quitdefault forcedefault opendefault terminals closeterm throttle getconfig
-  setconfig autotick remoteinfo copy`. `remoteinfo <slug>` starts/reuses the
+  Actions: `open quit force restart clean create remove rebadge purge mainpid
+  defaultpid quitdefault forcedefault opendefault terminals closeterm throttle
+  getconfig setconfig autotick remoteinfo copy`. `restart <slug>` (slug or
+  `default`) cycles an instance — TERM the tree, wait ~5s, force-`kill -9` if
+  still alive, then relaunch — the ONLY way to reclaim the `/dev/ptmx` master fds
+  Claude Desktop leaks (you can't free another process's fds from outside).
+  `stats` also emits per-instance `ptmx` (leaked masters held, NOT deduped — vs
+  `ptys`, the deduped real terminals) and `ptmxMax` (`sysctl -n kern.tty.ptmx_max`
+  ceiling) so the dashboard can warn before the pool exhausts and wedges the Mac.
+  `remoteinfo <slug>` starts/reuses the
   profile's Claude Code `screen` session (`~/.claude-code-instances/<slug>`) and
   emits JSON (`session`/`user`/`host`/`tailscaleIp`/`alreadyRunning`) for the
   dashboard's Remote modal — the GUI-facing twin of the CLI's text `remote`.

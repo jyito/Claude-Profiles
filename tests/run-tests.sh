@@ -53,9 +53,18 @@ EOF
 
 cat > "$WORK/shims/lsof" <<'EOF'
 #!/bin/bash
+# ttys = the deduped "terminals" metric; ptmx = the leaked masters (NOT deduped).
+# pid 100 tree holds 3 ttys + 4 ptmx masters; pid 200 holds 1 tty + 2 ptmx.
 case "$*" in
-  *100*) printf 'c 100 u 17u CHR /dev/ttys001\nc 101 u 18u CHR /dev/ttys002\nc 102 u 19u CHR /dev/ttys003\n' ;;
-  *200*) printf 'c 200 u 17u CHR /dev/ttys004\n' ;;
+  *100*) printf 'c 100 u 17u CHR /dev/ttys001\nc 101 u 18u CHR /dev/ttys002\nc 102 u 19u CHR /dev/ttys003\nc 100 u 20u CHR /dev/ptmx\nc 100 u 21u CHR /dev/ptmx\nc 101 u 22u CHR /dev/ptmx\nc 102 u 23u CHR /dev/ptmx\n' ;;
+  *200*) printf 'c 200 u 17u CHR /dev/ttys004\nc 200 u 24u CHR /dev/ptmx\nc 201 u 25u CHR /dev/ptmx\n' ;;
+esac
+EOF
+cat > "$WORK/shims/sysctl" <<'EOF'
+#!/bin/bash
+case "$*" in
+  *kern.tty.ptmx_max*) printf '511\n' ;;
+  *) printf '0\n' ;;
 esac
 EOF
 cat > "$WORK/shims/stat" <<'EOF'
@@ -148,6 +157,11 @@ check "stats is valid JSON"    "printf '%s' '$S' | python3 -m json.tool >/dev/nu
 check "cpu summed over tree"   "printf '%s' '$S' | grep -q '\"cpu\":16.8'"
 check "mem summed over tree"   "printf '%s' '$S' | grep -q '\"mem\":896'"
 check "pty count attributed"   "printf '%s' '$S' | grep -q '\"ptys\":3'"
+# /dev/ptmx leak metric: masters are counted (NOT deduped) — business holds 4,
+# the default 2 — and the system ceiling is surfaced from kern.tty.ptmx_max.
+check "ptmx leak count attributed" "printf '%s' '$S' | grep -q '\"ptmx\":4'"
+check "ptmx default counted"       "printf '%s' '$S' | grep -q '\"ptmx\":2'"
+check "ptmx ceiling reported"      "printf '%s' '$S' | grep -q '\"ptmxMax\":511'"
 check "default instance shown" "printf '%s' '$S' | grep -q 'Claude (default)'"
 check "opens counted"          "printf '%s' '$S' | grep -q '\"opens\":2'"
 check "mainpid resolves"       "[ \"\$('$ENGINE' mainpid business)\" = 100 ]"
@@ -192,6 +206,15 @@ check "throttle renices own tree"     "[ \"\$('$ENGINE' throttle business)\" = o
 check "throttle refuses when stopped" "[ \"\$('$ENGINE' throttle evex)\" = notrunning ]"
 check "throttle button in UI"         "grep -q 'Throttle CPU' '$ROOT/src/dashboard.html'"
 check "applet routes throttle"        "grep -q 'throttle' '$ROOT/src/dashboard.applescript'"
+
+echo "== restart (free leaked terminal handles) =="
+# A stopped/unknown instance has no tree to cycle, so restart skips straight to
+# relaunch and returns ok without blocking. Slug is validated at the boundary.
+check "restart relaunches stopped (ok)" "[ \"\$('$ENGINE' restart ghostprof)\" = ok ]"
+check "restart rejects spaced slug"     "[ \"\$('$ENGINE' restart 'bad slug')\" = 'err invalid slug' ]"
+check "restart rejects traversal slug"  "[ \"\$('$ENGINE' restart '../../evil')\" = 'err invalid slug' ]"
+check "applet routes restart"           "grep -q 'restart' '$ROOT/src/dashboard.applescript'"
+check "restart control in UI"           "grep -q 'armRestart' '$ROOT/src/dashboard.html'"
 
 echo "== settings & auto-clean =="
 check "getconfig defaults to zero"   "[ \"\$('$ENGINE' getconfig)\" = '{\"autoCloseIdleMin\":0,\"autoCleanThresholdMB\":0}' ]"
@@ -436,7 +459,25 @@ try {
   updateRemote({slug:'business',session:'claude-business',user:'me',host:'mac.local',tailscaleIp:'',alreadyRunning:false});
   if((E['rm-ts-cta']||{style:{}}).style.display!=='none' && (E['rm-ts-cmd']||{style:{}}).style.display==='none') rmcta=1;
 } catch(e){}
-console.log(cards, sw, sp, rm, drill, tiers, (loadCls.indexOf('hidden')>-1?1:0), lock, avatarColor, swatches, remotebtn, detailsbtn, rmfill, rmcta, defclean, ddrill);
+// /dev/ptmx leak: warning + system banner appear past threshold, hidden when clean.
+let leakhidden=0, bannerhidden=0, leakwarn=0, banner=0, leakarmed=0;
+try {
+  expanded=null; restartArmed=null;
+  fullRender(d);                              // real stats: low ptmx → nothing shown
+  const gl=(E['grid']||{}).innerHTML||'';
+  leakhidden = (gl.indexOf('leakwarn')===-1)?1:0;
+  bannerhidden = (((E['sysbanner']||{}).className||'').indexOf('hidden')>-1)?1:0;
+  const hi=JSON.parse(JSON.stringify(d)), r=hi.find(p=>p.running); r.ptmx=420; r.ptmxMax=511;
+  fullRender(hi);                             // one instance near the ceiling
+  const gh=(E['grid']||{}).innerHTML||'', es=(r.slug||'default');
+  if (gh.indexOf('leakwarn')>-1 && gh.indexOf(\"armRestart('\"+es+\"')\")>-1) leakwarn=1;
+  if (((E['sysbanner']||{}).className||'')==='sysbanner') banner=1;
+  restartArmed=es; fullRender(hi);            // armed → two-step Restart confirm
+  const ga=(E['grid']||{}).innerHTML||'';
+  if (ga.indexOf('Restart Now')>-1 && ga.indexOf(\"doRestart('\"+es+\"')\")>-1) leakarmed=1;
+  restartArmed=null;
+} catch(e){}
+console.log(cards, sw, sp, rm, drill, tiers, (loadCls.indexOf('hidden')>-1?1:0), lock, avatarColor, swatches, remotebtn, detailsbtn, rmfill, rmcta, defclean, ddrill, leakhidden, bannerhidden, leakwarn, banner, leakarmed);
 " 2>/dev/null)
     check "cards render"        "[ \"\$(echo '$R' | awk '{print \$1}')\" -ge 3 ]"
     check "Show Window buttons" "[ \"\$(echo '$R' | awk '{print \$2}')\" = 2 ]"
@@ -454,6 +495,11 @@ console.log(cards, sw, sp, rm, drill, tiers, (loadCls.indexOf('hidden')>-1?1:0),
     check "remote modal shows tailscale CTA"      "[ \"\$(echo '$R' | awk '{print \$14}')\" = 1 ]"
     check "default card has Remote + Details"     "[ \"\$(echo '$R' | awk '{print \$15}')\" = 1 ]"
     check "default drill is terminals, no badges" "[ \"\$(echo '$R' | awk '{print \$16}')\" = 1 ]"
+    check "no leak warning when ptmx low"         "[ \"\$(echo '$R' | awk '{print \$17}')\" = 1 ]"
+    check "no system banner when ptmx low"        "[ \"\$(echo '$R' | awk '{print \$18}')\" = 1 ]"
+    check "leak warning + Restart past threshold" "[ \"\$(echo '$R' | awk '{print \$19}')\" = 1 ]"
+    check "system banner near ptmx ceiling"       "[ \"\$(echo '$R' | awk '{print \$20}')\" = 1 ]"
+    check "armed warning shows two-step Restart"  "[ \"\$(echo '$R' | awk '{print \$21}')\" = 1 ]"
 else
     echo "  - node not found, skipping JS render tests"
 fi

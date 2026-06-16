@@ -142,6 +142,17 @@ pty_count_for_pids() {
     lsof -nP -p "$csv" 2>/dev/null | awk '$NF ~ /^\/dev\/ttys/ {print $NF}' | sort -u | wc -l | tr -d ' '
 }
 
+ptmx_count_for_pids() {  # count /dev/ptmx MASTER fds held by the tree (NOT deduped). Claude
+    # Desktop leaks these — opening a pty master per session and never closing it —
+    # which can exhaust the system pool (kern.tty.ptmx_max) and wedge the whole Mac.
+    local csv; csv=$(printf '%s' "$*" | tr ' ' ',')
+    lsof -nP -p "$csv" 2>/dev/null | grep -c '/dev/ptmx'
+}
+
+ptmx_max() {  # the system /dev/ptmx ceiling; 0 if the key isn't readable (older macOS)
+    sysctl -n kern.tty.ptmx_max 2>/dev/null || printf '0'
+}
+
 resolve_mains() {  # main PID(s) for a profile slug, or the default instance when slug is "default".
     # Keeps terminals/closeterm/throttle correctly scoped to the requested
     # instance's OWN tree — the default's PIDs come from the default detection,
@@ -189,8 +200,8 @@ disk_mb() {  # cached 30s — du on multi-GB dirs is too slow for a live tick
     printf '%s' "$size"
 }
 
-profile_json() {  # $1 name, $2 slug, $3 data_dir
-    local mains pids cpu=0 mem=0 nproc=0 ptys=0 running=false disk opens=0 last=""
+profile_json() {  # $1 name, $2 slug, $3 data_dir.  PTMX_MAX is set by cmd_stats (dynamic scope).
+    local mains pids cpu=0 mem=0 nproc=0 ptys=0 ptmx=0 running=false disk opens=0 last=""
     disk=$(disk_mb "$3")
     if [ -f "$3/.profile-activity" ]; then
         opens=$(wc -l < "$3/.profile-activity" | tr -d ' ')
@@ -205,35 +216,38 @@ profile_json() {  # $1 name, $2 slug, $3 data_dir
 $(usage_for_pids $pids)
 EOF
         ptys=$(pty_count_for_pids $pids)
+        ptmx=$(ptmx_count_for_pids $pids)
     fi
     local color
     # shellcheck disable=SC2046
     color=$(printf '#%02X%02X%02X' $(badge_color_for "$2"))  # same color as the Dock badge
-    printf '{"name":"%s","slug":"%s","running":%s,"cpu":%s,"mem":%s,"procs":%s,"ptys":%s,"disk":%s,"opens":%s,"last":"%s","color":"%s"}' \
-        "$1" "$2" "$running" "${cpu:-0}" "${mem:-0}" "${nproc:-0}" "${ptys:-0}" "$disk" "$opens" "$last" "$color"
+    printf '{"name":"%s","slug":"%s","running":%s,"cpu":%s,"mem":%s,"procs":%s,"ptys":%s,"ptmx":%s,"ptmxMax":%s,"disk":%s,"opens":%s,"last":"%s","color":"%s"}' \
+        "$1" "$2" "$running" "${cpu:-0}" "${mem:-0}" "${nproc:-0}" "${ptys:-0}" "${ptmx:-0}" "${PTMX_MAX:-0}" "$disk" "$opens" "$last" "$color"
 }
 
 cmd_stats() {
     local out="[" first=1 app name slug
     # One full-system ps for the whole tick. Every helper called below reads this
     # via dynamic scope instead of spawning its own ps (see PS_SNAP note above).
-    local PS_SNAP
+    local PS_SNAP PTMX_MAX
     PS_SNAP=$(ps axo pid=,ppid=,command=)
+    PTMX_MAX=$(ptmx_max)
     # default instance
     local def
     def=$(printf '%s\n' "$PS_SNAP" | awk '/Claude\.app\/Contents\/MacOS\/Claude/ && !/--user-data-dir/ && !/Helper/ {print $1; exit}')
     if [ -n "$def" ]; then
-        local pids cpu mem nproc ptys
+        local pids cpu mem nproc ptys ptmx
         # shellcheck disable=SC2086
         pids=$(tree_pids $def)
         read -r cpu mem nproc <<EOF
 $(usage_for_pids $pids)
 EOF
         ptys=$(pty_count_for_pids $pids)
-        out+="{\"name\":\"Claude (default)\",\"slug\":\"\",\"running\":true,\"cpu\":$cpu,\"mem\":$mem,\"procs\":$nproc,\"ptys\":$ptys,\"disk\":-1,\"opens\":0,\"last\":\"\",\"color\":\"#6E6A62\"}"
+        ptmx=$(ptmx_count_for_pids $pids)
+        out+="{\"name\":\"Claude (default)\",\"slug\":\"\",\"running\":true,\"cpu\":$cpu,\"mem\":$mem,\"procs\":$nproc,\"ptys\":$ptys,\"ptmx\":$ptmx,\"ptmxMax\":$PTMX_MAX,\"disk\":-1,\"opens\":0,\"last\":\"\",\"color\":\"#6E6A62\"}"
         first=0
     else
-        out+='{"name":"Claude (default)","slug":"","running":false,"cpu":0,"mem":0,"procs":0,"ptys":0,"disk":-1,"opens":0,"last":"","color":"#6E6A62"}'
+        out+="{\"name\":\"Claude (default)\",\"slug\":\"\",\"running\":false,\"cpu\":0,\"mem\":0,\"procs\":0,\"ptys\":0,\"ptmx\":0,\"ptmxMax\":$PTMX_MAX,\"disk\":-1,\"opens\":0,\"last\":\"\",\"color\":\"#6E6A62\"}"
         first=0
     fi
     while IFS= read -r app; do
@@ -496,6 +510,32 @@ cmd_killswitch() {  # emergency stop: SIGKILL every Claude instance tree, defaul
 }
 cmd_quit()  { local m; m=$(main_pids_for_dir "$INSTANCES_DIR/$1"); [ -n "$m" ] && kill -TERM $m 2>/dev/null; true; }
 cmd_force() { local m; m=$(main_pids_for_dir "$INSTANCES_DIR/$1"); [ -n "$m" ] && kill -9 $(tree_pids $m) 2>/dev/null; true; }
+cmd_restart() {  # quit an instance's whole tree, wait for it to exit (force if stubborn),
+    # then relaunch it. The ONLY way to reclaim the /dev/ptmx master fds Claude Desktop
+    # leaks — you can't free another process's fds from outside, so the process must cycle.
+    # Sign-ins and data dirs are untouched: it reopens already authenticated.
+    local slug="${1:?}" mains i
+    case "$slug" in
+        default) : ;;                                  # the default is signal-only, allowed here
+        *[!a-z0-9]*) printf 'err invalid slug'; return 0 ;;
+    esac
+    mains=$(resolve_mains "$slug")
+    if [ -n "$mains" ]; then
+        # shellcheck disable=SC2086
+        kill -TERM $(tree_pids $mains) 2>/dev/null
+        i=0
+        while [ "$i" -lt 25 ]; do
+            [ -z "$(resolve_mains "$slug")" ] && break
+            sleep 0.2
+            i=$((i + 1))
+        done
+        mains=$(resolve_mains "$slug")
+        # shellcheck disable=SC2086
+        [ -n "$mains" ] && kill -9 $(tree_pids $mains) 2>/dev/null
+    fi
+    if [ "$slug" = "default" ]; then cmd_open_default >/dev/null; else cmd_open "$slug"; fi
+    printf 'ok'
+}
 cmd_clean() {
     local dir="$INSTANCES_DIR/${1:?}" tier="${2:-all}" d
     [ -n "$(main_pids_for_dir "$dir")" ] && { printf 'running'; return 0; }
@@ -603,6 +643,7 @@ case "${1:-stats}" in
     open)  cmd_open  "${2:?}" ;;
     quit)  cmd_quit  "${2:?}" ;;
     force) cmd_force "${2:?}" ;;
+    restart) cmd_restart "${2:?}" ;;
     clean) cmd_clean "${2:?}" "${3:-}" ;;
     mainpid) cmd_mainpid "${2:?}" ;;
     terminals) cmd_terminals "${2:?}" ;;
