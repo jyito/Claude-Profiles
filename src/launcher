@@ -328,6 +328,12 @@ create_profile() {
         show_alert "Profile names need at least one letter or number."
         return 0
     fi
+    # "default" is reserved — it's the sentinel the GUI/engine use to target the
+    # real default Claude instance; a profile by that name would collide.
+    if [ "$slug" = "default" ]; then
+        show_alert "\"default\" is a reserved name. Please choose another."
+        return 0
+    fi
     app_name=$(app_name_for "$name")
 
     claude_app=$(detect_claude_app) || {

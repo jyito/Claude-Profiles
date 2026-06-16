@@ -120,6 +120,7 @@ check "--action add dispatch"  "printf 'button returned:Create, text returned:Di
 echo "== engine headless lifecycle =="
 check "engine create"          "[ \"\$('$ENGINE' create 'Head Less')\" = 'ok headless' ] && [ -d '$WORK/apps/Claude Head Less.app' ]"
 check "engine create sanitizes" "[ \"\$('$ENGINE' create 'Bad\":{Name}')\" = 'ok badname' ]"
+check "engine create reserves default" "printf '%s' \"\$('$ENGINE' create Default)\" | grep -qi reserved && [ ! -d '$WORK/instances/default' ]"
 check "engine remove keeps data" "mkdir -p '$WORK/instances/headless'; touch '$WORK/instances/headless/m'; [ \"\$('$ENGINE' remove headless)\" = ok ] && [ ! -d '$WORK/apps/Claude Head Less.app' ] && [ -f '$WORK/instances/headless/m' ]"
 check "engine purge erases data" "[ \"\$('$ENGINE' purge headless)\" = ok ] && [ ! -d '$WORK/instances/headless' ]"
 check "default launch exits 0"   "printf 'x\n' > '$WORK/queue'; '$L' >/dev/null 2>&1"

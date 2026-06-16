@@ -346,6 +346,10 @@ cmd_create() {  # headless profile creation for the dashboard; prints "ok <slug>
     name=$(printf '%s' "${1:?}" | tr -d '"\\{}:' | sed 's/^ *//;s/ *$//')
     slug=$(printf '%s' "$name" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9')
     [ -n "$slug" ] || { printf 'err name needs a letter or number'; return 0; }
+    # "default" is a reserved sentinel: the GUI/engine use it to target the real
+    # default instance's process tree (remoteinfo/terminals/throttle/closeterm).
+    # A profile slugged "default" would collide with that — refuse it.
+    [ "$slug" = "default" ] && { printf 'err "default" is a reserved name — pick another'; return 0; }
     case "$name" in Claude\ *|claude\ *|Claude|claude) app_name="$name" ;; *) app_name="Claude $name" ;; esac
     claude_app=$(detect_claude_app) || { printf 'err Claude.app not found'; return 0; }
 
