@@ -60,7 +60,11 @@ intended to go public once docs/screenshots/signing are in place.
   the test suite can source the file and unit-test the attribution functions.
   Actions: `open quit force clean create remove rebadge purge mainpid defaultpid
   quitdefault forcedefault opendefault terminals closeterm throttle getconfig
-  setconfig autotick`. `create`/`rebadge` give each wrapper a distinct Dock icon
+  setconfig autotick remoteinfo copy`. `remoteinfo <slug>` starts/reuses the
+  profile's Claude Code `screen` session (`~/.claude-code-instances/<slug>`) and
+  emits JSON (`session`/`user`/`host`/`tailscaleIp`/`alreadyRunning`) for the
+  dashboard's Remote modal — the GUI-facing twin of the CLI's text `remote`.
+  `copy <text>` pipes to `pbcopy` for the modal's Copy buttons. `create`/`rebadge` give each wrapper a distinct Dock icon
   via `badge_icon`: Claude's real icns → base PNG → `badge-icon.applescript`
   compositor → iconset → `iconutil`, badging it with the profile's initial on a
   deterministic per-slug colored disc (`badge_color_for`, 6-colour palette that
@@ -79,7 +83,12 @@ intended to go public once docs/screenshots/signing are in place.
   tick can't eat input (but NOT during drill-down, so live stats keep ticking
   under an open panel). Cards expand in place (full grid width, one at a time,
   Escape collapses): running → terminals table with per-row close + Throttle;
-  stopped → clean tiers. Settings modal drives `getconfig`/`setconfig`.
+  stopped → clean tiers. Each card's secondary controls are a row of two
+  button-styled controls — **Remote** (`act('remote')` → `cp:remote` →
+  `pushRemote` → `updateRemote` opens the Remote modal of copy-paste SSH
+  commands + in-app Tailscale steps; Copy buttons go `cp:copy` → `pbcopy`) and
+  **+ Details** (the drill-down toggle, formerly the "Terminals/Cleanup" text
+  link). Settings modal drives `getconfig`/`setconfig`.
   Buttons are Title Case (Apple HIG) with hover/press/focus-visible states; a
   startup loading splash shows until the first stats render. Other copy is
   sentence case.

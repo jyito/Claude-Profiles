@@ -1,6 +1,15 @@
 # Changelog
 
 ## [Unreleased]
+- **Remote button on every profile card.** Make a profile reachable from another
+  device without the CLI: the button starts/reuses its Claude Code session and
+  opens a modal with copy-paste SSH commands (same-network and, when Tailscale is
+  up, any-network) plus an in-app iPad/Tailscale setup guide. Copy buttons use a
+  `pbcopy` bridge. New engine actions `remoteinfo` (JSON) and `copy`; new
+  `cp:remote` / `cp:copy` bridge verbs. Still zero-network — the app opens no
+  socket; SSH stays your own channel.
+- The drill-down trigger is now a button-styled **+ Details** control (was a
+  text-link "Terminals/Cleanup"); the terminal count stays in the status line.
 - **`remote` reaches any device, anywhere.** When Tailscale is running, `remote`
   now auto-prints a works-from-any-network SSH attach line (using your Tailscale
   address) alongside the same-network one; when it's absent, it points you at
