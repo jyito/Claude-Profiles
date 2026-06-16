@@ -548,18 +548,24 @@ cmd_autotick() {  # enforce the opt-in auto rules; a cheap no-op while both are 
 }
 
 cmd_remoteinfo() {  # start/reuse a profile's Claude Code screen session; emit JSON for the dashboard
-    local slug="${1:?}" session cfg claude_bin host user ts_ip already=false
+    local slug="${1:?}" session cfg claude_bin host lhn user ts_ip already=false
+    # The slug arrives over the title bridge (a trust boundary) and is interpolated
+    # into a nested `bash -lc` and a filesystem path below. Reject anything that
+    # isn't a bare engine slug — this blocks shell injection and path traversal.
+    case "$slug" in ""|*[!a-z0-9]*) printf '{"error":"invalid profile id"}'; return 0 ;; esac
     command -v screen >/dev/null 2>&1 || { printf '{"error":"screen not found (it ships with macOS)"}'; return 0; }
+    command -v claude >/dev/null 2>&1 || { printf '{"error":"Claude Code CLI not found on PATH — install it, then click Remote again."}'; return 0; }
+    claude_bin=$(command -v claude)
     session="claude-$slug"
     cfg="$HOME/.claude-code-instances/$slug"
-    claude_bin=$(command -v claude 2>/dev/null) || claude_bin="claude"
     mkdir -p "$cfg"
     if screen -ls 2>/dev/null | grep -qE "[.]${session}[[:space:]]"; then
         already=true
     else
         screen -dmS "$session" bash -lc "CLAUDE_CONFIG_DIR='$cfg' '$claude_bin'"
     fi
-    host="$(scutil --get LocalHostName 2>/dev/null).local"
+    lhn=$(scutil --get LocalHostName 2>/dev/null)
+    if [ -n "$lhn" ]; then host="$lhn.local"; else host=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || true); fi
     user=$(whoami)
     ts_ip=""
     command -v tailscale >/dev/null 2>&1 && ts_ip=$(tailscale ip -4 2>/dev/null | head -n1)

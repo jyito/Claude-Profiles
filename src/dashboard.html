@@ -133,6 +133,7 @@
   .rm-err { color:#F0997B; font-size:12px; margin:8px 0; }
   .rm-steps { margin-top:10px; font-size:12px; color:#D3D1C7; line-height:1.5; }
   .rm-steps ol { margin:0 0 0 18px; }
+  #rm-steps-toggle:hover { color:#D3D1C7; }   /* neutral, not the destructive red .linkbtn uses for Remove */
   /* --- button reactivity: hover / press / keyboard focus --- */
   button { transition: background-color .12s ease, border-color .12s ease, color .12s ease, transform .06s ease; }
   .btn-add:hover { background:#E26A3E; }
@@ -271,7 +272,7 @@ if (typeof window !== "undefined" && window.addEventListener) {
   window.addEventListener("wheel", onUserScroll, { passive: true });
 }
 function uiLocked() {   // derive the input lock from live state — never a stale boolean
-  var ids = ["npmodal", "cleanmodal", "setmodal"], i, m;
+  var ids = ["npmodal", "cleanmodal", "setmodal", "remotemodal"], i, m;
   for (i = 0; i < ids.length; i++) { m = document.getElementById(ids[i]); if (m && m.className.indexOf("show") > -1) return true; }
   for (i in confirmStep) if (confirmStep.hasOwnProperty(i)) return true;
   return false;
@@ -402,6 +403,7 @@ function toggleSet(show) {
 function openSettings() { toggleSet(true); document.title = "cp:getconfig"; }   // host pushes updateConfig()
 function toggleRemote(show) {
   document.getElementById("remotemodal").className = show ? "scrim show" : "scrim";
+  if (!show) rerender();   // resume live render on close, like the other modals
 }
 function toggleSteps() {
   var s = document.getElementById("rm-steps");
@@ -434,6 +436,7 @@ function updateRemote(info) {   // pushed by the host after `engine remoteinfo <
       document.getElementById("rm-ts-cta").style.display = "";
     }
   }
+  var tt = document.getElementById("toast"); if (tt) tt.textContent = "";   // clear the "Preparing…" toast
   toggleRemote(true);
 }
 function updateConfig(c) {
@@ -498,7 +501,8 @@ function act(a, slug) {
                    force:"Force quitting…", quitdefault:"Asking Claude to quit…", forcedefault:"Force quitting Claude…",
                    clean:"Clearing caches…", remove:"Removing app…", quitall:"Quitting all profiles…",
                    cleanall:"Clearing caches on stopped profiles…", killswitch:"EMERGENCY STOP — killing all Claude instances…",
-                   throttle:"Lowering CPU priority…", purge:"Erasing saved login…"}[a] || "";
+                   throttle:"Lowering CPU priority…", purge:"Erasing saved login…",
+                   remote:"Preparing remote access…"}[a] || "";
   setTimeout(function(){ t.textContent = ""; }, 2500);
 }
 function spark(arr, color) {
