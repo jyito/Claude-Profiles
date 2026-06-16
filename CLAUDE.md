@@ -13,7 +13,7 @@ run simultaneously. The user-facing app is a native dashboard window (dark
 UI, live per-instance CPU/MEM/PTY/disk, sparklines, Show Window focusing,
 cleanup utilities). Status: **v0.3.0 feature-complete, working on the
 maintainer's Mac** (applet-layer items pending maintainer verification — see
-State section), 99/99 tests, CI configured, private repo target `jyito/Claude-Profiles`,
+State section), 124/124 tests, CI green, public repo `jyito/Claude-Profiles`,
 intended to go public once docs/screenshots/signing are in place.
 
 ## Non-negotiables (PRs violating these get declined)
@@ -175,7 +175,7 @@ intended to go public once docs/screenshots/signing are in place.
 ## Build / test / release
 
 ```bash
-bash tests/run-tests.sh    # 99 tests; runs on macOS or Linux (mac tools shimmed)
+bash tests/run-tests.sh    # 124 tests; runs on macOS or Linux (mac tools shimmed)
 shellcheck -S error src/launcher src/engine.sh cli/claude-profiles.sh scripts/*.sh
 bash scripts/make-icon.sh  # (macOS) regenerate assets/icon.iconset from app-icon.svg via sips
 bash scripts/build.sh      # assembles dist/Claude Profiles.app (+ DMG on macOS)

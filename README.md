@@ -51,9 +51,18 @@ That means:
 - **Graceful degradation** — if the dashboard window can't open on a given macOS version, the app automatically falls back to a native-dialog interface with the same capabilities.
 - **CLI for power users** — `cli/claude-profiles.sh` mirrors everything for scripting, plus a `code-alias` command for per-account [Claude Code](https://docs.claude.com/en/docs/claude-code/overview) config dirs, and a `remote` command that runs a profile's Claude Code session in `screen` so you can **SSH into it from your iPad** — real remote sessions with no network server (see [docs/REMOTE.md](docs/REMOTE.md)).
 
+## Requirements
+
+- **macOS 14 (Sonoma) or newer.** The dashboard and the one-click Show Window
+  flow rely on macOS 14+ behaviour; older versions aren't supported.
+- **[Claude Desktop](https://claude.ai/download)** installed (this tool launches
+  the real app — it never bundles or modifies it).
+- Nothing else: no Homebrew, Node, Python, or admin rights. It's bash +
+  AppleScript + macOS built-ins, which is also why the download is so small.
+
 ## Install (users)
 
-**[⬇ Download the latest release](https://github.com/jyito/Claude-Profiles/releases/latest)** — under **Assets**, grab `Claude-Profiles.dmg` (or `.zip`). Then see [docs/INSTALL.md](docs/INSTALL.md). Short version: open the DMG and drag **Claude Profiles.app** to Applications; first launch is right-click → Open (the app is currently unsigned — see [Roadmap](#roadmap)).
+**[⬇ Download the latest release](https://github.com/jyito/Claude-Profiles/releases/latest)** — under **Assets**, grab `Claude-Profiles.dmg` (or `.zip`), then open it and drag **Claude Profiles.app** to Applications. The app is **unsigned** (open-source, no paid Apple cert yet), so macOS blocks the *first* launch — get past it once with **System Settings → Privacy & Security → Open Anyway**. Full steps and why it's safe: **[docs/INSTALL.md](docs/INSTALL.md)**.
 
 ## Build from source
 
@@ -61,7 +70,7 @@ That means:
 git clone https://github.com/jyito/Claude-Profiles.git
 cd Claude-Profiles
 bash scripts/build.sh        # assembles dist/Claude Profiles.app (+ DMG on macOS)
-bash tests/run-tests.sh      # 99-check suite, runs on macOS or Linux
+bash tests/run-tests.sh      # full test suite, runs on macOS or Linux
 ```
 
 There is no compile step — `build.sh` just assembles the bundle from `src/`.
@@ -73,7 +82,7 @@ src/        the app: launcher (GUI manager), engine.sh (stats/actions),
             dashboard.html (window UI), dashboard.applescript (window host)
 cli/        standalone CLI with the same engine
 scripts/    build.sh (assemble bundle), make-dmg.sh (native DMG, macOS)
-docs/       INSTALL.md (end users), ARCHITECTURE.md (how it all works)
+docs/       INSTALL.md (end users), REMOTE.md (terminal access), ARCHITECTURE.md (how it all works)
 tests/      Linux-compatible suite with shimmed macOS tools
 ```
 
@@ -95,7 +104,7 @@ flowchart TD
 
 ## Known limitations
 
-- **Gatekeeper**: releases are unsigned, so the first launch needs right-click → Open. Apps the manager generates locally carry no quarantine and open normally.
+- **Gatekeeper**: downloaded releases are unsigned, so the first launch is blocked once — clear it with **System Settings → Privacy & Security → Open Anyway** (the old right-click → Open shortcut was removed in macOS 15; see [docs/INSTALL.md](docs/INSTALL.md)). Apps the manager generates locally carry no quarantine and open normally.
 - **Deep-link logins**: macOS routes `claude://` callbacks to one instance. If a browser login lands in the wrong window, use the login page's copy-code option. Once per profile.
 - **Spaces**: "Assign to Desktop" is unreliable across instances sharing a bundle ID; drag windows to Spaces manually and macOS remembers per session.
 - **Memory**: every instance is a full Electron app. The dashboard exists partly so you can see exactly what that costs.

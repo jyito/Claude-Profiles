@@ -483,7 +483,7 @@ function killswitch() {
   toggleClean(false);
 }
 function createProfile() {
-  var name = document.getElementById("npname").value.replace(/[":\\{}]/g, "").trim();
+  var name = document.getElementById("npname").value.replace(/[":\\{}<>&]/g, "").trim();
   if (!name) return;
   toggleNp(false);
   act("create", name);

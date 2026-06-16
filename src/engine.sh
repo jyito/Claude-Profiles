@@ -343,7 +343,10 @@ detect_claude_app() {
 
 cmd_create() {  # headless profile creation for the dashboard; prints "ok <slug>" or "err <msg>"
     local name slug app_name claude_app
-    name=$(printf '%s' "${1:?}" | tr -d '"\\{}:' | sed 's/^ *//;s/ *$//')
+    # Strip quote/brace/colon AND XML-significant chars (< > &): the name is
+    # embedded into the wrapper's Info.plist, so an unescaped & or < corrupts it
+    # (the wrapper then can't be read and silently never appears on the dashboard).
+    name=$(printf '%s' "${1:?}" | tr -d '"\\{}:<>&' | sed 's/^ *//;s/ *$//')
     slug=$(printf '%s' "$name" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9')
     [ -n "$slug" ] || { printf 'err name needs a letter or number'; return 0; }
     # "default" is a reserved sentinel: the GUI/engine use it to target the real
@@ -429,6 +432,9 @@ cmd_remove() {  # delete the wrapper app only; the data dir (saved login) is unt
 }
 
 cmd_purge() {  # delete the data dir (saved login + state); dashboard gates this behind typed DELETE
+    # Enforce the [a-z0-9] slug invariant at the engine boundary before the rm -rf,
+    # so a traversal slug can never escape $INSTANCES_DIR regardless of caller.
+    case "${1:?}" in *[!a-z0-9]*) printf 'err invalid slug'; return 0 ;; esac
     rm -rf "${INSTANCES_DIR:?}/${1:?}"
     rm -f "$DISK_CACHE"
     printf 'ok'

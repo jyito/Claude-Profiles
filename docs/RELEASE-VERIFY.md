@@ -19,14 +19,15 @@ rebuild or move the app.)
 | 1 | Launch the manager app | Dark dashboard renders (not a blank white pane). Loading splash → cards. |
 | 2 | Look at the Dock | The manager shows the window-stack icon; each profile shows the real Claude icon with a distinct colored badge. |
 | 3 | Have ≥2 profiles, both running. Click **Show Window** on one | That instance's windows come forward. **First time:** a one-time Automation prompt — click **Allow**. After allowing, repeat — it should jump every time, even across Spaces. |
-| 4 | Expand a running card (**▾ Terminals**) | The terminals table populates with the instance's live sessions (device, command, idle). |
+| 4 | Expand a running card (**+ Details**) | The terminals table populates with the instance's live sessions (device, command, idle). |
 | 5 | Click **Close** on a terminal (confirm) | That terminal disappears within ~2s. |
 | 6 | Click **Throttle CPU** | No crash; the instance keeps running (priority drops — visible in Activity Monitor as a higher "nice" value). |
 | 7 | Quit a profile, expand its (stopped) card | Clean tiers appear (Caches / GPU / Logs / Everything). Click one → caches clear (card disk shrinks). |
 | 8 | Open **Settings**, change auto-clean to a value, reopen | The selection persisted. |
 | 9 | In a card's drill-down, click a **badge color swatch** | The toast shows "Updating badge…"; within a moment the Dock icon recolors. |
 | 10 | On the stopped **default** card, click **Open** | The base Claude (default account) launches. |
-| 11 | Quit the dashboard (close its window) | The applet exits cleanly (no lingering process). |
+| 11 | Click **Remote** on a profile card | The Remote modal opens titled "Remote access — <name>" with copy-paste SSH lines; **Copy** lands the command in the clipboard; the modal is clearly labeled Claude Code (terminal), not the Desktop window. |
+| 12 | Quit the dashboard (close its window) | The applet exits cleanly (no lingering process). |
 
 If Show Window does nothing **and** no Automation prompt appears:
 `tccutil reset AppleEvents local.claude-profiles.dashboard`, then relaunch and

@@ -72,6 +72,12 @@ jobs:
           ' CHANGELOG.md > notes.md || true
           if [ ! -s notes.md ]; then echo "(no CHANGELOG section for $ver; using auto-generated notes)" > notes.md; fi
 
+      - name: checksums
+        run: |
+          set -euo pipefail
+          ( cd dist && shasum -a 256 Claude-Profiles.dmg Claude-Profiles.zip > SHA256SUMS.txt )
+          { printf '\n## Verify your download\n\n```\n'; cat dist/SHA256SUMS.txt; printf '```\n\nIn the folder you downloaded to: `shasum -a 256 -c SHA256SUMS.txt`\n'; } >> notes.md
+
       - name: attest build provenance (SLSA)
         if: ${{ github.event.repository.private == false }}
         continue-on-error: true # provenance is nice-to-have; never block publishing the release
@@ -88,10 +94,10 @@ jobs:
           set -euo pipefail
           if [ -s notes.md ] && ! grep -q "auto-generated notes" notes.md; then
             gh release create "$GITHUB_REF_NAME" \
-              dist/Claude-Profiles.dmg dist/Claude-Profiles.zip \
+              dist/Claude-Profiles.dmg dist/Claude-Profiles.zip dist/SHA256SUMS.txt \
               --title "$GITHUB_REF_NAME" --notes-file notes.md
           else
             gh release create "$GITHUB_REF_NAME" \
-              dist/Claude-Profiles.dmg dist/Claude-Profiles.zip \
+              dist/Claude-Profiles.dmg dist/Claude-Profiles.zip dist/SHA256SUMS.txt \
               --title "$GITHUB_REF_NAME" --generate-notes
           fi
