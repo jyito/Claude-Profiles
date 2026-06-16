@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [0.5.0] — 2026-06-15
 - **Remote button on every profile card.** Make a profile reachable from another
   device without the CLI: the button starts/reuses its Claude Code session and
   opens a modal with copy-paste SSH commands (same-network and, when Tailscale is

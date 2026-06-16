@@ -33,10 +33,17 @@ jobs:
           egress-policy: audit
       - id: pick
         run: |
+          # PR: one runner (fast feedback). Release (workflow_call → inherits the
+          # tag-push event): macos-14 + macos-15 — NOT macos-13, whose runners
+          # queue for long stretches and have repeatedly stalled releases. The
+          # weekly cron still exercises the full matrix incl. macos-13, where a
+          # slow runner blocks nothing.
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             echo 'os=["macos-latest"]' >> "$GITHUB_OUTPUT"
-          else
+          elif [ "${{ github.event_name }}" = "schedule" ]; then
             echo 'os=["macos-13","macos-14","macos-15"]' >> "$GITHUB_OUTPUT"
+          else
+            echo 'os=["macos-14","macos-15"]' >> "$GITHUB_OUTPUT"
           fi
 
   macos:
