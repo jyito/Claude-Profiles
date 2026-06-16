@@ -459,25 +459,36 @@ try {
   updateRemote({slug:'business',session:'claude-business',user:'me',host:'mac.local',tailscaleIp:'',alreadyRunning:false});
   if((E['rm-ts-cta']||{style:{}}).style.display!=='none' && (E['rm-ts-cmd']||{style:{}}).style.display==='none') rmcta=1;
 } catch(e){}
-// /dev/ptmx leak: warning + system banner appear past threshold, hidden when clean.
-let leakhidden=0, bannerhidden=0, leakwarn=0, banner=0, leakarmed=0;
+// /dev/ptmx leak: quiet status-line stat (>= threshold) + cleanup inside Details;
+// system banner near the ceiling. All hidden/absent when clean.
+let leakhidden=0, bannerhidden=0, leakstat=0, banner=0, leakclean=0;
 try {
   expanded=null; restartArmed=null;
-  fullRender(d);                              // real stats: low ptmx → nothing shown
+  fullRender(d);                              // real stats: low ptmx → no stat, no banner
   const gl=(E['grid']||{}).innerHTML||'';
-  leakhidden = (gl.indexOf('leakwarn')===-1)?1:0;
+  leakhidden = (gl.indexOf('leaked')===-1)?1:0;
   bannerhidden = (((E['sysbanner']||{}).className||'').indexOf('hidden')>-1)?1:0;
   const hi=JSON.parse(JSON.stringify(d)), r=hi.find(p=>p.running); r.ptmx=420; r.ptmxMax=511;
+  const es=(r.slug||'default');
   fullRender(hi);                             // one instance near the ceiling
-  const gh=(E['grid']||{}).innerHTML||'', es=(r.slug||'default');
-  if (gh.indexOf('leakwarn')>-1 && gh.indexOf(\"armRestart('\"+es+\"')\")>-1) leakwarn=1;
+  const gh=(E['grid']||{}).innerHTML||'';
+  if (gh.indexOf('420 leaked')>-1 && gh.indexOf('class=\"leaked\"')>-1) leakstat=1;  // quiet stat, not a box
   if (((E['sysbanner']||{}).className||'')==='sysbanner') banner=1;
-  restartArmed=es; fullRender(hi);            // armed → two-step Restart confirm
-  const ga=(E['grid']||{}).innerHTML||'';
-  if (ga.indexOf('Restart Now')>-1 && ga.indexOf(\"doRestart('\"+es+\"')\")>-1) leakarmed=1;
-  restartArmed=null;
+  // cleanup action lives in + Details, NOT on the card face
+  const onFace = gh.indexOf('Restart to free handles')>-1;
+  updateStats(hi);                            // lastData=hi so profileBySlug sees the leak
+  expanded=es;
+  updateTerminals(es,[{dev:'/dev/ttys009',pid:1,cmd:'bash',idle:10}]);
+  const da=(E['drill-'+es]||{}).innerHTML||'';
+  const hasAction = da.indexOf(\"armRestart('\"+es+\"')\")>-1 && da.indexOf('Restart to free handles')>-1;
+  restartArmed=es;
+  updateTerminals(es,[{dev:'/dev/ttys009',pid:1,cmd:'bash',idle:10}]);
+  const dc=(E['drill-'+es]||{}).innerHTML||'';
+  const hasConfirm = dc.indexOf(\"doRestart('\"+es+\"')\")>-1 && dc.indexOf('Confirm restart')>-1;
+  if (hasAction && hasConfirm && !onFace) leakclean=1;
+  restartArmed=null; expanded=null;
 } catch(e){}
-console.log(cards, sw, sp, rm, drill, tiers, (loadCls.indexOf('hidden')>-1?1:0), lock, avatarColor, swatches, remotebtn, detailsbtn, rmfill, rmcta, defclean, ddrill, leakhidden, bannerhidden, leakwarn, banner, leakarmed);
+console.log(cards, sw, sp, rm, drill, tiers, (loadCls.indexOf('hidden')>-1?1:0), lock, avatarColor, swatches, remotebtn, detailsbtn, rmfill, rmcta, defclean, ddrill, leakhidden, bannerhidden, leakstat, banner, leakclean);
 " 2>/dev/null)
     check "cards render"        "[ \"\$(echo '$R' | awk '{print \$1}')\" -ge 3 ]"
     check "Show Window buttons" "[ \"\$(echo '$R' | awk '{print \$2}')\" = 2 ]"
@@ -495,11 +506,11 @@ console.log(cards, sw, sp, rm, drill, tiers, (loadCls.indexOf('hidden')>-1?1:0),
     check "remote modal shows tailscale CTA"      "[ \"\$(echo '$R' | awk '{print \$14}')\" = 1 ]"
     check "default card has Remote + Details"     "[ \"\$(echo '$R' | awk '{print \$15}')\" = 1 ]"
     check "default drill is terminals, no badges" "[ \"\$(echo '$R' | awk '{print \$16}')\" = 1 ]"
-    check "no leak warning when ptmx low"         "[ \"\$(echo '$R' | awk '{print \$17}')\" = 1 ]"
+    check "no leak stat when ptmx low"            "[ \"\$(echo '$R' | awk '{print \$17}')\" = 1 ]"
     check "no system banner when ptmx low"        "[ \"\$(echo '$R' | awk '{print \$18}')\" = 1 ]"
-    check "leak warning + Restart past threshold" "[ \"\$(echo '$R' | awk '{print \$19}')\" = 1 ]"
+    check "quiet leak stat past threshold"        "[ \"\$(echo '$R' | awk '{print \$19}')\" = 1 ]"
     check "system banner near ptmx ceiling"       "[ \"\$(echo '$R' | awk '{print \$20}')\" = 1 ]"
-    check "armed warning shows two-step Restart"  "[ \"\$(echo '$R' | awk '{print \$21}')\" = 1 ]"
+    check "leak cleanup lives in + Details"       "[ \"\$(echo '$R' | awk '{print \$21}')\" = 1 ]"
 else
     echo "  - node not found, skipping JS render tests"
 fi

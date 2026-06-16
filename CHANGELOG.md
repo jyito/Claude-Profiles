@@ -1,17 +1,19 @@
 # Changelog
 
 ## [Unreleased]
-- **Terminal-handle leak detection + one-click restart.** Claude Desktop leaks
-  `/dev/ptmx` master handles (one per terminal session, never released); enough
-  of them across instances exhausts the system pool (`kern.tty.ptmx_max`) and can
-  wedge the whole Mac. The dashboard now counts them per instance and surfaces an
-  amber warning with a two-step **Restart** on any instance holding 50+, plus a
-  top banner when the machine-wide total nears the ceiling. Restart cycles just
-  that instance (TERM → wait → force if needed → relaunch) to reclaim the
-  handles — sign-ins and data are untouched. The framing is honest: it's a Claude
-  Desktop bug, and restarting is the only way to free another process's handles.
-  New engine `restart <slug>` action and `ptmx`/`ptmxMax` stats fields; new
-  `cp:restart` bridge verb.
+- **Terminal-handle leak detection + cleanup.** Claude Desktop leaks `/dev/ptmx`
+  master handles (one per terminal session, never released); enough of them across
+  instances exhausts the system pool (`kern.tty.ptmx_max`) and can wedge the whole
+  Mac. The dashboard now counts them per instance and shows a quiet **"N leaked"**
+  stat in a card's status line once it's worth noticing. The cleanup lives in
+  **+ Details**: a two-step **Restart to free handles** (arm → confirm) with a
+  clear warning that it quits and reopens Claude (open windows and running
+  terminals close; login and saved chats are kept). A top banner appears only in a
+  true system-wide emergency (≥80% of the ceiling). Restart cycles just that
+  instance (TERM → wait → force if needed → relaunch) — the only way to reclaim
+  the handles, since you can't free another process's fds from outside. Honest
+  framing throughout: it's a Claude Desktop bug. New engine `restart <slug>`
+  action and `ptmx`/`ptmxMax` stats fields; new `cp:restart` bridge verb.
 
 ## [0.5.1] — 2026-06-16
 - **Remote on the default card too**, with a terminals-only **+ Details** view

@@ -27,7 +27,7 @@ rebuild or move the app.)
 | 9 | In a card's drill-down, click a **badge color swatch** | The toast shows "Updating badge…"; within a moment the Dock icon recolors. |
 | 10 | On the stopped **default** card, click **Open** | The base Claude (default account) launches. |
 | 11 | Click **Remote** on a profile card | The Remote modal opens titled "Remote access — <name>" with copy-paste SSH lines; **Copy** lands the command in the clipboard; the modal is clearly labeled Claude Code (terminal), not the Desktop window. |
-| 12 | Open ~50+ terminal sessions in one instance (or watch a long-lived one) until its card shows the amber **terminal-handle leak** warning; click **Restart** → confirm | That instance quits and relaunches (still signed in); the warning clears and its `ptmx` count drops. Other instances are untouched. *(Hard to force on demand — the warning only shows once an instance actually crosses 50 leaked handles.)* |
+| 12 | Let an instance accumulate 50+ leaked terminal handles (a long-lived session does this on its own). Its status line shows a quiet **"N leaked"** stat. Open **+ Details** → click **Restart to free handles** → **Confirm restart** | The drill-down shows the cleanup row with a warning that Claude quits and reopens. On confirm, that instance quits and relaunches (still signed in); the "N leaked" stat clears as the count drops. Other instances untouched. *(Hard to force on demand — only shows past 50 leaked handles.)* |
 | 13 | Quit the dashboard (close its window) | The applet exits cleanly (no lingering process). |
 
 If Show Window does nothing **and** no Automation prompt appears:
