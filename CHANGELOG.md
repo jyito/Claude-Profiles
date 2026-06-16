@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+## [0.5.1] — 2026-06-16
+- **Remote on the default card too**, with a terminals-only **+ Details** view
+  (the default never exposes Cleanup — its data dir stays off-limits).
+- **Clearer Remote modal** — spells out it's Claude Code (terminal), not the
+  Desktop chat window, and that each profile keeps its own isolated login.
+- **Fixed:** a profile name containing `< > &` (e.g. "Q&A") produced a corrupt
+  app that silently never appeared — those characters are now stripped, and
+  `default` is reserved.
+- **More robust startup** — if the dashboard window can't open on a given macOS,
+  the error now offers a working **Use Simple Menu** button (the dialog menu),
+  instead of telling you to pass a flag a downloaded app can't.
+- **Verifiable downloads** — releases publish `SHA256SUMS.txt` and include the
+  checksums in the notes.
+- **Docs** — corrected install/Gatekeeper steps (on macOS 15+ use System Settings
+  → Privacy & Security → **Open Anyway**; the right-click→Open shortcut was
+  removed), rewritten to the real dashboard UI, with a stated **macOS 14+**
+  requirement.
+
 ## [0.5.0] — 2026-06-15
 - **Remote button on every profile card.** Make a profile reachable from another
   device without the CLI: the button starts/reuses its Claude Code session and
