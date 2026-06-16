@@ -2,3 +2,7 @@ dist/
 *.zip
 *.dmg
 .DS_Store
+# Guard: a stray scratch/ops script named test.sh must never land in this public
+# repo (the project's tests live in tests/run-tests.sh). Root-only so it can't
+# mask a legitimately-tracked file.
+/test.sh
