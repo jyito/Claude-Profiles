@@ -142,9 +142,16 @@ pty_count_for_pids() {
     lsof -nP -p "$csv" 2>/dev/null | awk '$NF ~ /^\/dev\/ttys/ {print $NF}' | sort -u | wc -l | tr -d ' '
 }
 
+resolve_mains() {  # main PID(s) for a profile slug, or the default instance when slug is "default".
+    # Keeps terminals/closeterm/throttle correctly scoped to the requested
+    # instance's OWN tree — the default's PIDs come from the default detection,
+    # not a profile data dir.
+    if [ "$1" = "default" ]; then cmd_defaultpid; else main_pids_for_dir "$INSTANCES_DIR/$1"; fi
+}
+
 instance_devices() {  # the /dev/ttysNN devices owned by slug $1's process tree, deduped
     local mains pids csv
-    mains=$(main_pids_for_dir "$INSTANCES_DIR/$1"); [ -z "$mains" ] && return
+    mains=$(resolve_mains "$1"); [ -z "$mains" ] && return
     # shellcheck disable=SC2086
     pids=$(tree_pids $mains); csv=$(printf '%s' "$pids" | tr ' ' ',')
     lsof -nP -p "$csv" 2>/dev/null | awk '$NF ~ /^\/dev\/ttys/ {print $NF}' | sort -u
@@ -260,7 +267,7 @@ cmd_throttle() {  # lower this instance's OWN process tree CPU priority (renice 
     # way to restore is to relaunch the instance. Guarded to the instance's tree —
     # renice is never aimed at an arbitrary pid.
     local slug="${1:?}" mains pids
-    mains=$(main_pids_for_dir "$INSTANCES_DIR/$slug")
+    mains=$(resolve_mains "$slug")
     [ -z "$mains" ] && { printf 'notrunning'; return 0; }
     # shellcheck disable=SC2086
     pids=$(tree_pids $mains)
@@ -292,8 +299,8 @@ cmd_terminals() {  # JSON array of this instance's terminals: [{dev,pid,cmd,idle
     # Devices are discovered only within this instance's own process tree, so each
     # /dev/ttysNN belongs to exactly one instance — no cross-app confusion. One row
     # per device (first holder wins, matching the deduped terminal count).
-    local dir="$INSTANCES_DIR/${1:?}" mains pids snap csv out="[" first=1
-    mains=$(main_pids_for_dir "$dir")
+    local mains pids snap csv out="[" first=1
+    mains=$(resolve_mains "${1:?}")
     [ -z "$mains" ] && { printf '[]'; return 0; }
     # shellcheck disable=SC2086
     pids=$(tree_pids $mains)

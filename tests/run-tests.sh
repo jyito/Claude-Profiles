@@ -159,6 +159,9 @@ check "terminals rows carry dev"  "printf '%s' '$T' | grep -q '\"dev\":\"/dev/tt
 check "terminals rows carry idle" "printf '%s' '$T' | grep -q '\"idle\":[0-9]'"
 check "terminals rows carry cmd"  "printf '%s' '$T' | grep -q '\"cmd\":\"'"
 check "terminals empty when stopped" "[ \"\$('$ENGINE' terminals evex)\" = '[]' ]"
+# the default instance: terminals/closeterm/throttle resolve PIDs via the default
+# detection (cmd_defaultpid), not a profile data dir, scoped to the default's tree
+check "terminals default uses default tree" "printf '%s' \"\$('$ENGINE' terminals default)\" | grep -q '\"dev\":\"/dev/ttys004\"'"
 # regression: real lsof truncates COMMAND to 9 chars and it may contain a space
 # ("Claude He"), shifting columns — the PID must still be read correctly.
 cp "$WORK/shims/lsof" "$WORK/shims/lsof.bak"
@@ -410,8 +413,16 @@ let swatches=0;
 try { const g5=(E['grid']||{}).innerHTML||''; if(g5.indexOf('class=\"swatch')>-1 && g5.indexOf('setbadge')>-1) swatches=1; } catch(e){}
 let remotebtn=0, detailsbtn=0, defclean=0;
 try { const g6=(E['grid']||{}).innerHTML||''; if(g6.indexOf(\"act('remote'\")>-1) remotebtn=1; if(g6.indexOf('+ Details')>-1) detailsbtn=1;
-  // the default card gets Remote (slug 'default') but NOT a + Details toggle (no exp-_default)
-  if(g6.indexOf(\"act('remote','default')\")>-1 && g6.indexOf('exp-_default')===-1) defclean=1; } catch(e){}
+  // the default card gets Remote AND a Details toggle, both keyed 'default'
+  if(g6.indexOf(\"act('remote','default')\")>-1 && g6.indexOf(\"toggleExpand('default')\")>-1) defclean=1; } catch(e){}
+let ddrill=0;
+try {
+  expanded=null; toggleExpand('default');
+  updateTerminals('default',[{dev:'/dev/ttys004',pid:200,cmd:'Claude',idle:5}]);
+  const dh=(E['drill-default']||{}).innerHTML||'';
+  // default drill = terminals + throttle, but NO badge picker (no slug)
+  if(dh.indexOf('ttys004')>-1 && dh.indexOf(\"act('throttle','default')\")>-1 && dh.indexOf('class=\"swatch')===-1) ddrill=1;
+} catch(e){}
 let rmfill=0;
 try {
   updateRemote({slug:'business',session:'claude-business',user:'me',host:'mac.local',tailscaleIp:'100.64.1.2',alreadyRunning:false});
@@ -423,7 +434,7 @@ try {
   updateRemote({slug:'business',session:'claude-business',user:'me',host:'mac.local',tailscaleIp:'',alreadyRunning:false});
   if((E['rm-ts-cta']||{style:{}}).style.display!=='none' && (E['rm-ts-cmd']||{style:{}}).style.display==='none') rmcta=1;
 } catch(e){}
-console.log(cards, sw, sp, rm, drill, tiers, (loadCls.indexOf('hidden')>-1?1:0), lock, avatarColor, swatches, remotebtn, detailsbtn, rmfill, rmcta, defclean);
+console.log(cards, sw, sp, rm, drill, tiers, (loadCls.indexOf('hidden')>-1?1:0), lock, avatarColor, swatches, remotebtn, detailsbtn, rmfill, rmcta, defclean, ddrill);
 " 2>/dev/null)
     check "cards render"        "[ \"\$(echo '$R' | awk '{print \$1}')\" -ge 3 ]"
     check "Show Window buttons" "[ \"\$(echo '$R' | awk '{print \$2}')\" = 2 ]"
@@ -439,7 +450,8 @@ console.log(cards, sw, sp, rm, drill, tiers, (loadCls.indexOf('hidden')>-1?1:0),
     check "card shows + Details button"           "[ \"\$(echo '$R' | awk '{print \$12}')\" = 1 ]"
     check "remote modal fills ssh lines"          "[ \"\$(echo '$R' | awk '{print \$13}')\" = 1 ]"
     check "remote modal shows tailscale CTA"      "[ \"\$(echo '$R' | awk '{print \$14}')\" = 1 ]"
-    check "default card has Remote, no Details"   "[ \"\$(echo '$R' | awk '{print \$15}')\" = 1 ]"
+    check "default card has Remote + Details"     "[ \"\$(echo '$R' | awk '{print \$15}')\" = 1 ]"
+    check "default drill is terminals, no badges" "[ \"\$(echo '$R' | awk '{print \$16}')\" = 1 ]"
 else
     echo "  - node not found, skipping JS render tests"
 fi

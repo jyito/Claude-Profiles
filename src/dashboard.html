@@ -294,8 +294,15 @@ function closeTerm(slug, dev) {   // two-step: first click arms, second confirms
     rerender();
   }
 }
+// A card's operative id for drill-down/terminals: a profile's slug, or "default"
+// for the default instance (which has an empty slug). Keeps the slug-based drill
+// machinery working for the default without colliding with its livePatch ids.
+function effSlug(p) { return p.slug || "default"; }
 function profileBySlug(slug) {
-  if (lastData) for (var i = 0; i < lastData.length; i++) if (lastData[i].slug === slug) return lastData[i];
+  if (lastData) for (var i = 0; i < lastData.length; i++) {
+    if (lastData[i].slug === slug) return lastData[i];
+    if (slug === "default" && !lastData[i].slug) return lastData[i];
+  }
   return null;
 }
 function toggleExpand(slug) {
@@ -329,7 +336,7 @@ function updateTerminals(slug, arr) {   // pushed by the host after `engine term
   // Patch ONLY the open drill panel, not the whole grid — an open panel refreshes
   // every 2s tick, and a full grid rebuild each time was resetting scroll/hover.
   if (expanded === slug) {
-    var el = document.getElementById("drill-" + (slug || "_default")), p = profileBySlug(slug);
+    var el = document.getElementById("drill-" + slug), p = profileBySlug(slug);
     if (el && p) el.innerHTML = drillInner(p); else rerender();
   }
 }
@@ -351,7 +358,7 @@ function tierBtn(slug, tier, title, desc) {
 // Outer container carries a stable id so updateTerminals can patch just the inner
 // content (drillInner) without rebuilding the whole card grid.
 function drillPanel(p) {
-  return '<div class="drill" id="drill-' + (p.slug || "_default") + '">' + drillInner(p) + "</div>";
+  return '<div class="drill" id="drill-' + effSlug(p) + '">' + drillInner(p) + "</div>";
 }
 function drillInner(p) {
   if (!p.running) {
@@ -363,8 +370,8 @@ function drillInner(p) {
     if (p.disk >= 0) c += '<div class="hint">Using ' + fmtDisk(p.disk) + " on disk.</div>";
     return c + badgeSwatches(p);
   }
-  var slug = p.slug, rows = terminals[slug];
-  var h = '<h4>Terminals — live sessions in this profile</h4>';
+  var slug = effSlug(p), rows = terminals[slug];
+  var h = '<h4>Terminals — live sessions in this instance</h4>';
   if (!rows) return h + '<div class="empty">Loading…</div>';
   if (!rows.length) return h + '<div class="empty">No active terminals.</div>';
   h += '<table class="tterm"><tr><th>Device</th><th>Command</th><th>Idle</th><th></th></tr>';
@@ -379,7 +386,7 @@ function drillInner(p) {
   h += '</table><div class="hint">Closing sends a hangup to that terminal\'s session — anything running in it stops.</div>';
   h += '<div class="throttle"><button class="tbtn" onclick="act(\'throttle\',\'' + slug + '\')">Throttle CPU</button>' +
        '<span class="thint">Lowers priority until this instance is relaunched.</span></div>';
-  return h + badgeSwatches(p);
+  return h + (p.slug ? badgeSwatches(p) : "");   // no badge picker for the default (it has no slug)
 }
 function toggleNp(show) {
   var f = document.getElementById("npmodal");
@@ -524,7 +531,7 @@ function updateStats(data) {
   // never clobber a command the user just queued (title already starts with cp:).
   if (expanded && document.title.indexOf("cp:") !== 0) {
     for (var j = 0; j < data.length; j++)
-      if (data[j].slug === expanded && data[j].running) { document.title = "cp:terminals:" + expanded; break; }
+      if ((data[j].slug || "default") === expanded && data[j].running) { document.title = "cp:terminals:" + expanded; break; }
   }
 }
 // The sub-line text (running stats / stopped summary) — the part that changes
@@ -534,7 +541,7 @@ function subText(p) {
   return p.running ? "Running · " + p.procs + " procs · " + p.ptys + " terminals"
                    : "Stopped" + (p.opens ? " · opened " + p.opens + "× · last " + p.last : "");
 }
-function expLabel(p) { return expanded === p.slug ? "− Details" : "+ Details"; }
+function expLabel(p) { return expanded === effSlug(p) ? "− Details" : "+ Details"; }
 function setKpi(totalMem, running) {
   document.getElementById("kpi").innerHTML = Math.round(totalMem).toLocaleString() +
     ' <small>MB across ' + running + " running</small>";
@@ -546,7 +553,7 @@ function structureSig(data) {
   for (var i = 0; i < data.length; i++) {
     var p = data[i];
     s.push((p.slug || "_default") + "|" + (p.running ? 1 : 0) + "|" +
-           (expanded === p.slug ? 1 : 0) + "|" + (confirmStep[p.slug] || 0));
+           (expanded === effSlug(p) ? 1 : 0) + "|" + (confirmStep[p.slug] || 0));
   }
   return s.join(";") + "#" + (closeArmed || "");
 }
@@ -586,7 +593,7 @@ function fullRender(data) {
     var av = AV[i % AV.length];
     var avatarBg = p.color || av[0];   // same color as this profile's Dock badge
     var initial = (p.slug ? p.name.replace(/^Claude /, "") : "C").charAt(0).toUpperCase();
-    html += '<div class="card' + (expanded === p.slug ? " expanded" : "") + '"><div class="hdr">' +
+    html += '<div class="card' + (expanded === effSlug(p) ? " expanded" : "") + '"><div class="hdr">' +
       '<div class="avatar" style="background:' + avatarBg + ';color:#FBF7F0">' + initial + "</div>" +
       '<div style="flex:1"><div class="name">' + p.name.replace(/^Claude /, "").replace(/^\(/, "Claude (") + "</div>" +
       '<div class="sub' + (p.running ? " on" : "") + '" id="sub-' + key + '"><span class="dot"></span>' +
@@ -633,12 +640,16 @@ function fullRender(data) {
         '<button class="cardbtn" onclick="act(\'remote\',\'' + p.slug + '\')">Remote</button>' +
         '<button class="cardbtn" id="exp-' + key + '" onclick="toggleExpand(\'' + p.slug + '\')">' + expLabel(p) + '</button>' +
         '</div>';
-      if (expanded === p.slug) html += drillPanel(p);
+      if (expanded === effSlug(p)) html += drillPanel(p);
     } else if (!p.slug) {
-      // the default instance gets Remote too — a separate Claude Code session in
-      // ~/.claude-code-instances/default; never touches the default's data dir.
-      // No "+ Details": the default has no drill-down (terminals/clean are off-limits).
-      html += '<div class="cardrow"><button class="cardbtn" onclick="act(\'remote\',\'default\')">Remote</button></div>';
+      // The default instance gets Remote (a separate Claude Code session in
+      // ~/.claude-code-instances/default — never touches the default's data dir)
+      // and, when running, a terminals-only "+ Details" (NO Cleanup — that would
+      // delete the off-limits default data dir; NO badge picker).
+      html += '<div class="cardrow"><button class="cardbtn" onclick="act(\'remote\',\'default\')">Remote</button>';
+      if (p.running) html += '<button class="cardbtn" id="exp-default" onclick="toggleExpand(\'default\')">' + expLabel(p) + '</button>';
+      html += '</div>';
+      if (p.running && expanded === "default") html += drillPanel(p);
     }
     if (p.slug && !p.running && !confirmStep[p.slug]) {
       html += '<button class="linkbtn" onclick="startRemove(\'' + p.slug + '\')">Remove profile…</button>';
