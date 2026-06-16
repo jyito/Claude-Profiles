@@ -138,6 +138,9 @@ on pushRemote(slug)
 	try
 		set rjson to do shell script quoted form of enginePath & " remoteinfo " & quoted form of slug
 		theWebView's evaluateJavaScript:("updateRemote(" & rjson & ")") completionHandler:(missing value)
+	on error
+		-- never leave the click with no feedback; the page renders this in the modal
+		theWebView's evaluateJavaScript:("updateRemote({\"error\":\"Could not prepare remote access.\"})") completionHandler:(missing value)
 	end try
 end pushRemote
 

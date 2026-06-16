@@ -82,6 +82,9 @@ EOF
 # would otherwise osacompile + `open` a real stay-open dashboard applet, which
 # survives $WORK cleanup and orphans in the Dock. The shim just logs the args.
 printf '#!/bin/bash\nprintf "%%s\\\\n" "$*" >> "%s/open.log"\n' "$WORK" > "$WORK/shims/open"
+# Stub the Claude Code CLI so remoteinfo's existence guard passes in CI (where it
+# isn't installed); a no-op is fine since `screen` is also a shim.
+printf '#!/bin/bash\n:\n' > "$WORK/shims/claude"
 chmod +x "$WORK/shims/"*
 
 export PATH="$WORK/shims:$PATH"
@@ -276,6 +279,11 @@ TS
 chmod +x "$WORK/shims/tailscale"
 check "remoteinfo includes tailscale ip" "printf '%s' \"\$('$ENGINE' remoteinfo work)\" | grep -q '\"tailscaleIp\":\"100.64.1.2\"'"
 rm -f "$WORK/shims/tailscale"
+# Security: a slug arrives over the title bridge (untrusted); remoteinfo must
+# reject anything that isn't [a-z0-9] before it reaches the nested bash -lc / paths.
+rm -f "$WORK/PWNED"
+check "remoteinfo rejects injection slug" "\"\$ENGINE\" remoteinfo \"x'; touch '$WORK/PWNED'; echo '\" 2>/dev/null | grep -q 'invalid profile id'; [ ! -f '$WORK/PWNED' ]"
+check "remoteinfo rejects traversal slug" "\"\$ENGINE\" remoteinfo '../../escape/evil' 2>/dev/null | grep -q 'invalid profile id'; [ ! -d '$WORK/escape' ]"
 
 echo "== engine copy (clipboard bridge) =="
 cat > "$WORK/shims/pbcopy" <<PB
@@ -400,8 +408,10 @@ let avatarColor=0;
 try { const prof=d.find(p=>p.slug && p.color); const g4=(E['grid']||{}).innerHTML||''; if(prof && g4.indexOf('background:'+prof.color)>-1) avatarColor=1; } catch(e){}
 let swatches=0;
 try { const g5=(E['grid']||{}).innerHTML||''; if(g5.indexOf('class=\"swatch')>-1 && g5.indexOf('setbadge')>-1) swatches=1; } catch(e){}
-let remotebtn=0, detailsbtn=0;
-try { const g6=(E['grid']||{}).innerHTML||''; if(g6.indexOf(\"act('remote'\")>-1) remotebtn=1; if(g6.indexOf('+ Details')>-1) detailsbtn=1; } catch(e){}
+let remotebtn=0, detailsbtn=0, defclean=0;
+try { const g6=(E['grid']||{}).innerHTML||''; if(g6.indexOf(\"act('remote'\")>-1) remotebtn=1; if(g6.indexOf('+ Details')>-1) detailsbtn=1;
+  // the default instance has no slug; its controls (if leaked) would carry act('remote','') / exp-_default
+  if(g6.indexOf(\"act('remote','')\")===-1 && g6.indexOf('exp-_default')===-1) defclean=1; } catch(e){}
 let rmfill=0;
 try {
   updateRemote({slug:'business',session:'claude-business',user:'me',host:'mac.local',tailscaleIp:'100.64.1.2',alreadyRunning:false});
@@ -413,7 +423,7 @@ try {
   updateRemote({slug:'business',session:'claude-business',user:'me',host:'mac.local',tailscaleIp:'',alreadyRunning:false});
   if((E['rm-ts-cta']||{style:{}}).style.display!=='none' && (E['rm-ts-cmd']||{style:{}}).style.display==='none') rmcta=1;
 } catch(e){}
-console.log(cards, sw, sp, rm, drill, tiers, (loadCls.indexOf('hidden')>-1?1:0), lock, avatarColor, swatches, remotebtn, detailsbtn, rmfill, rmcta);
+console.log(cards, sw, sp, rm, drill, tiers, (loadCls.indexOf('hidden')>-1?1:0), lock, avatarColor, swatches, remotebtn, detailsbtn, rmfill, rmcta, defclean);
 " 2>/dev/null)
     check "cards render"        "[ \"\$(echo '$R' | awk '{print \$1}')\" -ge 3 ]"
     check "Show Window buttons" "[ \"\$(echo '$R' | awk '{print \$2}')\" = 2 ]"
@@ -429,6 +439,7 @@ console.log(cards, sw, sp, rm, drill, tiers, (loadCls.indexOf('hidden')>-1?1:0),
     check "card shows + Details button"           "[ \"\$(echo '$R' | awk '{print \$12}')\" = 1 ]"
     check "remote modal fills ssh lines"          "[ \"\$(echo '$R' | awk '{print \$13}')\" = 1 ]"
     check "remote modal shows tailscale CTA"      "[ \"\$(echo '$R' | awk '{print \$14}')\" = 1 ]"
+    check "default card omits Remote/Details"     "[ \"\$(echo '$R' | awk '{print \$15}')\" = 1 ]"
 else
     echo "  - node not found, skipping JS render tests"
 fi
