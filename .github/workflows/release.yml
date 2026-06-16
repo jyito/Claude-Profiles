@@ -74,10 +74,9 @@ jobs:
 
       - name: checksums
         run: |
-          # shellcheck disable=SC2016  # backticks in the printf are literal markdown for the release notes, not command substitution
           set -euo pipefail
           ( cd dist && shasum -a 256 Claude-Profiles.dmg Claude-Profiles.zip > SHA256SUMS.txt )
-          { printf '\n## Verify your download\n\n```\n'; cat dist/SHA256SUMS.txt; printf '```\n\nIn the folder you downloaded to: `shasum -a 256 -c SHA256SUMS.txt`\n'; } >> notes.md
+          { echo; echo '## Verify your download'; echo; sed 's/^/    /' dist/SHA256SUMS.txt; echo; echo 'Then run  shasum -a 256 -c SHA256SUMS.txt  in the folder you downloaded to.'; } >> notes.md
 
       - name: attest build provenance (SLSA)
         if: ${{ github.event.repository.private == false }}
