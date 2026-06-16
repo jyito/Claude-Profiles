@@ -230,7 +230,7 @@
 <div class="scrim" id="remotemodal" onclick="if(event.target===this)toggleRemote(false)">
   <div class="modal">
     <h2 id="rm-title">Remote access</h2>
-    <p id="rm-intro">Reach this profile's session from another device — no app server, your own SSH.</p>
+    <p id="rm-intro">This is <b>Claude Code</b> (the terminal agent) for this profile — <b>not</b> the Desktop chat window. It's this profile's own isolated session and login, separate from your other profiles. Reached over your own SSH; the app opens no server.</p>
     <div id="rm-err" class="rm-err" style="display:none"></div>
     <div id="rm-body">
       <div class="rm-label">Same network (e.g. an SSH app on your iPad)</div>
@@ -238,7 +238,7 @@
       <div class="rm-label">Any network</div>
       <div class="rm-cmd" id="rm-ts-cmd"><code id="rm-ts"></code><button class="rm-copy" onclick="copyText(document.getElementById('rm-ts').textContent)">Copy</button></div>
       <div class="rm-cta" id="rm-ts-cta">To connect from outside your home network, set up Tailscale (free, no router config).</div>
-      <div class="rm-note">Requires Remote Login: System Settings → General → Sharing → Remote Login.</div>
+      <div class="rm-note">Requires Remote Login: System Settings → General → Sharing → Remote Login. The first time you attach, sign Claude Code into <b>this profile's account</b> — it then stays signed in for this profile only.</div>
       <button class="linkbtn" id="rm-steps-toggle" onclick="toggleSteps()">Show iPad / Tailscale setup ▾</button>
       <div id="rm-steps" class="rm-steps" style="display:none">
         <ol>
