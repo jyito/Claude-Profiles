@@ -82,6 +82,9 @@ EOF
 # would otherwise osacompile + `open` a real stay-open dashboard applet, which
 # survives $WORK cleanup and orphans in the Dock. The shim just logs the args.
 printf '#!/bin/bash\nprintf "%%s\\\\n" "$*" >> "%s/open.log"\n' "$WORK" > "$WORK/shims/open"
+# Stub the Claude Code CLI so remoteinfo's existence guard passes in CI (where it
+# isn't installed); a no-op is fine since `screen` is also a shim.
+printf '#!/bin/bash\n:\n' > "$WORK/shims/claude"
 chmod +x "$WORK/shims/"*
 
 export PATH="$WORK/shims:$PATH"
@@ -254,7 +257,43 @@ TS
 chmod +x "$WORK/shims/tailscale"
 check "cli remote shows tailscale any-network line" "bash '$CLI' remote Work 2>&1 | grep -qE 'ssh .*@100[.]64[.]1[.]2 -t .*screen -r claude-work'"
 rm -f "$WORK/shims/tailscale"
-check "cli remote hints tailscale when absent"      "bash '$CLI' remote Work 2>&1 | grep -qi 'install Tailscale'"
+# Restricted PATH so a real (system-installed) tailscale can't shadow the "absent"
+# case — the dashboard dev's Mac may well have Tailscale installed.
+check "cli remote hints tailscale when absent"      "PATH=\"$WORK/shims:/usr/bin:/bin\" bash '$CLI' remote Work 2>&1 | grep -qi 'install Tailscale'"
+
+echo "== engine remoteinfo (UI JSON) =="
+rm -f "$WORK/screen.log" "$WORK/screen-sessions"
+# Restricted PATH so a system-installed tailscale can't make the "absent" case flaky.
+RI=$(PATH="$WORK/shims:/usr/bin:/bin" "$ENGINE" remoteinfo work)
+check "remoteinfo is valid JSON"        "printf '%s' '$RI' | python3 -m json.tool >/dev/null"
+check "remoteinfo starts the session"   "grep -q 'claude-work' '$WORK/screen.log'"
+check "remoteinfo emits session+host"   "printf '%s' '$RI' | grep -q '\"session\":\"claude-work\"' && printf '%s' '$RI' | grep -q '\"host\":'"
+check "remoteinfo tailscaleIp empty when absent" "printf '%s' '$RI' | grep -q '\"tailscaleIp\":\"\"'"
+printf '\t9.claude-work\t(Detached)\n' > "$WORK/screen-sessions"
+check "remoteinfo alreadyRunning on reuse" "printf '%s' \"\$('$ENGINE' remoteinfo work)\" | grep -q '\"alreadyRunning\":true'"
+rm -f "$WORK/screen-sessions"
+cat > "$WORK/shims/tailscale" <<'TS'
+#!/bin/bash
+[ "$*" = "ip -4" ] && echo "100.64.1.2"
+TS
+chmod +x "$WORK/shims/tailscale"
+check "remoteinfo includes tailscale ip" "printf '%s' \"\$('$ENGINE' remoteinfo work)\" | grep -q '\"tailscaleIp\":\"100.64.1.2\"'"
+rm -f "$WORK/shims/tailscale"
+# Security: a slug arrives over the title bridge (untrusted); remoteinfo must
+# reject anything that isn't [a-z0-9] before it reaches the nested bash -lc / paths.
+rm -f "$WORK/PWNED"
+check "remoteinfo rejects injection slug" "\"\$ENGINE\" remoteinfo \"x'; touch '$WORK/PWNED'; echo '\" 2>/dev/null | grep -q 'invalid profile id'; [ ! -f '$WORK/PWNED' ]"
+check "remoteinfo rejects traversal slug" "\"\$ENGINE\" remoteinfo '../../escape/evil' 2>/dev/null | grep -q 'invalid profile id'; [ ! -d '$WORK/escape' ]"
+
+echo "== engine copy (clipboard bridge) =="
+cat > "$WORK/shims/pbcopy" <<PB
+#!/bin/bash
+cat > "$WORK/pbcopy.out"
+PB
+chmod +x "$WORK/shims/pbcopy"
+"$ENGINE" copy 'ssh me@mac.local -t "screen -r claude-work"'
+check "copy pipes text to pbcopy" "[ -f '$WORK/pbcopy.out' ] && grep -q 'screen -r claude-work' '$WORK/pbcopy.out'"
+rm -f "$WORK/shims/pbcopy" "$WORK/pbcopy.out"
 
 echo "== bulk cleanup =="
 mkdir -p "$WORK/instances/bulkstopped/GPUCache"; dd if=/dev/zero of="$WORK/instances/bulkstopped/GPUCache/b" bs=1024 count=64 2>/dev/null
@@ -332,7 +371,7 @@ const js=html.match(/<script>([\s\S]*)<\/script>/)[1];
 // Per-id element registry so we can observe livePatch's in-place updates (it
 // writes to cpuspk-/sub-/etc. by id), not just the grid innerHTML.
 const E={};
-global.document={getElementById:(id)=>{ if(!E[id]) E[id]={innerHTML:'',textContent:'',className:'',value:'',focus(){}}; return E[id]; },addEventListener:()=>{},title:''};
+global.document={getElementById:(id)=>{ if(!E[id]) E[id]={innerHTML:'',textContent:'',className:'',value:'',style:{},focus(){}}; return E[id]; },addEventListener:()=>{},title:''};
 global.setTimeout=()=>{};
 eval(js);
 const d=JSON.parse(fs.readFileSync('$WORK/stats.json','utf8'));
@@ -369,7 +408,22 @@ let avatarColor=0;
 try { const prof=d.find(p=>p.slug && p.color); const g4=(E['grid']||{}).innerHTML||''; if(prof && g4.indexOf('background:'+prof.color)>-1) avatarColor=1; } catch(e){}
 let swatches=0;
 try { const g5=(E['grid']||{}).innerHTML||''; if(g5.indexOf('class=\"swatch')>-1 && g5.indexOf('setbadge')>-1) swatches=1; } catch(e){}
-console.log(cards, sw, sp, rm, drill, tiers, (loadCls.indexOf('hidden')>-1?1:0), lock, avatarColor, swatches);
+let remotebtn=0, detailsbtn=0, defclean=0;
+try { const g6=(E['grid']||{}).innerHTML||''; if(g6.indexOf(\"act('remote'\")>-1) remotebtn=1; if(g6.indexOf('+ Details')>-1) detailsbtn=1;
+  // the default instance has no slug; its controls (if leaked) would carry act('remote','') / exp-_default
+  if(g6.indexOf(\"act('remote','')\")===-1 && g6.indexOf('exp-_default')===-1) defclean=1; } catch(e){}
+let rmfill=0;
+try {
+  updateRemote({slug:'business',session:'claude-business',user:'me',host:'mac.local',tailscaleIp:'100.64.1.2',alreadyRunning:false});
+  const loc=(E['rm-local']||{}).textContent||'', ts=(E['rm-ts']||{}).textContent||'';
+  if(loc.indexOf('screen -r claude-business')>-1 && ts.indexOf('100.64.1.2')>-1) rmfill=1;
+} catch(e){}
+let rmcta=0;
+try {
+  updateRemote({slug:'business',session:'claude-business',user:'me',host:'mac.local',tailscaleIp:'',alreadyRunning:false});
+  if((E['rm-ts-cta']||{style:{}}).style.display!=='none' && (E['rm-ts-cmd']||{style:{}}).style.display==='none') rmcta=1;
+} catch(e){}
+console.log(cards, sw, sp, rm, drill, tiers, (loadCls.indexOf('hidden')>-1?1:0), lock, avatarColor, swatches, remotebtn, detailsbtn, rmfill, rmcta, defclean);
 " 2>/dev/null)
     check "cards render"        "[ \"\$(echo '$R' | awk '{print \$1}')\" -ge 3 ]"
     check "Show Window buttons" "[ \"\$(echo '$R' | awk '{print \$2}')\" = 2 ]"
@@ -381,6 +435,11 @@ console.log(cards, sw, sp, rm, drill, tiers, (loadCls.indexOf('hidden')>-1?1:0),
     check "input lock derived from confirm state" "[ \"\$(echo '$R' | awk '{print \$8}')\" = 1 ]"
     check "card avatar uses badge color"          "[ \"\$(echo '$R' | awk '{print \$9}')\" = 1 ]"
     check "drill-down shows badge swatches"       "[ \"\$(echo '$R' | awk '{print \$10}')\" = 1 ]"
+    check "card shows Remote button"              "[ \"\$(echo '$R' | awk '{print \$11}')\" = 1 ]"
+    check "card shows + Details button"           "[ \"\$(echo '$R' | awk '{print \$12}')\" = 1 ]"
+    check "remote modal fills ssh lines"          "[ \"\$(echo '$R' | awk '{print \$13}')\" = 1 ]"
+    check "remote modal shows tailscale CTA"      "[ \"\$(echo '$R' | awk '{print \$14}')\" = 1 ]"
+    check "default card omits Remote/Details"     "[ \"\$(echo '$R' | awk '{print \$15}')\" = 1 ]"
 else
     echo "  - node not found, skipping JS render tests"
 fi

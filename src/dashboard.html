@@ -70,9 +70,12 @@
                    padding:6px 10px; font-size:12px; font-family:inherit; outline:none; margin:8px 0; }
   .confirm .danger { background:#501313; color:#F7C1C1; border:none; }
   .card.expanded { grid-column:1 / -1; }
-  .expander { background:none; border:none; color:#888780; font-size:11px; cursor:pointer;
-              font-family:inherit; padding:8px 0 0; width:100%; text-align:center; }
-  .expander:hover { color:#D3D1C7; }
+  .cardrow { display:flex; gap:8px; margin-top:8px; }
+  .cardbtn { flex:1; background:transparent; border:.5px solid #3a382f; color:#D3D1C7;
+             border-radius:7px; padding:6px 0; font-size:12px; cursor:pointer; font-family:inherit;
+             transition: background-color .12s ease, border-color .12s ease, color .12s ease, transform .06s ease; }
+  .cardbtn:hover { border-color:#5F5E5A; color:#F1EFE8; }
+  .cardbtn:active { transform:scale(.99); }
   .drill { margin-top:12px; border-top:.5px solid #2e2c25; padding-top:12px; }
   .drill h4 { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:#888780;
               font-weight:500; margin:0 0 8px; }
@@ -117,6 +120,20 @@
   .setrow select { width:100%; background:#21201A; border:.5px solid #3a382f; color:#F1EFE8;
                    border-radius:8px; padding:7px 10px; font-size:13px; font-family:inherit; outline:none; cursor:pointer; }
   .setrow select:focus { border-color:#D85A30; }
+  .rm-label { font-size:11px; color:#888780; margin:12px 0 4px; }
+  .rm-cmd { display:flex; gap:8px; align-items:center; background:#1A1915; border:.5px solid #3a382f;
+            border-radius:8px; padding:8px 10px; }
+  .rm-cmd code { flex:1; font-family:"SF Mono", ui-monospace, monospace; font-size:11px; color:#9FE1CB;
+                 word-break:break-all; -webkit-user-select:text; user-select:text; }
+  .rm-copy { flex:none; background:#2A4A3E; border:none; color:#9FE1CB; border-radius:6px;
+             padding:4px 10px; font-size:11px; cursor:pointer; font-family:inherit; }
+  .rm-copy:hover { background:#335C4D; }
+  .rm-cta { font-size:12px; color:#888780; margin-top:6px; }
+  .rm-note { font-size:11px; color:#6b6a64; margin-top:10px; }
+  .rm-err { color:#F0997B; font-size:12px; margin:8px 0; }
+  .rm-steps { margin-top:10px; font-size:12px; color:#D3D1C7; line-height:1.5; }
+  .rm-steps ol { margin:0 0 0 18px; }
+  #rm-steps-toggle:hover { color:#D3D1C7; }   /* neutral, not the destructive red .linkbtn uses for Remove */
   /* --- button reactivity: hover / press / keyboard focus --- */
   button { transition: background-color .12s ease, border-color .12s ease, color .12s ease, transform .06s ease; }
   .btn-add:hover { background:#E26A3E; }
@@ -129,7 +146,6 @@
   .modal .ghost:hover { border-color:#5F5E5A; color:#F1EFE8; }
   .modal button:active { transform:scale(.97); }
   .cleanrow:active { transform:scale(.992); }
-  .expander:active { transform:scale(.99); }
   .linkbtn:active { transform:scale(.99); }
   button:focus-visible { outline:2px solid #D85A30; outline-offset:2px; }
   select:focus-visible { outline:2px solid #D85A30; outline-offset:1px; }
@@ -211,6 +227,32 @@
     <div class="row"><button class="ghost" onclick="toggleSet(false)">Close</button></div>
   </div>
 </div>
+<div class="scrim" id="remotemodal" onclick="if(event.target===this)toggleRemote(false)">
+  <div class="modal">
+    <h2 id="rm-title">Remote access</h2>
+    <p id="rm-intro">Reach this profile's session from another device — no app server, your own SSH.</p>
+    <div id="rm-err" class="rm-err" style="display:none"></div>
+    <div id="rm-body">
+      <div class="rm-label">Same network (e.g. an SSH app on your iPad)</div>
+      <div class="rm-cmd"><code id="rm-local"></code><button class="rm-copy" onclick="copyText(document.getElementById('rm-local').textContent)">Copy</button></div>
+      <div class="rm-label">Any network</div>
+      <div class="rm-cmd" id="rm-ts-cmd"><code id="rm-ts"></code><button class="rm-copy" onclick="copyText(document.getElementById('rm-ts').textContent)">Copy</button></div>
+      <div class="rm-cta" id="rm-ts-cta">To connect from outside your home network, set up Tailscale (free, no router config).</div>
+      <div class="rm-note">Requires Remote Login: System Settings → General → Sharing → Remote Login.</div>
+      <button class="linkbtn" id="rm-steps-toggle" onclick="toggleSteps()">Show iPad / Tailscale setup ▾</button>
+      <div id="rm-steps" class="rm-steps" style="display:none">
+        <ol>
+          <li>On the Mac: turn on <b>Remote Login</b> (System Settings → General → Sharing).</li>
+          <li>On your device: install an SSH app (Blink Shell, Termius).</li>
+          <li>To reach it from <b>any</b> network: install <b>Tailscale</b> on the Mac and the device, sign into both with the same account, then use the "Any network" line above.</li>
+          <li>Paste the line into your SSH app — you're in the session. Detach with Ctrl-A then D.</li>
+        </ol>
+        <div class="rm-note">Full guide: docs/REMOTE.md in the repo.</div>
+      </div>
+    </div>
+    <div class="row"><button class="ghost" onclick="toggleRemote(false)">Close</button></div>
+  </div>
+</div>
 <div class="grid" id="grid"></div>
 <script>
 var hist = {}, MAXPTS = 30, confirmStep = {}, lastData = null, lastSig = null;
@@ -230,7 +272,7 @@ if (typeof window !== "undefined" && window.addEventListener) {
   window.addEventListener("wheel", onUserScroll, { passive: true });
 }
 function uiLocked() {   // derive the input lock from live state — never a stale boolean
-  var ids = ["npmodal", "cleanmodal", "setmodal"], i, m;
+  var ids = ["npmodal", "cleanmodal", "setmodal", "remotemodal"], i, m;
   for (i = 0; i < ids.length; i++) { m = document.getElementById(ids[i]); if (m && m.className.indexOf("show") > -1) return true; }
   for (i in confirmStep) if (confirmStep.hasOwnProperty(i)) return true;
   return false;
@@ -349,6 +391,7 @@ document.addEventListener("keydown", function(e) {
     if (document.getElementById("npmodal").className.indexOf("show") > -1) toggleNp(false);
     else if (document.getElementById("cleanmodal").className.indexOf("show") > -1) toggleClean(false);
     else if (document.getElementById("setmodal").className.indexOf("show") > -1) toggleSet(false);
+    else if (document.getElementById("remotemodal").className.indexOf("show") > -1) toggleRemote(false);
     else if (expanded) { expanded = null; rerender(); }
   }
 });
@@ -358,6 +401,44 @@ function toggleSet(show) {
   else { f.className = "scrim"; rerender(); }
 }
 function openSettings() { toggleSet(true); document.title = "cp:getconfig"; }   // host pushes updateConfig()
+function toggleRemote(show) {
+  document.getElementById("remotemodal").className = show ? "scrim show" : "scrim";
+  if (!show) rerender();   // resume live render on close, like the other modals
+}
+function toggleSteps() {
+  var s = document.getElementById("rm-steps");
+  s.style.display = s.style.display === "none" ? "" : "none";
+}
+function copyText(t) {
+  document.title = "cp:copy:" + t;   // host pipes it to pbcopy
+  var el = document.getElementById("toast"); el.textContent = "Copied";
+  setTimeout(function () { el.textContent = ""; }, 1500);
+}
+function updateRemote(info) {   // pushed by the host after `engine remoteinfo <slug>`
+  if (info.error) {
+    document.getElementById("rm-err").style.display = "block";
+    document.getElementById("rm-err").textContent = info.error;
+    document.getElementById("rm-body").style.display = "none";
+  } else {
+    document.getElementById("rm-err").style.display = "none";
+    document.getElementById("rm-body").style.display = "";
+    var p = profileBySlug(info.slug), name = (p ? p.name : info.slug).replace(/^Claude /, "");
+    document.getElementById("rm-title").textContent = "Remote access — " + name;
+    document.getElementById("rm-local").textContent =
+      'ssh ' + info.user + '@' + info.host + ' -t "screen -r ' + info.session + '"';
+    if (info.tailscaleIp) {
+      document.getElementById("rm-ts").textContent =
+        'ssh ' + info.user + '@' + info.tailscaleIp + ' -t "screen -r ' + info.session + '"';
+      document.getElementById("rm-ts-cmd").style.display = "";
+      document.getElementById("rm-ts-cta").style.display = "none";
+    } else {
+      document.getElementById("rm-ts-cmd").style.display = "none";
+      document.getElementById("rm-ts-cta").style.display = "";
+    }
+  }
+  var tt = document.getElementById("toast"); if (tt) tt.textContent = "";   // clear the "Preparing…" toast
+  toggleRemote(true);
+}
 function updateConfig(c) {
   var s = document.getElementById("set-clean"); if (s) s.value = String(c.autoCleanThresholdMB || 0);
   var t = document.getElementById("set-close"); if (t) t.value = String(c.autoCloseIdleMin || 0);
@@ -420,7 +501,8 @@ function act(a, slug) {
                    force:"Force quitting…", quitdefault:"Asking Claude to quit…", forcedefault:"Force quitting Claude…",
                    clean:"Clearing caches…", remove:"Removing app…", quitall:"Quitting all profiles…",
                    cleanall:"Clearing caches on stopped profiles…", killswitch:"EMERGENCY STOP — killing all Claude instances…",
-                   throttle:"Lowering CPU priority…", purge:"Erasing saved login…"}[a] || "";
+                   throttle:"Lowering CPU priority…", purge:"Erasing saved login…",
+                   remote:"Preparing remote access…"}[a] || "";
   setTimeout(function(){ t.textContent = ""; }, 2500);
 }
 function spark(arr, color) {
@@ -444,17 +526,14 @@ function updateStats(data) {
       if (data[j].slug === expanded && data[j].running) { document.title = "cp:terminals:" + expanded; break; }
   }
 }
-// The sub-line text (running stats / stopped summary) and the expander label —
-// the parts that change every tick. Live-patched in place so the DOM structure
-// (and the user's scroll/hover) survives the 2s refresh.
+// The sub-line text (running stats / stopped summary) — the part that changes
+// every tick. Live-patched in place so the DOM structure (and the user's
+// scroll/hover) survives the 2s refresh.
 function subText(p) {
   return p.running ? "Running · " + p.procs + " procs · " + p.ptys + " terminals"
                    : "Stopped" + (p.opens ? " · opened " + p.opens + "× · last " + p.last : "");
 }
-function expLabel(p) {
-  return p.running ? (expanded === p.slug ? "▴ Hide terminals" : "▾ Terminals" + (p.ptys ? " (" + p.ptys + ")" : ""))
-                   : (expanded === p.slug ? "▴ Hide cleanup" : "▾ Cleanup");
-}
+function expLabel(p) { return expanded === p.slug ? "− Details" : "+ Details"; }
 function setKpi(totalMem, running) {
   document.getElementById("kpi").innerHTML = Math.round(totalMem).toLocaleString() +
     ' <small>MB across ' + running + " running</small>";
@@ -495,7 +574,6 @@ function livePatch(data) {
     var cs = document.getElementById("cpuspk-" + key); if (cs) cs.innerHTML = spark(hist[key].cpu, "#F0997B");
     var ms = document.getElementById("memspk-" + key); if (ms) ms.innerHTML = spark(hist[key].mem, "#9FE1CB");
     var sb = document.getElementById("sub-" + key); if (sb) sb.innerHTML = '<span class="dot"></span>' + subText(p);
-    var ex = document.getElementById("exp-" + key); if (ex) ex.innerHTML = expLabel(p);
   }
   setKpi(totalMem, running);
 }
@@ -550,7 +628,10 @@ function fullRender(data) {
     }
     html += "</div>";
     if (p.slug && (p.running || !confirmStep[p.slug])) {
-      html += '<button class="expander" id="exp-' + key + '" onclick="toggleExpand(\'' + p.slug + '\')">' + expLabel(p) + "</button>";
+      html += '<div class="cardrow">' +
+        '<button class="cardbtn" onclick="act(\'remote\',\'' + p.slug + '\')">Remote</button>' +
+        '<button class="cardbtn" id="exp-' + key + '" onclick="toggleExpand(\'' + p.slug + '\')">' + expLabel(p) + '</button>' +
+        '</div>';
       if (expanded === p.slug) html += drillPanel(p);
     }
     if (p.slug && !p.running && !confirmStep[p.slug]) {
