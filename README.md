@@ -53,7 +53,7 @@ That means:
 
 ## Install (users)
 
-Grab the latest release (`Claude-Profiles.zip` or `.dmg`), then see [docs/INSTALL.md](docs/INSTALL.md). Short version: drag **Claude Profiles.app** to Applications; first launch is right-click → Open (the app is currently unsigned — see [Roadmap](#roadmap)).
+**[⬇ Download the latest release](https://github.com/jyito/Claude-Profiles/releases/latest)** — under **Assets**, grab `Claude-Profiles.dmg` (or `.zip`). Then see [docs/INSTALL.md](docs/INSTALL.md). Short version: open the DMG and drag **Claude Profiles.app** to Applications; first launch is right-click → Open (the app is currently unsigned — see [Roadmap](#roadmap)).
 
 ## Build from source
 
