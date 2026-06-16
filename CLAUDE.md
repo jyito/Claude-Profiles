@@ -29,8 +29,11 @@ intended to go public once docs/screenshots/signing are in place.
 4. **Never modify Claude.app** — breaks its code signature.
 5. **The default data dir (`~/Library/Application Support/Claude`) is
    off-limits.** The default-instance card offers Show Window / Quit / Force
-   Quit only — process signals are fine; reads/writes of that dir are not.
-   Clean Caches must never appear on the default card.
+   Quit, plus **Remote** — process signals are fine, and Remote only spins up a
+   *separate* Claude Code session under `~/.claude-code-instances/default` (never
+   touching the default's data dir). Reads/writes of the default data dir are
+   not allowed; Clean Caches and the drill-down (+ Details) must never appear on
+   the default card.
 6. **Profile data dirs are precious.** Destroying one requires the typed
    DELETE flow. Every `rm -rf` uses `${var:?}` guards.
 7. **bash 3.2 compatibility.** macOS ships bash 3.2. No `declare -A`,

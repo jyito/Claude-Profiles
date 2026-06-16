@@ -410,8 +410,8 @@ let swatches=0;
 try { const g5=(E['grid']||{}).innerHTML||''; if(g5.indexOf('class=\"swatch')>-1 && g5.indexOf('setbadge')>-1) swatches=1; } catch(e){}
 let remotebtn=0, detailsbtn=0, defclean=0;
 try { const g6=(E['grid']||{}).innerHTML||''; if(g6.indexOf(\"act('remote'\")>-1) remotebtn=1; if(g6.indexOf('+ Details')>-1) detailsbtn=1;
-  // the default instance has no slug; its controls (if leaked) would carry act('remote','') / exp-_default
-  if(g6.indexOf(\"act('remote','')\")===-1 && g6.indexOf('exp-_default')===-1) defclean=1; } catch(e){}
+  // the default card gets Remote (slug 'default') but NOT a + Details toggle (no exp-_default)
+  if(g6.indexOf(\"act('remote','default')\")>-1 && g6.indexOf('exp-_default')===-1) defclean=1; } catch(e){}
 let rmfill=0;
 try {
   updateRemote({slug:'business',session:'claude-business',user:'me',host:'mac.local',tailscaleIp:'100.64.1.2',alreadyRunning:false});
@@ -439,7 +439,7 @@ console.log(cards, sw, sp, rm, drill, tiers, (loadCls.indexOf('hidden')>-1?1:0),
     check "card shows + Details button"           "[ \"\$(echo '$R' | awk '{print \$12}')\" = 1 ]"
     check "remote modal fills ssh lines"          "[ \"\$(echo '$R' | awk '{print \$13}')\" = 1 ]"
     check "remote modal shows tailscale CTA"      "[ \"\$(echo '$R' | awk '{print \$14}')\" = 1 ]"
-    check "default card omits Remote/Details"     "[ \"\$(echo '$R' | awk '{print \$15}')\" = 1 ]"
+    check "default card has Remote, no Details"   "[ \"\$(echo '$R' | awk '{print \$15}')\" = 1 ]"
 else
     echo "  - node not found, skipping JS render tests"
 fi

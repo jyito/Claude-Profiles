@@ -422,7 +422,8 @@ function updateRemote(info) {   // pushed by the host after `engine remoteinfo <
   } else {
     document.getElementById("rm-err").style.display = "none";
     document.getElementById("rm-body").style.display = "";
-    var p = profileBySlug(info.slug), name = (p ? p.name : info.slug).replace(/^Claude /, "");
+    var p = profileBySlug(info.slug),
+        name = info.slug === "default" ? "Claude (default)" : (p ? p.name : info.slug).replace(/^Claude /, "");
     document.getElementById("rm-title").textContent = "Remote access — " + name;
     document.getElementById("rm-local").textContent =
       'ssh ' + info.user + '@' + info.host + ' -t "screen -r ' + info.session + '"';
@@ -633,6 +634,11 @@ function fullRender(data) {
         '<button class="cardbtn" id="exp-' + key + '" onclick="toggleExpand(\'' + p.slug + '\')">' + expLabel(p) + '</button>' +
         '</div>';
       if (expanded === p.slug) html += drillPanel(p);
+    } else if (!p.slug) {
+      // the default instance gets Remote too — a separate Claude Code session in
+      // ~/.claude-code-instances/default; never touches the default's data dir.
+      // No "+ Details": the default has no drill-down (terminals/clean are off-limits).
+      html += '<div class="cardrow"><button class="cardbtn" onclick="act(\'remote\',\'default\')">Remote</button></div>';
     }
     if (p.slug && !p.running && !confirmStep[p.slug]) {
       html += '<button class="linkbtn" onclick="startRemove(\'' + p.slug + '\')">Remove profile…</button>';
