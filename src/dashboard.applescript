@@ -31,7 +31,14 @@ on run
 		my setupWindow()
 		set didSetup to true
 	on error errMsg number errNum
-		display alert "Claude Profiles" message ("The dashboard window failed to open (" & errNum & "): " & errMsg & return & return & "Run the app with --classic for the dialog menu, and please report this.") as critical buttons {"OK"} default button "OK"
+		-- The window layer failed (NSWindow/WKWebView on this macOS). Don't dead-end a
+		-- downloaded-app user who has no way to run --classic themselves — offer the
+		-- dialog menu directly (same features, no WebView). The manager's launcher lives
+		-- next to this applet's baked Resources path.
+		try
+			set theButton to button returned of (display alert "Claude Profiles" message ("The dashboard window couldn't open on this Mac (" & errNum & "): " & errMsg & return & return & "You can use the simple dialog menu instead — it has the same features. Please also report this.") as critical buttons {"Quit", "Use Simple Menu"} default button "Use Simple Menu")
+			if theButton is "Use Simple Menu" then do shell script quoted form of (resourcesDir & "/../MacOS/launcher") & " --classic >/dev/null 2>&1 &"
+		end try
 		quit
 	end try
 end run
