@@ -162,13 +162,14 @@
                background:#3a2a14; color:#F0C674; border:1px solid #6b4e1f; }
   .sysbanner.hidden { display:none; }
   .sysbanner b { color:#F7D98A; }
-  .leakwarn { margin:11px 0 0; padding:9px 11px; border-radius:8px; font-size:12px; line-height:1.42;
+  .leakwarn { margin:11px 0 0; padding:9px 12px; border-radius:8px; font-size:12px; line-height:1.45;
               background:#3a2a14; color:#F0C674; border:1px solid #6b4e1f;
-              display:flex; align-items:center; gap:10px; }
+              display:flex; align-items:center; gap:12px; }
   .leakwarn.armed { display:block; }
-  .leakwarn .leakn { font-weight:600; color:#F7D98A; }
-  .leakbtn { margin-left:auto; flex:none; background:#E0A33E; color:#1A1915; border:none;
-             border-radius:6px; padding:5px 12px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; }
+  .leakmsg { flex:1; }
+  .leakwarn b { font-weight:700; color:#F7D98A; }
+  .leakbtn { flex:none; background:#E0A33E; color:#1A1915; border:none;
+             border-radius:6px; padding:6px 14px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; }
   .leakbtn:hover { background:#EDB454; }
   .leakbtn:active { transform:translateY(1px); }
 </style></head><body>
@@ -586,8 +587,8 @@ function leakWarning(p) {
       '<button class="danger" style="flex:1;border-radius:7px;padding:6px 0;font-size:12px;cursor:pointer" onclick="doRestart(\'' + slug + '\')">Restart Now</button>' +
       '<button onclick="restartArmed=null;rerender()">Cancel</button></div></div>';
   }
-  return '<div class="leakwarn">⚠ Holding <span class="leakn" id="leakn-' + slug + '">' + p.ptmx +
-    '</span> system terminal handles macOS won’t reclaim — a Claude Desktop leak that can wedge your Mac. Restarting frees them.' +
+  return '<div class="leakwarn"><span class="leakmsg">⚠ Holding <b id="leakn-' + slug + '">' + p.ptmx +
+    '</b> leaked terminal handles macOS can’t reclaim — a Claude Desktop bug. Enough of these can wedge your Mac; restart to free them.</span>' +
     '<button class="leakbtn" onclick="armRestart(\'' + slug + '\')">Restart</button></div>';
 }
 // Top banner when the machine-wide /dev/ptmx pool is running out (any instance
