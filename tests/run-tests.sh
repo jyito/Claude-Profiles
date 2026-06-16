@@ -363,7 +363,7 @@ const js=html.match(/<script>([\s\S]*)<\/script>/)[1];
 // Per-id element registry so we can observe livePatch's in-place updates (it
 // writes to cpuspk-/sub-/etc. by id), not just the grid innerHTML.
 const E={};
-global.document={getElementById:(id)=>{ if(!E[id]) E[id]={innerHTML:'',textContent:'',className:'',value:'',focus(){}}; return E[id]; },addEventListener:()=>{},title:''};
+global.document={getElementById:(id)=>{ if(!E[id]) E[id]={innerHTML:'',textContent:'',className:'',value:'',style:{},focus(){}}; return E[id]; },addEventListener:()=>{},title:''};
 global.setTimeout=()=>{};
 eval(js);
 const d=JSON.parse(fs.readFileSync('$WORK/stats.json','utf8'));
@@ -402,7 +402,18 @@ let swatches=0;
 try { const g5=(E['grid']||{}).innerHTML||''; if(g5.indexOf('class=\"swatch')>-1 && g5.indexOf('setbadge')>-1) swatches=1; } catch(e){}
 let remotebtn=0, detailsbtn=0;
 try { const g6=(E['grid']||{}).innerHTML||''; if(g6.indexOf(\"act('remote'\")>-1) remotebtn=1; if(g6.indexOf('+ Details')>-1) detailsbtn=1; } catch(e){}
-console.log(cards, sw, sp, rm, drill, tiers, (loadCls.indexOf('hidden')>-1?1:0), lock, avatarColor, swatches, remotebtn, detailsbtn);
+let rmfill=0;
+try {
+  updateRemote({slug:'business',session:'claude-business',user:'me',host:'mac.local',tailscaleIp:'100.64.1.2',alreadyRunning:false});
+  const loc=(E['rm-local']||{}).textContent||'', ts=(E['rm-ts']||{}).textContent||'';
+  if(loc.indexOf('screen -r claude-business')>-1 && ts.indexOf('100.64.1.2')>-1) rmfill=1;
+} catch(e){}
+let rmcta=0;
+try {
+  updateRemote({slug:'business',session:'claude-business',user:'me',host:'mac.local',tailscaleIp:'',alreadyRunning:false});
+  if((E['rm-ts-cta']||{style:{}}).style.display!=='none' && (E['rm-ts-cmd']||{style:{}}).style.display==='none') rmcta=1;
+} catch(e){}
+console.log(cards, sw, sp, rm, drill, tiers, (loadCls.indexOf('hidden')>-1?1:0), lock, avatarColor, swatches, remotebtn, detailsbtn, rmfill, rmcta);
 " 2>/dev/null)
     check "cards render"        "[ \"\$(echo '$R' | awk '{print \$1}')\" -ge 3 ]"
     check "Show Window buttons" "[ \"\$(echo '$R' | awk '{print \$2}')\" = 2 ]"
@@ -416,6 +427,8 @@ console.log(cards, sw, sp, rm, drill, tiers, (loadCls.indexOf('hidden')>-1?1:0),
     check "drill-down shows badge swatches"       "[ \"\$(echo '$R' | awk '{print \$10}')\" = 1 ]"
     check "card shows Remote button"              "[ \"\$(echo '$R' | awk '{print \$11}')\" = 1 ]"
     check "card shows + Details button"           "[ \"\$(echo '$R' | awk '{print \$12}')\" = 1 ]"
+    check "remote modal fills ssh lines"          "[ \"\$(echo '$R' | awk '{print \$13}')\" = 1 ]"
+    check "remote modal shows tailscale CTA"      "[ \"\$(echo '$R' | awk '{print \$14}')\" = 1 ]"
 else
     echo "  - node not found, skipping JS render tests"
 fi
