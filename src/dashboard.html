@@ -157,6 +157,19 @@
              border-radius:50%; animation:spin .8s linear infinite; }
   .lmsg { font-size:13px; color:#888780; letter-spacing:.02em; }
   @keyframes spin { to { transform:rotate(360deg); } }
+  /* --- terminal-handle (/dev/ptmx) leak: quiet card stat + Details cleanup --- */
+  .sysbanner { margin:0 22px 0; padding:11px 15px; border-radius:9px; font-size:12.5px; line-height:1.45;
+               background:#3a2a14; color:#F0C674; border:1px solid #6b4e1f; }
+  .sysbanner.hidden { display:none; }
+  .sysbanner b { color:#F7D98A; }
+  .sub .leaked { color:#E0A579; }          /* quiet amber stat in the card status line */
+  .leakrow { display:flex; align-items:center; gap:10px; margin-top:12px;
+             border-top:.5px solid #2e2c25; padding-top:12px; }
+  .leakrow b { color:#E0A579; font-weight:600; }
+  .leakrow .thint .warn { color:#E0A579; font-weight:600; }
+  .tbtn.armed { background:#E0A33E; border-color:#E0A33E; color:#1A1915; font-weight:600; }
+  .leakbtn:hover { background:#EDB454; }
+  .leakbtn:active { transform:translateY(1px); }
 </style></head><body>
 <div id="loading" class="loading"><div class="spinner"></div><div class="lmsg">Starting Claude Profiles…</div></div>
 <div class="top">
@@ -166,6 +179,7 @@
   </div>
   <div><button class="btn-ghost" onclick="openSettings()">Settings</button><button class="btn-ghost" onclick="toggleClean(true)">Cleanup</button><button class="btn-add" onclick="toggleNp(true)">＋ New Profile</button></div>
 </div>
+<div id="sysbanner" class="sysbanner hidden"></div>
 <div class="toast" id="toast"></div>
 <div class="scrim" id="npmodal" onclick="if(event.target===this)toggleNp(false)">
   <div class="modal">
@@ -277,7 +291,22 @@ function uiLocked() {   // derive the input lock from live state — never a sta
   for (i in confirmStep) if (confirmStep.hasOwnProperty(i)) return true;
   return false;
 }
-var expanded = null, terminals = {}, closeArmed = null;
+var expanded = null, terminals = {}, closeArmed = null, restartArmed = null;
+// Claude Desktop leaks /dev/ptmx master fds (one per terminal session, never
+// closed). Past this many on a single instance we surface a restart prompt;
+// past 80% of the system ceiling (ptmxMax) we raise the top banner — both are
+// the SAME underlying bug, just per-instance vs. system-wide.
+var LEAK_PER = 50;
+function armRestart(slug) {   // first click arms the per-card warning's Restart button
+  restartArmed = slug;
+  setTimeout(function(){ if (restartArmed === slug) { restartArmed = null; rerender(); } }, 4000);
+  rerender();
+}
+function doRestart(slug) {     // second click: cycle the instance (frees the leaked handles)
+  restartArmed = null;
+  act("restart", slug);
+  rerender();
+}
 function closeTerm(slug, dev) {   // two-step: first click arms, second confirms (live session)
   var k = slug + "/" + dev;
   if (closeArmed === k) {
@@ -386,6 +415,7 @@ function drillInner(p) {
   h += '</table><div class="hint">Closing sends a hangup to that terminal\'s session — anything running in it stops.</div>';
   h += '<div class="throttle"><button class="tbtn" onclick="act(\'throttle\',\'' + slug + '\')">Throttle CPU</button>' +
        '<span class="thint">Lowers priority until this instance is relaunched.</span></div>';
+  h += leakCleanup(p);
   return h + (p.slug ? badgeSwatches(p) : "");   // no badge picker for the default (it has no slug)
 }
 function toggleNp(show) {
@@ -510,6 +540,7 @@ function act(a, slug) {
                    clean:"Clearing caches…", remove:"Removing app…", quitall:"Quitting all profiles…",
                    cleanall:"Clearing caches on stopped profiles…", killswitch:"EMERGENCY STOP — killing all Claude instances…",
                    throttle:"Lowering CPU priority…", purge:"Erasing saved login…",
+                   restart:"Restarting to free leaked handles…",
                    remote:"Preparing remote access…"}[a] || "";
   setTimeout(function(){ t.textContent = ""; }, 2500);
 }
@@ -538,10 +569,45 @@ function updateStats(data) {
 // every tick. Live-patched in place so the DOM structure (and the user's
 // scroll/hover) survives the 2s refresh.
 function subText(p) {
-  return p.running ? "Running · " + p.procs + " procs · " + p.ptys + " terminals"
-                   : "Stopped" + (p.opens ? " · opened " + p.opens + "× · last " + p.last : "");
+  if (!p.running) return "Stopped" + (p.opens ? " · opened " + p.opens + "× · last " + p.last : "");
+  var s = "Running · " + p.procs + " procs · " + p.ptys + " terminals";
+  // The /dev/ptmx leak shown as a quiet stat (not a banner). The cleanup action
+  // lives in + Details. Only surfaced once it's worth caring about (>= LEAK_PER).
+  if (leaking(p)) s += ' · <span class="leaked">' + p.ptmx + " leaked</span>";
+  return s;
 }
 function expLabel(p) { return expanded === effSlug(p) ? "− Details" : "+ Details"; }
+function leaking(p) { return p.running && (p.ptmx || 0) >= LEAK_PER; }
+// The leaked-handle cleanup row that lives inside + Details. Restarting the
+// instance is the only way to reclaim the fds (you can't free another process's
+// fds from outside). Two-step (arm → confirm); sign-in is kept. Honest framing:
+// it's a Claude Desktop bug. Shown for any running instance — the count tells
+// you whether it matters yet.
+function leakCleanup(p) {
+  if (!p.running) return "";
+  var slug = effSlug(p), n = p.ptmx || 0, armed = restartArmed === slug;
+  return '<div class="leakrow"><button class="tbtn' + (armed ? " armed" : "") + '" onclick="' +
+    (armed ? "doRestart('" + slug + "')" : "armRestart('" + slug + "')") + '">' +
+    (armed ? "Confirm restart" : "Restart to free handles") + '</button>' +
+    '<span class="thint">' + (armed
+      ? '<span class="warn">⚠ This quits and reopens Claude</span> — open windows and any running terminals in this instance close. Your login and saved chats are kept.'
+      : '<b>' + n + "</b> leaked terminal handles macOS can’t reclaim (a Claude Desktop bug). Restart frees them.") +
+    "</span></div>";
+}
+// Top banner when the machine-wide /dev/ptmx pool is running out (any instance
+// shares the same ceiling). Hidden when there's plenty of headroom.
+function setBanner(data) {
+  var el = document.getElementById("sysbanner");
+  if (!el) return;
+  var total = 0, max = 0;
+  for (var i = 0; i < data.length; i++) { total += (data[i].ptmx || 0); if (data[i].ptmxMax > max) max = data[i].ptmxMax; }
+  if (max > 0 && total >= 0.8 * max) {
+    el.innerHTML = '⚠ <b>' + total + ' of ' + max + '</b> system terminal handles are in use — Claude Desktop is leaking them and your Mac can wedge near the limit. Restart a flagged instance below to free handles.';
+    el.className = "sysbanner";
+  } else {
+    el.className = "sysbanner hidden";
+  }
+}
 function setKpi(totalMem, running) {
   document.getElementById("kpi").innerHTML = Math.round(totalMem).toLocaleString() +
     ' <small>MB across ' + running + " running</small>";
@@ -555,7 +621,7 @@ function structureSig(data) {
     s.push((p.slug || "_default") + "|" + (p.running ? 1 : 0) + "|" +
            (expanded === effSlug(p) ? 1 : 0) + "|" + (confirmStep[p.slug] || 0));
   }
-  return s.join(";") + "#" + (closeArmed || "");
+  return s.join(";") + "#" + (closeArmed || "") + "#" + (restartArmed || "");
 }
 function render(data) {
   // Accumulate sparkline history every tick regardless of render path.
@@ -584,6 +650,7 @@ function livePatch(data) {
     var sb = document.getElementById("sub-" + key); if (sb) sb.innerHTML = '<span class="dot"></span>' + subText(p);
   }
   setKpi(totalMem, running);
+  setBanner(data);
 }
 function fullRender(data) {
   var totalMem = 0, running = 0, html = "";
@@ -658,6 +725,7 @@ function fullRender(data) {
   }
   document.getElementById("grid").innerHTML = html;
   setKpi(totalMem, running);
+  setBanner(data);
   var l = document.getElementById("loading"); if (l) l.className = "loading hidden";
 }
 </script></body></html>
