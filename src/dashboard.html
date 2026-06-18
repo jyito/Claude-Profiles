@@ -131,6 +131,9 @@
              padding:4px 10px; font-size:11px; cursor:pointer; font-family:inherit; }
   .rm-copy:hover { background:#335C4D; }
   .rm-cta { font-size:12px; color:#888780; margin-top:6px; }
+  .rm-qr-wrap { display:flex; flex-direction:column; align-items:center; gap:6px; margin-top:14px; }
+  .rm-qr { background:#fff; padding:8px; border-radius:8px; line-height:0; }
+  .rm-qr-label { font-size:11px; color:#6b6a64; text-align:center; }
   .rm-note { font-size:11px; color:#6b6a64; margin-top:10px; }
   .rm-err { color:#F0997B; font-size:12px; margin:8px 0; }
   .rm-steps { margin-top:10px; font-size:12px; color:#D3D1C7; line-height:1.5; }
@@ -264,6 +267,7 @@
       <div class="rm-label">Any network</div>
       <div class="rm-cmd" id="rm-ts-cmd"><code id="rm-ts"></code><button class="rm-copy" onclick="copyText(document.getElementById('rm-ts').textContent)">Copy</button></div>
       <div class="rm-cta" id="rm-ts-cta">To connect from outside your home network, set up Tailscale (free, no router config).</div>
+      <div class="rm-qr-wrap"><div id="rm-qr" class="rm-qr"></div><div class="rm-qr-label">Scan to read the attach line on your phone or iPad</div></div>
       <div class="rm-note">Requires Remote Login: System Settings → General → Sharing → Remote Login. The first time you attach, sign Claude Code into <b>this profile's account</b> — it then stays signed in for this profile only.</div>
       <button class="linkbtn" id="rm-steps-toggle" onclick="toggleSteps()">Show iPad / Tailscale setup ▾</button>
       <div id="rm-steps" class="rm-steps" style="display:none">
@@ -463,6 +467,108 @@ function copyText(t) {
   var el = document.getElementById("toast"); el.textContent = "Copied";
   setTimeout(function () { el.textContent = ""; }, 1500);
 }
+// ---- Inline QR encoder (byte mode, versions 1–5, ECC level L, single block) ----
+// Zero-dependency, no network: enough for an SSH attach line (≤106 bytes). Renders
+// dark-on-light SVG (needs the light quiet zone to scan). Algorithm per ISO/IEC
+// 18004; placement/format/mask follow Nayuki's reference. Returns null if too long.
+var QR_EC = {1:7,2:10,3:15,4:20,5:26};          // EC codewords per version (level L, 1 block)
+var QR_TOTAL = {1:26,2:44,3:70,4:100,5:134};    // total codewords
+var QR_ALIGN = {1:0,2:18,3:22,4:26,5:30};       // single alignment-pattern center (0 = none)
+var QR_EXP = [], QR_LOG = [];
+(function(){ var x=1,i; for(i=0;i<255;i++){ QR_EXP[i]=x; QR_LOG[x]=i; x<<=1; if(x&0x100)x^=0x11D; } for(i=255;i<512;i++)QR_EXP[i]=QR_EXP[i-255]; })();
+function qrMul(a,b){ return (a===0||b===0)?0:QR_EXP[QR_LOG[a]+QR_LOG[b]]; }
+function qrGenPoly(deg){ var g=[1],i,j; for(i=0;i<deg;i++){ var ng=[]; for(j=0;j<g.length+1;j++)ng[j]=0; for(j=0;j<g.length;j++){ ng[j]^=g[j]; ng[j+1]^=qrMul(g[j],QR_EXP[i]); } g=ng; } return g; }
+function qrRS(data,ecLen){ var gen=qrGenPoly(ecLen),res=[],i,j; for(i=0;i<data.length+ecLen;i++)res[i]=0; for(i=0;i<data.length;i++)res[i]=data[i]; for(i=0;i<data.length;i++){ var c=res[i]; if(c!==0) for(j=0;j<gen.length;j++) res[i+j]^=qrMul(gen[j],c); } return res.slice(data.length); }
+function qrUtf8(s){ var o=[],i; for(i=0;i<s.length;i++){ var c=s.charCodeAt(i); if(c<0x80)o.push(c); else if(c<0x800){o.push(0xC0|(c>>6),0x80|(c&63));} else {o.push(0xE0|(c>>12),0x80|((c>>6)&63),0x80|(c&63));} } return o; }
+function qrFormatBits(mask){ var data=(1<<3)|mask,rem=data,i; for(i=0;i<10;i++)rem=(rem<<1)^((rem>>9)*0x537); return ((data<<10)|rem)^0x5412; }
+function qrEncode(text){
+  var bytes=qrUtf8(text),version=0,v;
+  for(v=1;v<=5;v++){ if(bytes.length<=QR_TOTAL[v]-QR_EC[v]-2){ version=v; break; } }
+  if(!version) return null;
+  var dataCW=QR_TOTAL[version]-QR_EC[version],bits=[],i;
+  function put(val,len){ for(var k=len-1;k>=0;k--)bits.push((val>>k)&1); }
+  put(4,4); put(bytes.length,8);
+  for(i=0;i<bytes.length;i++)put(bytes[i],8);
+  put(0,Math.min(4,dataCW*8-bits.length));
+  while(bits.length%8)bits.push(0);
+  var cw=[]; for(i=0;i<bits.length;i+=8){ var b=0; for(var k=0;k<8;k++)b=(b<<1)|bits[i+k]; cw.push(b); }
+  var pads=[0xEC,0x11],pi=0; while(cw.length<dataCW){ cw.push(pads[pi&1]); pi++; }
+  return { version:version, codewords:cw.concat(qrRS(cw,QR_EC[version])) };
+}
+function qrMaskCond(mask,r,c){
+  switch(mask){
+    case 0: return (r+c)%2===0; case 1: return r%2===0; case 2: return c%3===0;
+    case 3: return (r+c)%3===0; case 4: return (Math.floor(r/2)+Math.floor(c/3))%2===0;
+    case 5: return ((r*c)%2+(r*c)%3)===0; case 6: return (((r*c)%2+(r*c)%3)%2)===0;
+    default: return (((r+c)%2+(r*c)%3)%2)===0;
+  }
+}
+function qrSkeleton(version){
+  var size=17+4*version,m=[],res=[],r,c,i,j;
+  for(r=0;r<size;r++){ m.push([]); res.push([]); for(c=0;c<size;c++){ m[r][c]=0; res[r][c]=false; } }
+  function S(rr,cc,v){ if(rr<0||cc<0||rr>=size||cc>=size)return; m[rr][cc]=v?1:0; res[rr][cc]=true; }
+  function finder(fr,fc){ for(i=-1;i<=7;i++)for(j=-1;j<=7;j++){ var on=(i>=0&&i<=6&&(j===0||j===6))||(j>=0&&j<=6&&(i===0||i===6))||(i>=2&&i<=4&&j>=2&&j<=4); S(fr+i,fc+j,on?1:0); } }
+  finder(0,0); finder(0,size-7); finder(size-7,0);
+  for(i=8;i<size-8;i++){ if(!res[6][i])S(6,i,(i%2===0)?1:0); if(!res[i][6])S(i,6,(i%2===0)?1:0); }
+  var a=QR_ALIGN[version];
+  if(a){ for(i=-2;i<=2;i++)for(j=-2;j<=2;j++)S(a+i,a+j,(Math.max(Math.abs(i),Math.abs(j))!==1)?1:0); }
+  S(size-8,8,1);                                   // dark module
+  for(i=0;i<=8;i++){ if(!res[8][i]){m[8][i]=0;res[8][i]=true;} if(!res[i][8]){m[i][8]=0;res[i][8]=true;} }
+  for(i=0;i<8;i++){ if(!res[8][size-1-i]){m[8][size-1-i]=0;res[8][size-1-i]=true;} if(!res[size-1-i][8]){m[size-1-i][8]=0;res[size-1-i][8]=true;} }
+  return { size:size, m:m, res:res };
+}
+function qrPlaceData(m,res,size,cw){
+  var bits=[],i,b; for(i=0;i<cw.length;i++)for(b=7;b>=0;b--)bits.push((cw[i]>>b)&1);
+  var idx=0,right,vert,col,row,j;
+  for(right=size-1;right>=1;right-=2){
+    if(right===6)right=5;
+    for(vert=0;vert<size;vert++){
+      for(j=0;j<2;j++){
+        col=right-j; row=(((right+1)&2)===0)?(size-1-vert):vert;
+        if(!res[row][col]){ m[row][col]=idx<bits.length?bits[idx]:0; idx++; }
+      }
+    }
+  }
+}
+function qrApplyFormat(m,size,mask){
+  var bits=qrFormatBits(mask),i; function g(k){ return (bits>>k)&1; }
+  for(i=0;i<=5;i++)m[8][i]=g(i);
+  m[8][7]=g(6); m[8][8]=g(7); m[7][8]=g(8);
+  for(i=9;i<15;i++)m[14-i][8]=g(i);
+  for(i=0;i<8;i++)m[size-1-i][8]=g(i);
+  for(i=8;i<15;i++)m[8][size-15+i]=g(i);
+  m[size-8][8]=1;
+}
+function qrPenalty(m,size){
+  var p=0,r,c,i;
+  for(r=0;r<size;r++){ var run=1; for(c=1;c<size;c++){ if(m[r][c]===m[r][c-1]){run++; if(run===5)p+=3; else if(run>5)p++;} else run=1; } }
+  for(c=0;c<size;c++){ var run2=1; for(r=1;r<size;r++){ if(m[r][c]===m[r-1][c]){run2++; if(run2===5)p+=3; else if(run2>5)p++;} else run2=1; } }
+  for(r=0;r<size-1;r++)for(c=0;c<size-1;c++){ var v=m[r][c]; if(v===m[r][c+1]&&v===m[r+1][c]&&v===m[r+1][c+1])p+=3; }
+  var dark=0; for(r=0;r<size;r++)for(c=0;c<size;c++)if(m[r][c])dark++;
+  p+=Math.floor(Math.abs(dark*100/(size*size)-50)/5)*10;
+  return p;
+}
+function qrBuild(text){
+  var enc=qrEncode(text); if(!enc) return null;
+  var version=enc.version,best=null,bestMask=0,bestPen=Infinity,mask;
+  for(mask=0;mask<8;mask++){
+    var sk=qrSkeleton(version);
+    qrPlaceData(sk.m,sk.res,sk.size,enc.codewords);
+    for(var r=0;r<sk.size;r++)for(var c=0;c<sk.size;c++){ if(!sk.res[r][c]&&qrMaskCond(mask,r,c))sk.m[r][c]^=1; }
+    qrApplyFormat(sk.m,sk.size,mask);
+    var pen=qrPenalty(sk.m,sk.size);
+    if(pen<bestPen){ bestPen=pen; best=sk; bestMask=mask; }
+  }
+  return { size:best.size, version:version, mask:bestMask, matrix:best.m, reserved:best.res, codewords:enc.codewords };
+}
+function qrMatrix(text){ var b=qrBuild(text); return b?b.matrix:null; }
+function qrSvg(text){
+  var m=qrMatrix(text); if(!m) return "";
+  var n=m.length,quiet=4,dim=n+quiet*2,rects=[],r,c;
+  for(r=0;r<n;r++)for(c=0;c<n;c++)if(m[r][c])rects.push('<rect x="'+(c+quiet)+'" y="'+(r+quiet)+'" width="1" height="1"/>');
+  return '<svg viewBox="0 0 '+dim+' '+dim+'" width="148" height="148" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">'+
+    '<rect width="'+dim+'" height="'+dim+'" fill="#fff"/><g fill="#000">'+rects.join('')+'</g></svg>';
+}
 function updateRemote(info) {   // pushed by the host after `engine remoteinfo <slug>`
   if (info.error) {
     document.getElementById("rm-err").style.display = "block";
@@ -485,6 +591,13 @@ function updateRemote(info) {   // pushed by the host after `engine remoteinfo <
       document.getElementById("rm-ts-cmd").style.display = "none";
       document.getElementById("rm-ts-cta").style.display = "";
     }
+    // QR of the attach line (any-network if available, else same-network) so you can
+    // read it onto a phone/iPad camera instead of retyping. Inline, no network.
+    var qline = info.tailscaleIp
+      ? document.getElementById("rm-ts").textContent
+      : document.getElementById("rm-local").textContent;
+    var qel = document.getElementById("rm-qr");
+    if (qel) { var svg = qrSvg(qline); qel.innerHTML = svg; qel.style.display = svg ? "" : "none"; }
   }
   var tt = document.getElementById("toast"); if (tt) tt.textContent = "";   // clear the "Preparing…" toast
   toggleRemote(true);
