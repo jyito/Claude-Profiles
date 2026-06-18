@@ -217,11 +217,14 @@ check "applet routes restart"           "grep -q 'restart' '$ROOT/src/dashboard.
 check "restart control in UI"           "grep -q 'armRestart' '$ROOT/src/dashboard.html'"
 
 echo "== settings & auto-clean =="
-check "getconfig defaults to zero"   "[ \"\$('$ENGINE' getconfig)\" = '{\"autoCloseIdleMin\":0,\"autoCleanThresholdMB\":0}' ]"
+check "getconfig defaults to zero"   "[ \"\$('$ENGINE' getconfig)\" = '{\"autoCloseIdleMin\":0,\"autoCleanThresholdMB\":0,\"autoRestartLeakAt\":0}' ]"
 check "setconfig persists threshold" "[ \"\$('$ENGINE' setconfig autoCleanThresholdMB 500)\" = ok ]"
 check "getconfig reflects setting"   "'$ENGINE' getconfig | grep -q '\"autoCleanThresholdMB\":500'"
+check "setconfig persists leak threshold" "[ \"\$('$ENGINE' setconfig autoRestartLeakAt 250)\" = ok ] && '$ENGINE' getconfig | grep -q '\"autoRestartLeakAt\":250'"
+"$ENGINE" setconfig autoRestartLeakAt 0 >/dev/null
 check "setconfig rejects bad key"    "[ \"\$('$ENGINE' setconfig nope 5)\" = 'err badkey' ]"
 check "setconfig rejects bad value"  "[ \"\$('$ENGINE' setconfig autoCloseIdleMin -3)\" = 'err badval' ]"
+check "setconfig rejects bad leak value" "[ \"\$('$ENGINE' setconfig autoRestartLeakAt 5x)\" = 'err badval' ]"
 "$ENGINE" setconfig autoCleanThresholdMB 0 >/dev/null; "$ENGINE" setconfig autoCloseIdleMin 0 >/dev/null
 check "autotick is a no-op when disabled" "[ \"\$('$ENGINE' autotick)\" = ok ]"
 check "autotick runs with auto-close on" "'$ENGINE' setconfig autoCloseIdleMin 60 >/dev/null; [ \"\$('$ENGINE' autotick)\" = ok ]"
@@ -232,6 +235,28 @@ dd if=/dev/zero of="$WORK/instances/autobig/GPUCache/big" bs=1024 count=2048 2>/
 rm -f "${TMPDIR:-/tmp}/claude-profiles-disk-cache"
 check "autotick cleans over-threshold stopped profile" "'$ENGINE' setconfig autoCleanThresholdMB 1 >/dev/null; '$ENGINE' autotick >/dev/null; [ ! -d '$WORK/instances/autobig/GPUCache' ]"
 "$ENGINE" setconfig autoCleanThresholdMB 0 >/dev/null
+# auto-restart on leak: business (pid 100 tree) holds 4 leaked /dev/ptmx masters.
+# Stub cmd_restart so we observe the dispatch without the real ~5s cycle.
+check "autotick restarts a profile over leak threshold" "bash -c '
+  . \"$ENGINE\"
+  cmd_restart() { printf \"%s\\n\" \"\$1\" >> \"$WORK/autorestart.log\"; }
+  rm -f \"$WORK/autorestart.log\"
+  cmd_setconfig autoRestartLeakAt 3 >/dev/null
+  cmd_autotick >/dev/null
+  cmd_setconfig autoRestartLeakAt 0 >/dev/null
+  grep -qx business \"$WORK/autorestart.log\"
+'"
+check "autotick skips a profile under leak threshold" "bash -c '
+  . \"$ENGINE\"
+  cmd_restart() { printf \"%s\\n\" \"\$1\" >> \"$WORK/autorestart.log\"; }
+  rm -f \"$WORK/autorestart.log\"
+  cmd_setconfig autoRestartLeakAt 99 >/dev/null
+  cmd_autotick >/dev/null
+  cmd_setconfig autoRestartLeakAt 0 >/dev/null
+  [ ! -s \"$WORK/autorestart.log\" ]
+'"
+check "settings UI exposes auto-restart control" "grep -q 'set-restart' '$ROOT/src/dashboard.html' && grep -q \"saveSetting('autoRestartLeakAt'\" '$ROOT/src/dashboard.html'"
+check "updateConfig populates auto-restart select" "grep -q 'c.autoRestartLeakAt' '$ROOT/src/dashboard.html'"
 
 echo "== default instance launch =="
 rm -f "$WORK/open.log"   # the `open` shim is set up at the top; isolate this check

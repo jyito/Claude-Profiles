@@ -560,13 +560,15 @@ setting_get() {  # $1 key -> integer value, or empty if unset
     [ -f "$SETTINGS_FILE" ] && awk -v k="$1" '$1==k {print $2; exit}' "$SETTINGS_FILE"
 }
 cmd_getconfig() {
-    local ac am
+    local ac am ar
     ac=$(setting_get autoCloseIdleMin); am=$(setting_get autoCleanThresholdMB)
-    printf '{"autoCloseIdleMin":%s,"autoCleanThresholdMB":%s}' "${ac:-0}" "${am:-0}"
+    ar=$(setting_get autoRestartLeakAt)
+    printf '{"autoCloseIdleMin":%s,"autoCleanThresholdMB":%s,"autoRestartLeakAt":%s}' \
+        "${ac:-0}" "${am:-0}" "${ar:-0}"
 }
 cmd_setconfig() {  # setconfig <key> <non-negative-integer>; validates then persists
     local key="${1:?}" val="${2:?}" tmp
-    case "$key" in autoCloseIdleMin|autoCleanThresholdMB) ;; *) printf 'err badkey'; return 0 ;; esac
+    case "$key" in autoCloseIdleMin|autoCleanThresholdMB|autoRestartLeakAt) ;; *) printf 'err badkey'; return 0 ;; esac
     case "$val" in ''|*[!0-9]*) printf 'err badval'; return 0 ;; esac
     mkdir -p "$(dirname "$SETTINGS_FILE")"
     tmp="$SETTINGS_FILE.t"
@@ -578,10 +580,22 @@ cmd_setconfig() {  # setconfig <key> <non-negative-integer>; validates then pers
 cmd_autotick() {  # enforce the opt-in auto rules; a cheap no-op while both are 0.
     # Called periodically by the dashboard applet. Only ever signals processes or
     # deletes regenerable caches — sign-ins and data dirs are never touched.
-    local am ac slug dir d secs mt now dev
+    local am ac ar slug dir d secs mt now dev mains n
     am=$(setting_get autoCleanThresholdMB); ac=$(setting_get autoCloseIdleMin)
-    am=${am:-0}; ac=${ac:-0}
-    [ "$am" -eq 0 ] && [ "$ac" -eq 0 ] && { printf 'ok'; return 0; }
+    ar=$(setting_get autoRestartLeakAt)
+    am=${am:-0}; ac=${ac:-0}; ar=${ar:-0}
+    [ "$am" -eq 0 ] && [ "$ac" -eq 0 ] && [ "$ar" -eq 0 ] && { printf 'ok'; return 0; }
+    if [ "$ar" -gt 0 ]; then  # auto-restart a profile leaking >= ar /dev/ptmx masters
+        # Profiles only — never the default (same invariant as auto-clean/close).
+        # restart reclaims the leaked fds; sign-in and data are untouched.
+        for slug in $(all_profile_slugs); do
+            mains=$(main_pids_for_dir "$INSTANCES_DIR/$slug")
+            [ -z "$mains" ] && continue
+            # shellcheck disable=SC2086
+            n=$(ptmx_count_for_pids $(tree_pids $mains))
+            [ "${n:-0}" -ge "$ar" ] && cmd_restart "$slug" >/dev/null
+        done
+    fi
     if [ "$am" -gt 0 ]; then  # auto-clean stopped profiles over the disk threshold
         for slug in $(all_profile_slugs); do
             dir="$INSTANCES_DIR/$slug"

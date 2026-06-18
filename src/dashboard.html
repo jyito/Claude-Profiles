@@ -215,7 +215,7 @@
 <div class="scrim" id="setmodal" onclick="if(event.target===this)toggleSet(false)">
   <div class="modal">
     <h2>Settings</h2>
-    <p>Automatic maintenance — both off by default. They only ever clear regenerable caches or close idle terminals; sign-ins are never touched.</p>
+    <p>Automatic maintenance — all off by default. They only clear regenerable caches, close idle terminals, or restart a leaking profile; sign-ins and data are never touched.</p>
     <div class="setrow">
       <div class="t">Auto-clean stopped profiles</div>
       <div class="d">Clears caches when a stopped profile's disk use exceeds the limit.</div>
@@ -236,6 +236,16 @@
         <option value="60">After 1 hour</option>
         <option value="120">After 2 hours</option>
         <option value="240">After 4 hours</option>
+      </select>
+    </div>
+    <div class="setrow">
+      <div class="t">Auto-restart on terminal-handle leak</div>
+      <div class="d warn">⚠ Restarts a profile once it holds this many leaked handles (a Claude Desktop bug). Its windows close and reopen — login kept. The default instance is never auto-restarted.</div>
+      <select id="set-restart" onchange="saveSetting('autoRestartLeakAt', this.value)">
+        <option value="0">Off</option>
+        <option value="150">At 150 leaked</option>
+        <option value="250">At 250 leaked</option>
+        <option value="350">At 350 leaked</option>
       </select>
     </div>
     <div class="row"><button class="ghost" onclick="toggleSet(false)">Close</button></div>
@@ -480,6 +490,7 @@ function updateRemote(info) {   // pushed by the host after `engine remoteinfo <
 function updateConfig(c) {
   var s = document.getElementById("set-clean"); if (s) s.value = String(c.autoCleanThresholdMB || 0);
   var t = document.getElementById("set-close"); if (t) t.value = String(c.autoCloseIdleMin || 0);
+  var r = document.getElementById("set-restart"); if (r) r.value = String(c.autoRestartLeakAt || 0);
 }
 function saveSetting(key, val) {
   document.title = "cp:setconfig:" + key + ":" + val;
