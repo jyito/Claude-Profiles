@@ -44,12 +44,16 @@ That means:
 
   <!-- SCREENSHOT — save as assets/drilldown.png (≥1000px wide). An expanded running card showing the terminals table; crop to the card. -->
   <!-- ![A running profile expanded to its live terminals table](assets/drilldown.png) — uncomment once the screenshot exists -->
-- **Automatic maintenance (opt-in)** — Settings can auto-clear caches on stopped profiles over a size limit and auto-close terminals idle past a threshold. Both are off by default and local-only.
+- **Terminal-handle leak guard** — Claude Desktop leaks `/dev/ptmx` master handles (one per terminal session, never released); enough of them across instances can exhaust the system pool and wedge the whole Mac. The dashboard counts them per instance, shows a quiet *"N leaked"* stat once it matters, and offers a two-step **Restart to free handles** in **+ Details** — the only way to reclaim another process's handles. Optional auto-restart over a threshold heals it unattended.
+- **Menu-bar switcher** — a menu-bar item lists every account; click one to focus or launch it without opening the dashboard.
+- **Keyboard switching** — **⌘⌥1–9** focuses an instance while the dashboard is up; for the same chord *globally*, a copy-paste [Hammerspoon recipe](docs/HOTKEYS.md) drives the headless `engine focus` (your own optional tool — the app ships no global hooks).
+- **Automatic maintenance (opt-in)** — Settings can auto-clear caches on stopped profiles over a size limit, auto-close terminals idle past a threshold, and auto-restart a leaking instance. All off by default and local-only.
 - **Show Window** — with many instances and many windows, one click raises every window of a *specific* instance. It targets the process by PID via `NSRunningApplication`, which works even though all instances share Claude's bundle identifier — and needs no Accessibility permissions.
 - **Cleanup utilities** — graceful quit, force-quit of a full process tree (releases stuck terminals), per-profile cache clearing, and an Emergency Stop killswitch. Cache clearing only ever deletes regenerable Electron caches; it refuses to run against a live instance and never touches sign-ins.
 - **Safe removal** — deleting a profile's app takes one confirmation; deleting its saved login requires literally typing `DELETE`.
 - **Graceful degradation** — if the dashboard window can't open on a given macOS version, the app automatically falls back to a native-dialog interface with the same capabilities.
-- **CLI for power users** — `cli/claude-profiles.sh` mirrors everything for scripting, plus a `code-alias` command for per-account [Claude Code](https://docs.claude.com/en/docs/claude-code/overview) config dirs, and a `remote` command that runs a profile's Claude Code session in `screen` so you can **SSH into it from your iPad** — real remote sessions with no network server (see [docs/REMOTE.md](docs/REMOTE.md)).
+- **Remote, from your iPad** — each card's **Remote** button runs that profile's Claude Code session in `screen` and shows copy-paste SSH lines (same-network and, with Tailscale, any-network) so you can **SSH into it from your iPad** — real remote sessions, no network server. A mint dot marks accounts whose session is already live, and the modal includes a **QR of the attach line** to read straight onto your phone's camera. (See [docs/REMOTE.md](docs/REMOTE.md).)
+- **CLI for power users** — `cli/claude-profiles.sh` mirrors everything for scripting, plus a `code-alias` command for per-account [Claude Code](https://docs.claude.com/en/docs/claude-code/overview) config dirs and the same `remote` flow on the command line.
 
 ## Requirements
 
@@ -113,10 +117,12 @@ flowchart TD
 
 ## Roadmap
 
+- [x] Per-profile icon badging (distinct Dock/Spotlight icon per account)
+- [x] Menu-bar quick switcher
+- [x] Keyboard profile switching (⌘⌥1–9 + optional global Hammerspoon recipe)
 - [ ] Developer ID signing + notarization for friction-free public distribution
+- [ ] Homebrew cask (`brew install --cask claude-profiles`) — follows signing
 - [ ] Compiled SwiftUI dashboard (current window host is AppleScriptObjC by design — zero deps — but a signed Swift app unlocks richer UI)
-- [ ] Menu-bar quick switcher
-- [ ] Per-profile icon tinting/badging
 
 ## Contributing
 
