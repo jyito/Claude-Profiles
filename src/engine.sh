@@ -153,6 +153,13 @@ ptmx_max() {  # the system /dev/ptmx ceiling; 0 if the key isn't readable (older
     sysctl -n kern.tty.ptmx_max 2>/dev/null || printf '0'
 }
 
+remote_live() {  # is slug $1's Claude Code `screen` session (claude-<slug>) running?
+    # Matches the session name as a whole token (trailing whitespace) so claude-work
+    # doesn't match claude-work2 — same boundary cmd_remoteinfo uses. Reads the
+    # caller's SCREEN_SNAP (one `screen -ls` per stats tick) when set.
+    printf '%s\n' "${SCREEN_SNAP:-$(screen -ls 2>/dev/null)}" | grep -qE "[.]claude-$1[[:space:]]"
+}
+
 resolve_mains() {  # main PID(s) for a profile slug, or the default instance when slug is "default".
     # Keeps terminals/closeterm/throttle correctly scoped to the requested
     # instance's OWN tree — the default's PIDs come from the default detection,
@@ -218,23 +225,27 @@ EOF
         ptys=$(pty_count_for_pids $pids)
         ptmx=$(ptmx_count_for_pids $pids)
     fi
-    local color
+    local color remote=false
+    remote_live "$2" && remote=true   # is this profile's Claude Code session live?
     # shellcheck disable=SC2046
     color=$(printf '#%02X%02X%02X' $(badge_color_for "$2"))  # same color as the Dock badge
-    printf '{"name":"%s","slug":"%s","running":%s,"cpu":%s,"mem":%s,"procs":%s,"ptys":%s,"ptmx":%s,"ptmxMax":%s,"disk":%s,"opens":%s,"last":"%s","color":"%s"}' \
-        "$1" "$2" "$running" "${cpu:-0}" "${mem:-0}" "${nproc:-0}" "${ptys:-0}" "${ptmx:-0}" "${PTMX_MAX:-0}" "$disk" "$opens" "$last" "$color"
+    printf '{"name":"%s","slug":"%s","running":%s,"cpu":%s,"mem":%s,"procs":%s,"ptys":%s,"ptmx":%s,"ptmxMax":%s,"disk":%s,"opens":%s,"last":"%s","color":"%s","remote":%s}' \
+        "$1" "$2" "$running" "${cpu:-0}" "${mem:-0}" "${nproc:-0}" "${ptys:-0}" "${ptmx:-0}" "${PTMX_MAX:-0}" "$disk" "$opens" "$last" "$color" "$remote"
 }
 
 cmd_stats() {
     local out="[" first=1 app name slug
     # One full-system ps for the whole tick. Every helper called below reads this
     # via dynamic scope instead of spawning its own ps (see PS_SNAP note above).
-    local PS_SNAP PTMX_MAX
+    local PS_SNAP PTMX_MAX SCREEN_SNAP
     PS_SNAP=$(ps axo pid=,ppid=,command=)
     PTMX_MAX=$(ptmx_max)
+    SCREEN_SNAP=$(screen -ls 2>/dev/null)   # one listing per tick; remote_live reads it
     # default instance
     local def
     def=$(printf '%s\n' "$PS_SNAP" | awk '/Claude\.app\/Contents\/MacOS\/Claude/ && !/--user-data-dir/ && !/Helper/ {print $1; exit}')
+    local dremote=false
+    remote_live default && dremote=true   # default's Claude Code session (claude-default)
     if [ -n "$def" ]; then
         local pids cpu mem nproc ptys ptmx
         # shellcheck disable=SC2086
@@ -244,10 +255,10 @@ $(usage_for_pids $pids)
 EOF
         ptys=$(pty_count_for_pids $pids)
         ptmx=$(ptmx_count_for_pids $pids)
-        out+="{\"name\":\"Claude (default)\",\"slug\":\"\",\"running\":true,\"cpu\":$cpu,\"mem\":$mem,\"procs\":$nproc,\"ptys\":$ptys,\"ptmx\":$ptmx,\"ptmxMax\":$PTMX_MAX,\"disk\":-1,\"opens\":0,\"last\":\"\",\"color\":\"#6E6A62\"}"
+        out+="{\"name\":\"Claude (default)\",\"slug\":\"\",\"running\":true,\"cpu\":$cpu,\"mem\":$mem,\"procs\":$nproc,\"ptys\":$ptys,\"ptmx\":$ptmx,\"ptmxMax\":$PTMX_MAX,\"disk\":-1,\"opens\":0,\"last\":\"\",\"color\":\"#6E6A62\",\"remote\":$dremote}"
         first=0
     else
-        out+="{\"name\":\"Claude (default)\",\"slug\":\"\",\"running\":false,\"cpu\":0,\"mem\":0,\"procs\":0,\"ptys\":0,\"ptmx\":0,\"ptmxMax\":$PTMX_MAX,\"disk\":-1,\"opens\":0,\"last\":\"\",\"color\":\"#6E6A62\"}"
+        out+="{\"name\":\"Claude (default)\",\"slug\":\"\",\"running\":false,\"cpu\":0,\"mem\":0,\"procs\":0,\"ptys\":0,\"ptmx\":0,\"ptmxMax\":$PTMX_MAX,\"disk\":-1,\"opens\":0,\"last\":\"\",\"color\":\"#6E6A62\",\"remote\":$dremote}"
         first=0
     fi
     while IFS= read -r app; do

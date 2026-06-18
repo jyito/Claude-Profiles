@@ -70,6 +70,10 @@ intended to go public once docs/screenshots/signing are in place.
   `stats` also emits per-instance `ptmx` (leaked masters held, NOT deduped — vs
   `ptys`, the deduped real terminals) and `ptmxMax` (`sysctl -n kern.tty.ptmx_max`
   ceiling) so the dashboard can warn before the pool exhausts and wedges the Mac.
+  `stats` also emits a per-instance `remote` boolean — whether that profile's Claude
+  Code `screen` session (`claude-<slug>`) is live — via `remote_live`, fed by one
+  `screen -ls` per tick (`SCREEN_SNAP`, dynamic scope); read-only, never starts a
+  session. The card's Remote button shows a mint live-dot when true.
   `remoteinfo <slug>` starts/reuses the
   profile's Claude Code `screen` session (`~/.claude-code-instances/<slug>`) and
   emits JSON (`session`/`user`/`host`/`tailscaleIp`/`alreadyRunning`) for the

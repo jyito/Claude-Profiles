@@ -167,6 +167,16 @@ check "opens counted"          "printf '%s' '$S' | grep -q '\"opens\":2'"
 check "mainpid resolves"       "[ \"\$('$ENGINE' mainpid business)\" = 100 ]"
 check "defaultpid resolves"    "[ \"\$('$ENGINE' defaultpid)\" = 200 ]"
 
+echo "== remote session status (stats remote field) =="
+# With a live claude-business screen session, business is remote:true; default
+# (no claude-default session) is remote:false. Token boundary avoids prefix bleed.
+printf '\t12345.claude-business\t(Detached)\n' > "$WORK/screen-sessions"
+RS=$("$ENGINE" stats)
+rm -f "$WORK/screen-sessions"
+check "stats: live profile is remote:true"  "printf '%s' '$RS' | python3 -c 'import sys,json; d=json.load(sys.stdin); print([p[\"remote\"] for p in d if p[\"slug\"]==\"business\"][0])' | grep -qx True"
+check "stats: default is remote:false"      "printf '%s' '$RS' | python3 -c 'import sys,json; d=json.load(sys.stdin); print([p[\"remote\"] for p in d if p[\"slug\"]==\"\"][0])' | grep -qx False"
+check "stats: no screen → all remote:false" "printf '%s' '$S' | python3 -c 'import sys,json; d=json.load(sys.stdin); print(any(p[\"remote\"] for p in d))' | grep -qx False"
+
 echo "== terminals (drill-down data) =="
 T=$("$ENGINE" terminals business)
 check "terminals is valid JSON"   "printf '%s' '$T' | python3 -m json.tool >/dev/null"
@@ -513,7 +523,15 @@ try {
   if (hasAction && hasConfirm && !onFace) leakclean=1;
   restartArmed=null; expanded=null;
 } catch(e){}
-console.log(cards, sw, sp, rm, drill, tiers, (loadCls.indexOf('hidden')>-1?1:0), lock, avatarColor, swatches, remotebtn, detailsbtn, rmfill, rmcta, defclean, ddrill, leakhidden, bannerhidden, leakstat, banner, leakclean);
+// Remote live-dot: a profile with remote:true renders the mint .rdot on its Remote button.
+let rdot=0;
+try {
+  const rr=JSON.parse(JSON.stringify(d)); const rp=rr.find(p=>p.slug); rp.remote=true;
+  expanded=null; fullRender(rr);
+  const g=(E['grid']||{}).innerHTML||'';
+  if (g.indexOf('class=\"rdot\"')>-1 && g.indexOf('session is live')>-1) rdot=1;
+} catch(e){}
+console.log(cards, sw, sp, rm, drill, tiers, (loadCls.indexOf('hidden')>-1?1:0), lock, avatarColor, swatches, remotebtn, detailsbtn, rmfill, rmcta, defclean, ddrill, leakhidden, bannerhidden, leakstat, banner, leakclean, rdot);
 " 2>/dev/null)
     check "cards render"        "[ \"\$(echo '$R' | awk '{print \$1}')\" -ge 3 ]"
     check "Show Window buttons" "[ \"\$(echo '$R' | awk '{print \$2}')\" = 2 ]"
@@ -536,6 +554,7 @@ console.log(cards, sw, sp, rm, drill, tiers, (loadCls.indexOf('hidden')>-1?1:0),
     check "quiet leak stat past threshold"        "[ \"\$(echo '$R' | awk '{print \$19}')\" = 1 ]"
     check "system banner near ptmx ceiling"       "[ \"\$(echo '$R' | awk '{print \$20}')\" = 1 ]"
     check "leak cleanup lives in + Details"       "[ \"\$(echo '$R' | awk '{print \$21}')\" = 1 ]"
+    check "remote live-dot on Remote button"      "[ \"\$(echo '$R' | awk '{print \$22}')\" = 1 ]"
 else
     echo "  - node not found, skipping JS render tests"
 fi

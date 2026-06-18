@@ -76,6 +76,8 @@
              transition: background-color .12s ease, border-color .12s ease, color .12s ease, transform .06s ease; }
   .cardbtn:hover { border-color:#5F5E5A; color:#F1EFE8; }
   .cardbtn:active { transform:scale(.99); }
+  .rdot { display:inline-block; width:6px; height:6px; border-radius:50%; background:#5DCAA5;
+          vertical-align:middle; margin-left:3px; box-shadow:0 0 4px #5DCAA5; }
   .drill { margin-top:12px; border-top:.5px solid #2e2c25; padding-top:12px; }
   .drill h4 { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:#888780;
               font-weight:500; margin:0 0 8px; }
@@ -588,6 +590,13 @@ function subText(p) {
   return s;
 }
 function expLabel(p) { return expanded === effSlug(p) ? "− Details" : "+ Details"; }
+// Remote button label — a mint live-dot when this profile's Claude Code session
+// is up (so you can tell at a glance which accounts are remotely reachable).
+function remoteLabel(p) {
+  return p.remote
+    ? 'Remote <span class="rdot" title="Claude Code session is live"></span>'
+    : "Remote";
+}
 function leaking(p) { return p.running && (p.ptmx || 0) >= LEAK_PER; }
 // The leaked-handle cleanup row that lives inside + Details. Restarting the
 // instance is the only way to reclaim the fds (you can't free another process's
@@ -630,7 +639,8 @@ function structureSig(data) {
   for (var i = 0; i < data.length; i++) {
     var p = data[i];
     s.push((p.slug || "_default") + "|" + (p.running ? 1 : 0) + "|" +
-           (expanded === effSlug(p) ? 1 : 0) + "|" + (confirmStep[p.slug] || 0));
+           (expanded === effSlug(p) ? 1 : 0) + "|" + (confirmStep[p.slug] || 0) + "|" +
+           (p.remote ? 1 : 0));
   }
   return s.join(";") + "#" + (closeArmed || "") + "#" + (restartArmed || "");
 }
@@ -715,7 +725,7 @@ function fullRender(data) {
     html += "</div>";
     if (p.slug && (p.running || !confirmStep[p.slug])) {
       html += '<div class="cardrow">' +
-        '<button class="cardbtn" onclick="act(\'remote\',\'' + p.slug + '\')">Remote</button>' +
+        '<button class="cardbtn" onclick="act(\'remote\',\'' + p.slug + '\')">' + remoteLabel(p) + '</button>' +
         '<button class="cardbtn" id="exp-' + key + '" onclick="toggleExpand(\'' + p.slug + '\')">' + expLabel(p) + '</button>' +
         '</div>';
       if (expanded === effSlug(p)) html += drillPanel(p);
@@ -724,7 +734,7 @@ function fullRender(data) {
       // ~/.claude-code-instances/default — never touches the default's data dir)
       // and, when running, a terminals-only "+ Details" (NO Cleanup — that would
       // delete the off-limits default data dir; NO badge picker).
-      html += '<div class="cardrow"><button class="cardbtn" onclick="act(\'remote\',\'default\')">Remote</button>';
+      html += '<div class="cardrow"><button class="cardbtn" onclick="act(\'remote\',\'default\')">' + remoteLabel(p) + '</button>';
       if (p.running) html += '<button class="cardbtn" id="exp-default" onclick="toggleExpand(\'default\')">' + expLabel(p) + '</button>';
       html += '</div>';
       if (p.running && expanded === "default") html += drillPanel(p);
