@@ -1,19 +1,46 @@
 # Changelog
 
 ## [Unreleased]
-- **Terminal-handle leak detection + cleanup.** Claude Desktop leaks `/dev/ptmx`
-  master handles (one per terminal session, never released); enough of them across
-  instances exhausts the system pool (`kern.tty.ptmx_max`) and can wedge the whole
-  Mac. The dashboard now counts them per instance and shows a quiet **"N leaked"**
-  stat in a card's status line once it's worth noticing. The cleanup lives in
-  **+ Details**: a two-step **Restart to free handles** (arm → confirm) with a
-  clear warning that it quits and reopens Claude (open windows and running
-  terminals close; login and saved chats are kept). A top banner appears only in a
-  true system-wide emergency (≥80% of the ceiling). Restart cycles just that
-  instance (TERM → wait → force if needed → relaunch) — the only way to reclaim
-  the handles, since you can't free another process's fds from outside. Honest
-  framing throughout: it's a Claude Desktop bug. New engine `restart <slug>`
-  action and `ptmx`/`ptmxMax` stats fields; new `cp:restart` bridge verb.
+
+### Terminal-handle leak (the `/dev/ptmx` wedge)
+- **Detection + cleanup.** Claude Desktop leaks `/dev/ptmx` master handles (one per
+  terminal session, never released); enough of them across instances exhausts the
+  system pool (`kern.tty.ptmx_max`) and can wedge the whole Mac. The dashboard now
+  counts them per instance and shows a **"N leaked"** stat on the card's status line
+  — visible on the collapsed card whenever there's any leak, brightening once it
+  crosses the threshold (~50) where a restart is worth doing. The cleanup lives in
+  **+ Details**: a two-step **Restart to free handles** (arm → confirm) warning that
+  it quits and reopens Claude (windows + running terminals close; login and saved
+  chats are kept). A top banner appears only in a true system-wide emergency (≥80%
+  of the ceiling). Restart cycles just that instance (TERM → wait → force → relaunch)
+  — the only way to reclaim the handles, since you can't free another process's fds
+  from outside. New engine `restart <slug>` action and `ptmx`/`ptmxMax` stats fields;
+  new `cp:restart` bridge verb.
+- **Opt-in auto-restart.** Settings can auto-restart a profile once it crosses a
+  chosen leaked-handle threshold (`autoRestartLeakAt`, default off), enforced by the
+  existing `autotick` sweep. Profiles only — never the default.
+
+### Switching
+- **Menu-bar switcher.** A persistent menu-bar item lists every account (running ones
+  marked ●); click one to focus or launch it without opening the dashboard, plus
+  Show Dashboard / Quit. Closing the dashboard window now hides it to the menu bar
+  (Quit via the menu or ⌘Q). New engine `menulist` command.
+- **Keyboard switching.** ⌘⌥1–9 focuses the Nth instance while the dashboard is
+  focused; a copy-paste Hammerspoon recipe (`docs/HOTKEYS.md`) drives a new headless
+  `engine focus <slug>` for the same chord globally — zero-dependency, the app ships
+  no global hooks.
+
+### Remote
+- **Live session status** — a mint dot on each card's Remote button marks accounts
+  whose Claude Code `screen` session is already running (new `remote` stats field).
+- **QR of the attach line** — the Remote modal renders a QR of the SSH attach line
+  (a self-contained, zero-dependency byte-mode QR encoder) so you can read it onto a
+  phone/iPad camera.
+
+### Docs
+- README refreshed with the new features + roadmap; `docs/SIGNING.md` and a draft
+  Homebrew cask groundwork for signed distribution (blocked on an Apple Developer
+  account).
 
 ## [0.5.1] — 2026-06-16
 - **Remote on the default card too**, with a terminals-only **+ Details** view
