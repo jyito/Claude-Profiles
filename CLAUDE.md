@@ -61,9 +61,12 @@ intended to go public once docs/screenshots/signing are in place.
   internal term). Disk via `du` cached 30s in `$TMPDIR` (live `du` on multi-GB
   dirs is too slow). The dispatch is guarded by a `BASH_SOURCE`==`$0` check so
   the test suite can source the file and unit-test the attribution functions.
-  Actions: `open quit force restart clean create remove rebadge purge mainpid
-  defaultpid quitdefault forcedefault opendefault terminals closeterm throttle
-  getconfig setconfig autotick remoteinfo copy`. `restart <slug>` (slug or
+  Actions: `open quit force restart focus clean create remove rebadge purge
+  mainpid defaultpid quitdefault forcedefault opendefault terminals closeterm
+  throttle getconfig setconfig autotick remoteinfo copy`. `focus <slug|default>`
+  raises an instance's windows by PID (System Events frontmost) — the headless
+  twin of the applet's in-process focus, for external callers like the optional
+  Hammerspoon global-hotkey recipe (`docs/HOTKEYS.md`). `restart <slug>` (slug or
   `default`) cycles an instance — TERM the tree, wait ~5s, force-`kill -9` if
   still alive, then relaunch — the ONLY way to reclaim the `/dev/ptmx` master fds
   Claude Desktop leaks (you can't free another process's fds from outside).

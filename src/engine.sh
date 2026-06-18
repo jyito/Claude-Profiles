@@ -285,6 +285,17 @@ EOF
     return 1
 }
 
+cmd_focus() {  # raise an instance's windows by slug (or "default"). Headless twin of
+    # the applet's in-process focus — for external callers (e.g. a Hammerspoon
+    # global-hotkey recipe). System Events `set frontmost` reliably travels across
+    # Spaces (asks the CALLER for Automation once). osascript is a macOS built-in.
+    local slug="${1:?}" pid
+    case "$slug" in default) : ;; *[!a-z0-9]*) printf 'err invalid slug'; return 0 ;; esac
+    pid=$(resolve_mains "$slug" | head -n 1)
+    [ -z "$pid" ] && { printf 'err not running'; return 0; }
+    osascript -e "tell application \"System Events\" to set frontmost of (first application process whose unix id is $pid) to true" >/dev/null 2>&1
+    printf 'ok'
+}
 cmd_open()  { local w; w=$(wrapper_for_slug "$1") && "$w/Contents/MacOS/launcher" & }
 cmd_mainpid() { main_pids_for_dir "$INSTANCES_DIR/${1:?}" | head -n 1; }
 cmd_throttle() {  # lower this instance's OWN process tree CPU priority (renice +10).
@@ -665,6 +676,7 @@ cmd_copy() {  # put text on the clipboard for the dashboard's Copy buttons (macO
 if [ "${BASH_SOURCE[0]:-$0}" = "$0" ]; then
 case "${1:-stats}" in
     stats) cmd_stats ;;
+    focus) cmd_focus "${2:?}" ;;
     open)  cmd_open  "${2:?}" ;;
     quit)  cmd_quit  "${2:?}" ;;
     force) cmd_force "${2:?}" ;;

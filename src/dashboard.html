@@ -439,6 +439,16 @@ function toggleNp(show) {
   if (show) { f.className = "scrim show"; document.getElementById("npname").focus(); }
   else { f.className = "scrim"; document.getElementById("npname").value = ""; rerender(); }
 }
+// In-app profile switch: ⌘⌥1..9 focuses the Nth instance (card order — default = 1,
+// then profiles). Only fires while the dashboard window is focused; for the same
+// chord GLOBALLY (any app), see docs/HOTKEYS.md (optional Hammerspoon recipe → the
+// headless `engine focus <slug>`).
+function hotkeyFocus(n) {
+  if (!lastData || n < 1 || n > lastData.length) return false;
+  var p = lastData[n - 1];
+  act(p.slug ? "focus" : "focusdefault", p.slug || "");
+  return true;
+}
 document.addEventListener("keydown", function(e) {
   if (e.key === "Escape") {
     if (document.getElementById("npmodal").className.indexOf("show") > -1) toggleNp(false);
@@ -446,6 +456,8 @@ document.addEventListener("keydown", function(e) {
     else if (document.getElementById("setmodal").className.indexOf("show") > -1) toggleSet(false);
     else if (document.getElementById("remotemodal").className.indexOf("show") > -1) toggleRemote(false);
     else if (expanded) { expanded = null; rerender(); }
+  } else if (e.metaKey && e.altKey && !e.shiftKey && /^[1-9]$/.test(e.key)) {
+    if (hotkeyFocus(parseInt(e.key, 10))) e.preventDefault();
   }
 });
 function toggleSet(show) {
