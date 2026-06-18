@@ -23,6 +23,8 @@ property enginePath : "__RESOURCES__/engine.sh"
 property pollTimer : missing value
 property didSetup : false
 property idleCount : 0
+property statusItem : missing value -- menu-bar switcher item (retained here)
+property statusMenu : missing value
 property statsTmp : "" -- path the background `stats` run writes to (set in setupWindow)
 property termPrefix : "" -- prefix for per-slug background `terminals` output files
 
@@ -74,7 +76,97 @@ on setupWindow()
 	try
 		do shell script quoted form of enginePath & " stats > " & quoted form of (statsTmp & ".tmp") & " 2>/dev/null && mv " & quoted form of (statsTmp & ".tmp") & " " & quoted form of statsTmp & " &"
 	end try
+	my setupMenuBar()
 end setupWindow
+
+on setupMenuBar()
+	-- A persistent menu-bar item to focus/launch any profile without raising the
+	-- dashboard window. The item is retained in `statusItem`; its menu rebuilds on
+	-- open via the delegate (menuNeedsUpdate:), so it's always fresh and costs
+	-- nothing while closed.
+	try
+		set bar to current application's NSStatusBar's systemStatusBar()
+		set statusItem to bar's statusItemWithLength:(current application's NSVariableStatusItemLength)
+		set img to missing value
+		try
+			set img to current application's NSImage's imageWithSystemSymbolName:"square.on.square" accessibilityDescription:"Claude Profiles"
+		end try
+		if img is not missing value then
+			img's setTemplate:true
+			(statusItem's button())'s setImage:img
+		else
+			(statusItem's button())'s setTitle:"CP"
+		end if
+		set statusMenu to current application's NSMenu's alloc()'s init()
+		statusMenu's setDelegate:me
+		statusItem's setMenu:statusMenu
+	end try
+end setupMenuBar
+
+on menuNeedsUpdate:menu
+	-- Rebuild the switcher menu from the engine's lightweight `menulist`
+	-- (slug<TAB>name<TAB>running) just before it opens.
+	try
+		menu's removeAllItems()
+		set listText to ""
+		try
+			set listText to do shell script quoted form of enginePath & " menulist"
+		end try
+		repeat with aPar in (paragraphs of listText)
+			set aLine to aPar as text
+			if aLine is not "" then
+				set f to my splitText(aLine, tab)
+				if (count of f) ≥ 3 then
+					set theSlug to item 1 of f
+					set theName to item 2 of f
+					set mark to "    "
+					if (item 3 of f) is "1" then set mark to "●  "
+					set mi to (current application's NSMenuItem's alloc()'s initWithTitle:(mark & theName) action:"menuClicked:" keyEquivalent:"")
+					mi's setTarget:me
+					mi's setRepresentedObject:theSlug
+					menu's addItem:mi
+				end if
+			end if
+		end repeat
+		menu's addItem:(current application's NSMenuItem's separatorItem())
+		set showItem to (current application's NSMenuItem's alloc()'s initWithTitle:"Show Dashboard" action:"showDashboard:" keyEquivalent:"")
+		showItem's setTarget:me
+		menu's addItem:showItem
+		set quitItem to (current application's NSMenuItem's alloc()'s initWithTitle:"Quit Claude Profiles" action:"quitApp:" keyEquivalent:"q")
+		quitItem's setTarget:me
+		menu's addItem:quitItem
+	end try
+end menuNeedsUpdate:
+
+on menuClicked:sender
+	try
+		set s to (sender's representedObject()) as text
+		if s is "default" then
+			my focusInstance("focusdefault", "")
+		else
+			my focusInstance("focus", s)
+		end if
+	end try
+end menuClicked:
+
+on showDashboard:sender
+	try
+		theWindow's makeKeyAndOrderFront:(missing value)
+		activate
+	end try
+end showDashboard:
+
+on quitApp:sender
+	quit
+end quitApp:
+
+on reopen
+	-- Dock-icon click or the manager re-launching while we live in the menu bar.
+	try
+		theWindow's makeKeyAndOrderFront:(missing value)
+		activate
+	end try
+end reopen
 
 on checkBridge:aTimer
 	if not didSetup then return
@@ -154,15 +246,13 @@ end pushRemote
 on idle
 	if not didSetup then return 2
 	try
-		-- quit when the window is closed (but not when minimized)
-		if ((theWindow's isVisible()) as boolean) is false and ((theWindow's isMiniaturized()) as boolean) is false then
-			if pollTimer is not missing value then pollTimer's invalidate()
-			quit
-			return 2
-		end if
-		my pushStats()
+		-- The app now persists in the menu bar (the switcher), so closing the window
+		-- HIDES rather than quits — Quit is on the menu-bar menu (or ⌘Q). While the
+		-- window is hidden we skip the stats sweep (nothing to paint) but keep the
+		-- auto rules running, so a leaking/over-disk profile is still handled.
+		if ((theWindow's isVisible()) as boolean) then my pushStats()
 		-- enforce opt-in auto rules roughly every 16s (every 8th 2s tick); the
-		-- engine no-ops cheaply when both settings are disabled (the default).
+		-- engine no-ops cheaply when all settings are disabled (the default).
 		set idleCount to idleCount + 1
 		if idleCount mod 8 = 0 then do shell script quoted form of enginePath & " autotick >/dev/null 2>&1 &"
 	end try

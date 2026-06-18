@@ -274,6 +274,28 @@ EOF
     printf '%s]' "$out"
 }
 
+cmd_menulist() {  # one line per instance for the menu-bar switcher:
+    #   slug<TAB>display-name<TAB>running(1|0)
+    # "default" is the sentinel slug for the default instance, listed first.
+    # Lighter than `stats` (no metrics) — cheap to call on every menu open.
+    local PS_SNAP def app name slug
+    PS_SNAP=$(ps axo pid=,ppid=,command=)
+    def=$(printf '%s\n' "$PS_SNAP" | awk '/Claude\.app\/Contents\/MacOS\/Claude/ && !/--user-data-dir/ && !/Helper/ {print $1; exit}')
+    if [ -n "$def" ]; then printf 'default\tClaude (default)\t1\n'; else printf 'default\tClaude (default)\t0\n'; fi
+    while IFS= read -r app; do
+        [ -n "$app" ] || continue
+        name=$(display_name_of "$app")
+        slug=$(bundle_id_of "$app" | sed "s/^$BUNDLE_ID_PREFIX\.//")
+        if [ -n "$(main_pids_for_dir "$INSTANCES_DIR/$slug")" ]; then
+            printf '%s\t%s\t1\n' "$slug" "$name"
+        else
+            printf '%s\t%s\t0\n' "$slug" "$name"
+        fi
+    done <<EOF
+$(profile_wrappers)
+EOF
+}
+
 wrapper_for_slug() {
     local app
     while IFS= read -r app; do
@@ -676,6 +698,7 @@ cmd_copy() {  # put text on the clipboard for the dashboard's Copy buttons (macO
 if [ "${BASH_SOURCE[0]:-$0}" = "$0" ]; then
 case "${1:-stats}" in
     stats) cmd_stats ;;
+    menulist) cmd_menulist ;;
     focus) cmd_focus "${2:?}" ;;
     open)  cmd_open  "${2:?}" ;;
     quit)  cmd_quit  "${2:?}" ;;

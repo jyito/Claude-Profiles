@@ -116,6 +116,14 @@ intended to go public once docs/screenshots/signing are in place.
   grant alive across launches), then `open`s it (re-`open` focuses the existing
   instance). Bridges `terminals`/`getconfig` back to the page via
   `updateTerminals`/`updateConfig`; runs `autotick` every ~16th idle tick.
+  Also hosts the **menu-bar switcher**: an `NSStatusItem` (retained in a property,
+  template SF Symbol) whose menu rebuilds on open via the `menuNeedsUpdate:`
+  delegate from `engine menulist` (slug⇥name⇥running), each row reusing
+  `focusInstance` by PID. Because the status item must persist, closing the window
+  no longer quits — `on idle` just stops the stats sweep while hidden; **Quit** is
+  on the menu (or ⌘Q), and `on reopen` re-shows the window. Menu-item target/action
+  (`setTarget:me` + `menuClicked:`) is one of the few callbacks AppleScriptObjC can
+  do without the title-bridge.
 - **`badge-icon.applescript`** — zero-dep AppleScriptObjC icon compositor called
   by `engine.sh`'s `badge_icon`. Draws a colored disc + the profile's initial
   onto a base icon in a headless `NSBitmapImageRep` context (no window — runs

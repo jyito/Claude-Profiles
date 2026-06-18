@@ -177,6 +177,14 @@ check "stats: live profile is remote:true"  "printf '%s' '$RS' | python3 -c 'imp
 check "stats: default is remote:false"      "printf '%s' '$RS' | python3 -c 'import sys,json; d=json.load(sys.stdin); print([p[\"remote\"] for p in d if p[\"slug\"]==\"\"][0])' | grep -qx False"
 check "stats: no screen → all remote:false" "printf '%s' '$S' | python3 -c 'import sys,json; d=json.load(sys.stdin); print(any(p[\"remote\"] for p in d))' | grep -qx False"
 
+echo "== menulist (menu-bar switcher data) =="
+# slug<TAB>name<TAB>running(1|0); default sentinel first, business running (pid 100).
+check "menulist lists default first"     "[ \"\$('$ENGINE' menulist | head -1 | cut -f1)\" = default ]"
+check "menulist marks default running"   "[ \"\$('$ENGINE' menulist | head -1 | cut -f3)\" = 1 ]"
+check "menulist default carries name"    "[ \"\$('$ENGINE' menulist | head -1 | cut -f2)\" = 'Claude (default)' ]"
+check "menulist marks running profile 1" "'$ENGINE' menulist | awk -F'\t' '\$1==\"business\"{print \$3}' | grep -qx 1"
+check "menulist marks a stopped profile" "'$ENGINE' menulist | awk -F'\t' '\$3==0' | grep -q ."
+
 echo "== terminals (drill-down data) =="
 T=$("$ENGINE" terminals business)
 check "terminals is valid JSON"   "printf '%s' '$T' | python3 -m json.tool >/dev/null"
@@ -382,6 +390,14 @@ check "settings save wired"      "grep -q 'saveSetting(' '$ROOT/src/dashboard.ht
 check "auto-close warning shown" "grep -q 'can look idle' '$ROOT/src/dashboard.html'"
 check "config push hook present" "grep -q 'function updateConfig' '$ROOT/src/dashboard.html'"
 check "applet routes autotick"   "grep -q 'autotick' '$ROOT/src/dashboard.applescript'"
+
+echo "== menu-bar switcher (applet wiring) =="
+check "applet creates a status item"   "grep -q 'statusItemWithLength' '$ROOT/src/dashboard.applescript'"
+check "applet menu rebuilds on open"   "grep -q 'on menuNeedsUpdate:' '$ROOT/src/dashboard.applescript'"
+check "applet menu calls menulist"     "grep -q ' menulist' '$ROOT/src/dashboard.applescript'"
+check "applet switcher reuses focus"   "grep -q 'on menuClicked:' '$ROOT/src/dashboard.applescript' && grep -q 'focusInstance' '$ROOT/src/dashboard.applescript'"
+check "applet persists for menu bar"   "grep -q 'on reopen' '$ROOT/src/dashboard.applescript' && grep -q 'on quitApp:' '$ROOT/src/dashboard.applescript'"
+check "applet compiles (osacompile)"   "if command -v osacompile >/dev/null 2>&1; then osacompile -o '$WORK/applet-check.app' '$ROOT/src/dashboard.applescript' >/dev/null 2>&1; rc=\$?; rm -rf '$WORK/applet-check.app'; [ \$rc -eq 0 ]; else true; fi"
 
 echo "== polish =="
 check "loading screen present"  "grep -q 'id=\"loading\"' '$ROOT/src/dashboard.html'"
