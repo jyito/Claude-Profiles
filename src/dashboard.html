@@ -167,7 +167,8 @@
                background:#3a2a14; color:#F0C674; border:1px solid #6b4e1f; }
   .sysbanner.hidden { display:none; }
   .sysbanner b { color:#F7D98A; }
-  .sub .leaked { color:#E0A579; }          /* quiet amber stat in the card status line */
+  .sub .leaked { color:#E0A579; }                          /* always-visible amber leak stat */
+  .sub .leaked.hot { color:#F0997B; font-weight:600; }     /* brightens past the restart threshold */
   .leakrow { display:flex; align-items:center; gap:10px; margin-top:12px;
              border-top:.5px solid #2e2c25; padding-top:12px; }
   .leakrow b { color:#E0A579; font-weight:600; }
@@ -709,9 +710,14 @@ function updateStats(data) {
 function subText(p) {
   if (!p.running) return "Stopped" + (p.opens ? " · opened " + p.opens + "× · last " + p.last : "");
   var s = "Running · " + p.procs + " procs · " + p.ptys + " terminals";
-  // The /dev/ptmx leak shown as a quiet stat (not a banner). The cleanup action
-  // lives in + Details. Only surfaced once it's worth caring about (>= LEAK_PER).
-  if (leaking(p)) s += ' · <span class="leaked">' + p.ptmx + " leaked</span>";
+  // The /dev/ptmx leak shown as a quiet stat on the card face (collapsed too) —
+  // always visible once there's any leak, so you can watch it climb. It brightens
+  // (.hot) past LEAK_PER, when restarting is worth doing. Cleanup is in + Details.
+  if ((p.ptmx || 0) > 0) {
+    s += ' · <span class="leaked' + (leaking(p) ? " hot" : "") +
+         '" title="leaked terminal handles macOS can’t reclaim — a Claude Desktop bug; restart to free them">' +
+         p.ptmx + " leaked</span>";
+  }
   return s;
 }
 function expLabel(p) { return expanded === effSlug(p) ? "− Details" : "+ Details"; }
