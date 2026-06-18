@@ -515,6 +515,52 @@ else
     echo "  - node not found, skipping JS render tests"
 fi
 
+echo "== QR encoder (Remote modal) =="
+if command -v node >/dev/null 2>&1; then
+    Q=$(node -e "
+const fs=require('fs');
+const html=fs.readFileSync('$ROOT/src/dashboard.html','utf8');
+const js=html.match(/<script>([\s\S]*)<\/script>/)[1];
+global.document={getElementById:()=>null,addEventListener:()=>{},title:''};
+global.setTimeout=()=>{}; global.setInterval=()=>{};
+eval(js);
+let fmt=1, gf=0, struct=0, roundtrip=0, svg=0, bump=0;
+// 1) format-info BCH known-answer (ECC level L, masks 0..7) — authoritative table
+const KAT=['111011111000100','111001011110011','111110110101010','111100010011101','110011000101111','110001100011000','110110001000001','110100101110110'];
+for(let mk=0;mk<8;mk++){ if((qrFormatBits(mk)&0x7FFF)!==parseInt(KAT[mk],2)) fmt=0; }
+// 2) GF(256) table spot-check (α^8 = 29 with primitive 0x11D)
+gf = (QR_EXP[8]===29 && QR_LOG[29]===8) ? 1 : 0;
+// 3) structure: short text → v1 (21×21), finder corner is solid 7×7 with a ring
+const b=qrBuild('hello');
+if(b && b.size===21){
+  const m=b.matrix;
+  if(m[0][0]===1&&m[0][6]===1&&m[6][0]===1&&m[6][6]===1&&m[1][1]===0&&m[2][2]===1&&m[0][7]===0) struct=1;
+}
+// 4) round-trip: undo mask + read zigzag → original data+ec codewords
+function readback(b){
+  const m=b.matrix.map(r=>r.slice());
+  for(let r=0;r<b.size;r++)for(let c=0;c<b.size;c++){ if(!b.reserved[r][c]&&qrMaskCond(b.mask,r,c)) m[r][c]^=1; }
+  const bits=[]; for(let right=b.size-1;right>=1;right-=2){ if(right===6)right=5;
+    for(let vert=0;vert<b.size;vert++)for(let j=0;j<2;j++){ const col=right-j,row=(((right+1)&2)===0)?(b.size-1-vert):vert; if(!b.reserved[row][col]) bits.push(m[row][col]); } }
+  const cw=[]; for(let i=0;i+8<=bits.length&&cw.length<b.codewords.length;i+=8){ let v=0; for(let k=0;k<8;k++)v=(v<<1)|bits[i+k]; cw.push(v); } return cw;
+}
+const rb=readback(b); roundtrip=(rb.length===b.codewords.length && rb.every((v,i)=>v===b.codewords[i]))?1:0;
+// 5) svg output; 6) longer text bumps the version (bigger matrix)
+const s=qrSvg('hello'); if(s.indexOf('<svg')===0 && s.indexOf('<rect')>-1) svg=1;
+const big=qrBuild('ssh someuser@100.115.92.14 -t \"screen -r claude-personal-account\"');
+if(big && big.size>21) bump=1;
+console.log(fmt,gf,struct,roundtrip,svg,bump);
+" 2>/dev/null)
+    check "QR format-info BCH matches spec table" "[ \"\$(echo '$Q' | awk '{print \$1}')\" = 1 ]"
+    check "QR GF(256) tables correct"             "[ \"\$(echo '$Q' | awk '{print \$2}')\" = 1 ]"
+    check "QR finder patterns + v1 size"          "[ \"\$(echo '$Q' | awk '{print \$3}')\" = 1 ]"
+    check "QR data round-trips (placement+mask)"  "[ \"\$(echo '$Q' | awk '{print \$4}')\" = 1 ]"
+    check "QR renders inline SVG"                 "[ \"\$(echo '$Q' | awk '{print \$5}')\" = 1 ]"
+    check "QR bumps version for longer text"      "[ \"\$(echo '$Q' | awk '{print \$6}')\" = 1 ]"
+else
+    echo "  - node not found, skipping QR tests"
+fi
+
 echo
 printf '%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
