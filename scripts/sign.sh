@@ -6,6 +6,9 @@
 # someone ELSE downloads your DMG — without it they get a "can't be opened"
 # prompt and must right-click -> Open. Requires an Apple Developer ID.
 #
+# Full maintainer walkthrough (enrollment, notarytool profile, Homebrew cask):
+#   docs/SIGNING.md
+#
 # Config via environment:
 #   SIGN_IDENTITY   required — e.g. "Developer ID Application: Jane Doe (AB12CD34EF)"
 #                   list yours with:  security find-identity -v -p codesigning
