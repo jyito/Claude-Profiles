@@ -28,7 +28,10 @@ rebuild or move the app.)
 | 10 | On the stopped **default** card, click **Open** | The base Claude (default account) launches. |
 | 11 | Click **Remote** on a profile card | The Remote modal opens titled "Remote access — <name>" with copy-paste SSH lines; **Copy** lands the command in the clipboard; the modal is clearly labeled Claude Code (terminal), not the Desktop window. |
 | 12 | Let an instance accumulate 50+ leaked terminal handles (a long-lived session does this on its own). Its status line shows a quiet **"N leaked"** stat. Open **+ Details** → click **Restart to free handles** → **Confirm restart** | The drill-down shows the cleanup row with a warning that Claude quits and reopens. On confirm, that instance quits and relaunches (still signed in); the "N leaked" stat clears as the count drops. Other instances untouched. *(Hard to force on demand — only shows past 50 leaked handles.)* |
-| 13 | Quit the dashboard (close its window) | The applet exits cleanly (no lingering process). |
+| 13 | Look at the macOS menu bar (top-right) | A **window-stack** menu-bar icon is present. Click it → a menu lists every profile + Claude (default), running ones marked `●`, plus **Show Dashboard** and **Quit Claude Profiles**. |
+| 14 | With the dashboard window closed/hidden, click a **profile row** in the menu-bar menu | That instance's windows come forward — no dashboard window needed. |
+| 15 | Close the dashboard window (red button) | The app does **not** quit — it stays in the menu bar. Click the menu's **Show Dashboard** (or the Dock icon) → the window returns. |
+| 16 | Menu-bar menu → **Quit Claude Profiles** (or ⌘Q) | The app exits cleanly (menu-bar icon disappears, no lingering process). |
 
 If Show Window does nothing **and** no Automation prompt appears:
 `tccutil reset AppleEvents local.claude-profiles.dashboard`, then relaunch and
