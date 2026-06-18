@@ -459,20 +459,20 @@ try {
   updateRemote({slug:'business',session:'claude-business',user:'me',host:'mac.local',tailscaleIp:'',alreadyRunning:false});
   if((E['rm-ts-cta']||{style:{}}).style.display!=='none' && (E['rm-ts-cmd']||{style:{}}).style.display==='none') rmcta=1;
 } catch(e){}
-// /dev/ptmx leak: quiet status-line stat (>= threshold) + cleanup inside Details;
-// system banner near the ceiling. All hidden/absent when clean.
-let leakhidden=0, bannerhidden=0, leakstat=0, banner=0, leakclean=0;
+// /dev/ptmx leak: always-visible status-line stat (any leak, collapsed card too),
+// brightening (.hot) past the threshold; cleanup inside Details; banner near ceiling.
+let lowstat=0, bannerhidden=0, leakstat=0, banner=0, leakclean=0;
 try {
   expanded=null; restartArmed=null;
-  fullRender(d);                              // real stats: low ptmx → no stat, no banner
+  fullRender(d);                              // real stats: low ptmx → stat shown, NOT hot
   const gl=(E['grid']||{}).innerHTML||'';
-  leakhidden = (gl.indexOf('leaked')===-1)?1:0;
+  lowstat = (gl.indexOf('leaked')>-1 && gl.indexOf('leaked hot')===-1)?1:0;
   bannerhidden = (((E['sysbanner']||{}).className||'').indexOf('hidden')>-1)?1:0;
   const hi=JSON.parse(JSON.stringify(d)), r=hi.find(p=>p.running); r.ptmx=420; r.ptmxMax=511;
   const es=(r.slug||'default');
   fullRender(hi);                             // one instance near the ceiling
   const gh=(E['grid']||{}).innerHTML||'';
-  if (gh.indexOf('420 leaked')>-1 && gh.indexOf('class=\"leaked\"')>-1) leakstat=1;  // quiet stat, not a box
+  if (gh.indexOf('420 leaked')>-1 && gh.indexOf('leaked hot')>-1) leakstat=1;  // shown + brightened
   if (((E['sysbanner']||{}).className||'')==='sysbanner') banner=1;
   // cleanup action lives in + Details, NOT on the card face
   const onFace = gh.indexOf('Restart to free handles')>-1;
@@ -488,7 +488,7 @@ try {
   if (hasAction && hasConfirm && !onFace) leakclean=1;
   restartArmed=null; expanded=null;
 } catch(e){}
-console.log(cards, sw, sp, rm, drill, tiers, (loadCls.indexOf('hidden')>-1?1:0), lock, avatarColor, swatches, remotebtn, detailsbtn, rmfill, rmcta, defclean, ddrill, leakhidden, bannerhidden, leakstat, banner, leakclean);
+console.log(cards, sw, sp, rm, drill, tiers, (loadCls.indexOf('hidden')>-1?1:0), lock, avatarColor, swatches, remotebtn, detailsbtn, rmfill, rmcta, defclean, ddrill, lowstat, bannerhidden, leakstat, banner, leakclean);
 " 2>/dev/null)
     check "cards render"        "[ \"\$(echo '$R' | awk '{print \$1}')\" -ge 3 ]"
     check "Show Window buttons" "[ \"\$(echo '$R' | awk '{print \$2}')\" = 2 ]"
@@ -506,9 +506,9 @@ console.log(cards, sw, sp, rm, drill, tiers, (loadCls.indexOf('hidden')>-1?1:0),
     check "remote modal shows tailscale CTA"      "[ \"\$(echo '$R' | awk '{print \$14}')\" = 1 ]"
     check "default card has Remote + Details"     "[ \"\$(echo '$R' | awk '{print \$15}')\" = 1 ]"
     check "default drill is terminals, no badges" "[ \"\$(echo '$R' | awk '{print \$16}')\" = 1 ]"
-    check "no leak stat when ptmx low"            "[ \"\$(echo '$R' | awk '{print \$17}')\" = 1 ]"
+    check "leak stat shown (not hot) when low"    "[ \"\$(echo '$R' | awk '{print \$17}')\" = 1 ]"
     check "no system banner when ptmx low"        "[ \"\$(echo '$R' | awk '{print \$18}')\" = 1 ]"
-    check "quiet leak stat past threshold"        "[ \"\$(echo '$R' | awk '{print \$19}')\" = 1 ]"
+    check "leak stat brightens past threshold"    "[ \"\$(echo '$R' | awk '{print \$19}')\" = 1 ]"
     check "system banner near ptmx ceiling"       "[ \"\$(echo '$R' | awk '{print \$20}')\" = 1 ]"
     check "leak cleanup lives in + Details"       "[ \"\$(echo '$R' | awk '{print \$21}')\" = 1 ]"
 else
