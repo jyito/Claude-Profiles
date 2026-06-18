@@ -216,6 +216,14 @@ check "restart rejects traversal slug"  "[ \"\$('$ENGINE' restart '../../evil')\
 check "applet routes restart"           "grep -q 'restart' '$ROOT/src/dashboard.applescript'"
 check "restart control in UI"           "grep -q 'armRestart' '$ROOT/src/dashboard.html'"
 
+echo "== focus (headless, for global hotkeys) =="
+# osascript is shimmed; business (pid 100) is running, so focus resolves + returns ok.
+check "focus a running profile (ok)"    "[ \"\$('$ENGINE' focus business)\" = ok ]"
+check "focus the default (ok)"          "[ \"\$('$ENGINE' focus default)\" = ok ]"
+check "focus rejects bad slug"          "[ \"\$('$ENGINE' focus 'bad slug')\" = 'err invalid slug' ]"
+check "focus errors when not running"   "[ \"\$('$ENGINE' focus ghostprof)\" = 'err not running' ]"
+check "hotkeys doc ships hammerspoon"   "grep -qi 'hammerspoon' '$ROOT/docs/HOTKEYS.md' && grep -q ' focus ' '$ROOT/docs/HOTKEYS.md'"
+
 echo "== settings & auto-clean =="
 check "getconfig defaults to zero"   "[ \"\$('$ENGINE' getconfig)\" = '{\"autoCloseIdleMin\":0,\"autoCleanThresholdMB\":0}' ]"
 check "setconfig persists threshold" "[ \"\$('$ENGINE' setconfig autoCleanThresholdMB 500)\" = ok ]"
@@ -488,7 +496,20 @@ try {
   if (hasAction && hasConfirm && !onFace) leakclean=1;
   restartArmed=null; expanded=null;
 } catch(e){}
-console.log(cards, sw, sp, rm, drill, tiers, (loadCls.indexOf('hidden')>-1?1:0), lock, avatarColor, swatches, remotebtn, detailsbtn, rmfill, rmcta, defclean, ddrill, leakhidden, bannerhidden, leakstat, banner, leakclean);
+// ⌘⌥N hotkey: hotkeyFocus(1) → default (cp:focusdefault); hotkeyFocus(2) → 1st profile.
+let hotkey=0;
+try {
+  updateStats(d);
+  document.title='';
+  hotkeyFocus(1);
+  const t1=document.title;
+  document.title='';
+  hotkeyFocus(2);
+  const t2=document.title;
+  const prof=d.find(p=>p.slug);
+  if (t1==='cp:focusdefault' && t2===('cp:focus:'+(prof?prof.slug:''))) hotkey=1;
+} catch(e){}
+console.log(cards, sw, sp, rm, drill, tiers, (loadCls.indexOf('hidden')>-1?1:0), lock, avatarColor, swatches, remotebtn, detailsbtn, rmfill, rmcta, defclean, ddrill, leakhidden, bannerhidden, leakstat, banner, leakclean, hotkey);
 " 2>/dev/null)
     check "cards render"        "[ \"\$(echo '$R' | awk '{print \$1}')\" -ge 3 ]"
     check "Show Window buttons" "[ \"\$(echo '$R' | awk '{print \$2}')\" = 2 ]"
@@ -511,6 +532,7 @@ console.log(cards, sw, sp, rm, drill, tiers, (loadCls.indexOf('hidden')>-1?1:0),
     check "quiet leak stat past threshold"        "[ \"\$(echo '$R' | awk '{print \$19}')\" = 1 ]"
     check "system banner near ptmx ceiling"       "[ \"\$(echo '$R' | awk '{print \$20}')\" = 1 ]"
     check "leak cleanup lives in + Details"       "[ \"\$(echo '$R' | awk '{print \$21}')\" = 1 ]"
+    check "⌘⌥N hotkey focuses Nth instance"        "[ \"\$(echo '$R' | awk '{print \$22}')\" = 1 ]"
 else
     echo "  - node not found, skipping JS render tests"
 fi
