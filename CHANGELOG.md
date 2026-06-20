@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-06-20
+
+First signed + notarized release (Developer ID). Downloads open with a normal
+double-click — no Gatekeeper "Open Anyway" detour.
+
 ### Terminal-handle leak (the `/dev/ptmx` wedge)
 - **Detection + cleanup.** Claude Desktop leaks `/dev/ptmx` master handles (one per
   terminal session, never released); enough of them across instances exhausts the

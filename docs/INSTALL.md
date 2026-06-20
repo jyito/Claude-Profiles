@@ -10,25 +10,15 @@ Each profile is its own Claude app in your Dock, permanently signed in.
      onto the **Applications** shortcut in the window.
    - **Zip:** double-click it (Finder unpacks **Claude Profiles.app**), then drag
      **Claude Profiles.app** into your **Applications** folder.
-2. **First launch — get past Gatekeeper.** The app is open-source and **unsigned**
-   (no paid Apple Developer ID yet), so macOS blocks the very first open. This is
-   expected. On current macOS (Sequoia / macOS 15 and later):
-   1. Double-click **Claude Profiles**. macOS says it "can't be opened because
-      Apple cannot check it for malicious software." Click **Done**.
-   2. Open **System Settings → Privacy & Security**, scroll to the **Security**
-      section, and next to *"Claude Profiles was blocked…"* click **Open Anyway**.
-   3. Confirm **Open Anyway** and authenticate with Touch ID / your password.
+2. **First launch.** Double-click **Claude Profiles**. Because it came from the
+   internet, macOS shows a one-time *"Claude Profiles is an app downloaded from the
+   Internet. Are you sure you want to open it?"* — click **Open**. The app is signed
+   with an Apple Developer ID and **notarized by Apple**, so you do *not* hit the
+   "unidentified developer / can't be opened" block. Every launch after is a plain
+   double-click.
 
-   The app opens, and **every launch after this is a normal double-click**.
-
-   *(On macOS 14 (Sonoma) and earlier you can instead right-click the app →
-   **Open** → **Open** — but Apple removed that shortcut for unsigned apps in
-   macOS 15, so use the System Settings path above.)*
-
-   Why is it unsigned? See [Privacy & security](#privacy--security) — the app
-   handles no credentials, opens no network connections, and the profile apps it
-   creates are generated locally on your Mac. Signing is on the roadmap and will
-   remove this prompt entirely.
+   *(Releases before v0.6.0 were unsigned and needed System Settings → Privacy &
+   Security → Open Anyway on first launch. Grab the latest signed release instead.)*
 
 ## Use
 

@@ -28,7 +28,37 @@ and it's a prerequisite for a clean Homebrew cask.
    > Do this yourself in a terminal — the Claude Profiles tooling never handles
    > your Apple credentials.
 
-## Release flow
+## Release via CI (recommended)
+
+`.github/workflows/release.yml` signs + notarizes automatically on a version-tag
+push — no local signing needed. One-time, add these **GitHub repo secrets**
+(Settings → Secrets and variables → Actions). Set them yourself; they never pass
+through this tooling:
+
+| Secret | What |
+|--------|------|
+| `SIGN_IDENTITY` | `Developer ID Application: Your Name (TEAMID)` (gates the sign step) |
+| `APPLE_DEVELOPER_ID_P12_BASE64` | your Developer ID cert exported as `.p12`, base64'd: `base64 -i cert.p12 \| pbcopy` |
+| `P12_PASSWORD` | the password you set when exporting the `.p12` |
+| `APPLE_ID` | your Apple ID email |
+| `APPLE_TEAM_ID` | your 10-char Team ID |
+| `APPLE_APP_SPECIFIC_PASSWORD` | an app-specific password (appleid.apple.com → Sign-In and Security) |
+
+Export the `.p12` from **Keychain Access** → your *Developer ID Application* key →
+right-click → Export, set a password (that's `P12_PASSWORD`).
+
+Then cut a release:
+```sh
+# version already bumped in src/Info.plist + a matching ## [x.y.z] CHANGELOG section
+git tag v0.6.0 && git push origin v0.6.0
+```
+The workflow runs the macOS test matrix, builds, imports the cert into a throwaway
+keychain, runs `scripts/sign.sh` (sign → notarize → staple), extracts release notes
+from the CHANGELOG's `[x.y.z]` section, appends `SHA256SUMS.txt`, attaches SLSA build
+provenance, and publishes the GitHub Release with the signed DMG/zip. (The sign step
+is skipped automatically if `SIGN_IDENTITY` isn't set, so unsigned releases still work.)
+
+## Manual / local signing (alternative)
 
 ```sh
 bash scripts/build.sh                       # assemble dist/Claude Profiles.app (+ DMG)
