@@ -1,6 +1,9 @@
 # Changelog
 
 ## [Unreleased]
+
+## [0.6.2] — 2026-06-21
+UI polish.
 - **Fixed:** the transient status toast ("Launching…", etc.) moved from the top-right (where it overlapped the New Profile button) to an upper-left pill that stays clear of the buttons.
 
 ## [0.6.1] — 2026-06-20
