@@ -66,7 +66,7 @@ That means:
 
 ## Install (users)
 
-**[⬇ Download the latest release](https://github.com/jyito/Claude-Profiles/releases/latest)** — under **Assets**, grab `Claude-Profiles.dmg` (or `.zip`), then open it and drag **Claude Profiles.app** to Applications. The app is **unsigned** (open-source, no paid Apple cert yet), so macOS blocks the *first* launch — get past it once with **System Settings → Privacy & Security → Open Anyway**. Full steps and why it's safe: **[docs/INSTALL.md](docs/INSTALL.md)**.
+**[⬇ Download the latest release](https://github.com/jyito/Claude-Profiles/releases/latest)** — under **Assets**, grab `Claude-Profiles.dmg` (or `.zip`), then open it and drag **Claude Profiles.app** to Applications. Releases are **signed with an Apple Developer ID and notarized**, so it opens with a normal double-click (just the standard one-time "downloaded from the internet" confirmation). Full steps and why it's safe: **[docs/INSTALL.md](docs/INSTALL.md)**.
 
 ## Build from source
 
@@ -108,7 +108,7 @@ flowchart TD
 
 ## Known limitations
 
-- **Gatekeeper**: downloaded releases are unsigned, so the first launch is blocked once — clear it with **System Settings → Privacy & Security → Open Anyway** (the old right-click → Open shortcut was removed in macOS 15; see [docs/INSTALL.md](docs/INSTALL.md)). Apps the manager generates locally carry no quarantine and open normally.
+- **Gatekeeper**: releases (v0.6.0+) are signed with an Apple Developer ID and notarized, so they open with a normal double-click (just the standard one-time "downloaded from the internet" confirmation). Apps the manager generates locally carry no quarantine and open normally.
 - **Deep-link logins**: macOS routes `claude://` callbacks to one instance. If a browser login lands in the wrong window, use the login page's copy-code option. Once per profile.
 - **Spaces**: "Assign to Desktop" is unreliable across instances sharing a bundle ID; drag windows to Spaces manually and macOS remembers per session.
 - **Memory**: every instance is a full Electron app. The dashboard exists partly so you can see exactly what that costs.
@@ -120,7 +120,7 @@ flowchart TD
 - [x] Per-profile icon badging (distinct Dock/Spotlight icon per account)
 - [x] Menu-bar quick switcher
 - [x] Keyboard profile switching (⌘⌥1–9 + optional global Hammerspoon recipe)
-- [ ] Developer ID signing + notarization for friction-free public distribution
+- [x] Developer ID signing + notarization for friction-free public distribution (v0.6.0)
 - [ ] Homebrew cask (`brew install --cask claude-profiles`) — follows signing
 - [ ] Compiled SwiftUI dashboard (current window host is AppleScriptObjC by design — zero deps — but a signed Swift app unlocks richer UI)
 
