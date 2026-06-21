@@ -8,8 +8,8 @@
 # release's SHA256SUMS.txt (or `shasum -a 256 Claude-Profiles.dmg`).
 
 cask "claude-profiles" do
-  version "0.6.1"
-  sha256 "888d7892ca7559d0506ed83c75cc1fc332b7203eabc0f4e25f1184af1e21bae4"
+  version "0.6.2"
+  sha256 "076f2c7684f94e7a024ce0f6906970db72ae943a3713592fecb454965dd4d19a"
 
   url "https://github.com/jyito/Claude-Profiles/releases/download/v#{version}/Claude-Profiles.dmg",
       verified: "github.com/jyito/Claude-Profiles/"
