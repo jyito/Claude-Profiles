@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- **Fixed:** the system-wide leak banner now aligns with the profile cards and has a gap below it (was inset 22px and flush against the grid).
 
 ## [0.6.0] — 2026-06-20
 
