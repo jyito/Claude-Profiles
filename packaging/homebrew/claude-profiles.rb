@@ -18,7 +18,7 @@ cask "claude-profiles" do
   homepage "https://github.com/jyito/Claude-Profiles"
 
   # The dashboard + one-click Show Window rely on macOS 14+ behaviour.
-  depends_on macos: ">= :sonoma"
+  depends_on macos: :sonoma
 
   app "Claude Profiles.app"
 
