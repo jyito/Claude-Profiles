@@ -69,7 +69,9 @@ intended to go public once docs/screenshots/signing are in place.
   Hammerspoon global-hotkey recipe (`docs/HOTKEYS.md`). `restart <slug>` (slug or
   `default`) cycles an instance — TERM the tree, wait ~5s, force-`kill -9` if
   still alive, then relaunch — the ONLY way to reclaim the `/dev/ptmx` master fds
-  Claude Desktop leaks (you can't free another process's fds from outside).
+  Claude Desktop leaks (you can't free another process's fds from outside; root
+  cause confirmed — bundled node-pty 1.1.0-beta34, see
+  `docs/postmortems/2026-06-21-ptmx-node-pty-leak.md`).
   `stats` also emits per-instance `ptmx` (leaked masters held, NOT deduped — vs
   `ptys`, the deduped real terminals) and `ptmxMax` (`sysctl -n kern.tty.ptmx_max`
   ceiling) so the dashboard can warn before the pool exhausts and wedges the Mac.
