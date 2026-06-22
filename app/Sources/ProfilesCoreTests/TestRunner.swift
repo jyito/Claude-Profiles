@@ -28,7 +28,7 @@ func runSuite<T: XCTestCase>(_ suite: String,
 struct ProfilesCoreTestsMain {
     static func main() async {
         var tally = TestTally()
-        // Suites are registered here as each is added (Tasks 3–7).
+        await runSuite("ProfileStatTests", ProfileStatTests.allTests, &tally)
         print("Executed \(tally.passed + tally.failed) tests, with \(tally.failed) failures")
         exit(tally.failed == 0 ? 0 : 1)
     }
