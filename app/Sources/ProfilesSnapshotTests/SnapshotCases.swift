@@ -133,6 +133,20 @@ enum SnapshotCases {
                 .padding(Theme.Space.lg)
         })
 
+        // Task 8 — assembled inspector bodies by state (looser tolerance: tall composites)
+        cases.append(SnapshotCase("inspector-running-full", size: CGSize(width: 360, height: 540), tolerance: 0.015) {
+            InspectorView(stat: Fixtures.business, terminals: Fixtures.terminals,
+                          state: .warning(climbing: false)) { _ in }
+        })
+        cases.append(SnapshotCase("inspector-stopped-full", size: CGSize(width: 360, height: 480), tolerance: 0.015) {
+            InspectorView(stat: Fixtures.clientX, terminals: [], state: .calm) { _ in }
+        })
+        cases.append(SnapshotCase("inspector-default", size: CGSize(width: 360, height: 320), tolerance: 0.015) {
+            // Restricted default: terminals ONLY — structurally no clean/badge/remove.
+            InspectorView(stat: Fixtures.defaultInstance, terminals: Fixtures.terminals,
+                          state: .calm) { _ in }
+        })
+
         return cases
     }
 }

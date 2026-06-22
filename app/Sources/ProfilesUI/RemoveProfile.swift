@@ -22,6 +22,7 @@ public struct RemoveProfile: View {
     /// borrows the accent's affordance.
     private static let dangerRed = Color(hex: 0xB05242)
 
+    @Environment(\.snapshotMode) private var snapshotMode
     @State private var expanded = false
     @State private var typed = ""
 
@@ -51,21 +52,7 @@ public struct RemoveProfile: View {
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.text2)
 
-            TextField(name, text: $typed)
-                .textFieldStyle(.plain)
-                .font(.system(size: 13, design: .monospaced))
-                .foregroundStyle(Theme.text)
-                .padding(.horizontal, Theme.Space.sm)
-                .padding(.vertical, 6)
-                .background(
-                    RoundedRectangle(cornerRadius: Theme.Radius.button, style: .continuous)
-                        .fill(Theme.surface1)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: Theme.Radius.button, style: .continuous)
-                        .strokeBorder(Theme.hairlineLit, lineWidth: 1)
-                )
-                .accessibilityIdentifier("inspector-remove-field")
+            nameField
 
             HStack(spacing: Theme.Space.sm) {
                 Button {
@@ -103,5 +90,35 @@ public struct RemoveProfile: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.top, Theme.Space.xs)
+    }
+
+    /// The name-entry control. In the live app this is an editable `TextField`; in
+    /// `snapshotMode` it's a static stand-in (the native field paints as an empty
+    /// yellow box under `ImageRenderer`, so the golden draws the text directly).
+    @ViewBuilder private var nameField: some View {
+        Group {
+            if snapshotMode {
+                Text(snapshotExpanded ? name : "")
+                    .font(.system(size: 13, design: .monospaced))
+                    .foregroundStyle(Theme.text)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                TextField(name, text: $typed)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 13, design: .monospaced))
+                    .foregroundStyle(Theme.text)
+            }
+        }
+        .padding(.horizontal, Theme.Space.sm)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: Theme.Radius.button, style: .continuous)
+                .fill(Theme.surface1)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.Radius.button, style: .continuous)
+                .strokeBorder(Theme.hairlineLit, lineWidth: 1)
+        )
+        .accessibilityIdentifier("inspector-remove-field")
     }
 }
