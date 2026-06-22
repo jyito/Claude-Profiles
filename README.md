@@ -66,7 +66,13 @@ That means:
 
 ## Install (users)
 
-**[⬇ Download the latest release](https://github.com/jyito/Claude-Profiles/releases/latest)** — under **Assets**, grab `Claude-Profiles.dmg` (or `.zip`), then open it and drag **Claude Profiles.app** to Applications. Releases are **signed with an Apple Developer ID and notarized**, so it opens with a normal double-click (just the standard one-time "downloaded from the internet" confirmation). Full steps and why it's safe: **[docs/INSTALL.md](docs/INSTALL.md)**.
+**Homebrew** (easiest):
+
+```sh
+brew install --cask jyito/tap/claude-profiles
+```
+
+**Or [⬇ download the latest release](https://github.com/jyito/Claude-Profiles/releases/latest)** — under **Assets**, grab `Claude-Profiles.dmg` (or `.zip`), then open it and drag **Claude Profiles.app** to Applications. Either way, releases are **signed with an Apple Developer ID and notarized**, so it opens with a normal double-click (just the standard one-time "downloaded from the internet" confirmation). Full steps and why it's safe: **[docs/INSTALL.md](docs/INSTALL.md)**.
 
 ## Build from source
 
@@ -121,7 +127,7 @@ flowchart TD
 - [x] Menu-bar quick switcher
 - [x] Keyboard profile switching (⌘⌥1–9 + optional global Hammerspoon recipe)
 - [x] Developer ID signing + notarization for friction-free public distribution (v0.6.0)
-- [ ] Homebrew cask (`brew install --cask claude-profiles`) — follows signing
+- [x] Homebrew cask — `brew install --cask jyito/tap/claude-profiles` (v0.6.0)
 - [ ] Compiled SwiftUI dashboard (current window host is AppleScriptObjC by design — zero deps — but a signed Swift app unlocks richer UI)
 
 ## Contributing
