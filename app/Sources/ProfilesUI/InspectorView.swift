@@ -21,16 +21,20 @@ public struct InspectorView: View {
     let terminals: [TerminalInfo]
     let state: AlertState
     let onAction: (InspectorAction) -> Void
+    /// Snapshot-only: pre-arm one terminal's Close row so the armed state renders.
+    let snapshotArmedDev: String?
 
     @Environment(\.snapshotMode) private var snapshotMode
 
     public init(stat: ProfileStat,
                 terminals: [TerminalInfo],
                 state: AlertState,
+                snapshotArmedDev: String? = nil,
                 onAction: @escaping (InspectorAction) -> Void) {
         self.stat = stat
         self.terminals = terminals
         self.state = state
+        self.snapshotArmedDev = snapshotArmedDev
         self.onAction = onAction
     }
 
@@ -84,11 +88,25 @@ public struct InspectorView: View {
 
     // MARK: Body routing
     //
-    // The per-state sub-views (terminals table, throttle + leak block, clean tiers,
-    // badge picker, remove) are assembled in Tasks 4–8. Until then this is a header
-    // shell; the full composition + default gating lands in Task 8.
+    // running → terminals table (+ throttle + leak block, Task 5);
+    // stopped → clean tiers + badge picker + remove (Tasks 6–7);
+    // default → terminals ONLY (gated structurally by isDefault — Task 8).
+    // Snapshot-only `snapshotArmedDev` pre-arms one Close row for the golden.
 
     @ViewBuilder private var stateBody: some View {
-        EmptyView()
+        if stat.isDefault {
+            terminalsSection
+        } else if stat.running {
+            terminalsSection
+        } else {
+            // Stopped body (clean tiers + badge + remove) assembled in Tasks 6–7.
+            EmptyView()
+        }
+    }
+
+    private var terminalsSection: some View {
+        TerminalsTable(terminals: terminals, snapshotArmedDev: snapshotArmedDev) {
+            onAction(.closeTerminal($0))
+        }
     }
 }

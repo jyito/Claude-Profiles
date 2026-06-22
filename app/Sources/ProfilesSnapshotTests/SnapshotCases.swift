@@ -101,6 +101,12 @@ enum SnapshotCases {
             InspectorView(stat: Fixtures.business, terminals: [], state: .calm, onAction: { _ in })
         })
 
+        // Task 4 — terminals table (3 rows, the middle one armed → "Confirm")
+        cases.append(SnapshotCase("inspector-terminals", size: CGSize(width: 340, height: 180)) {
+            TerminalsTable(terminals: Fixtures.terminals, snapshotArmedDev: "/dev/ttys007") { _ in }
+                .padding(Theme.Space.lg)
+        })
+
         return cases
     }
 }
