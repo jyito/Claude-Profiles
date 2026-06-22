@@ -166,6 +166,14 @@ enum SnapshotCases {
                 onChange: { _, _ in }, onClose: {})
         })
 
+        // Task 4 — Cleanup sheet, resting + Emergency armed (the 2-step confirm state).
+        cases.append(SnapshotCase("sheet-cleanup", size: CGSize(width: 440, height: 420)) {
+            CleanupSheet(onAction: { _ in }, onClose: {})
+        })
+        cases.append(SnapshotCase("sheet-cleanup-armed", size: CGSize(width: 440, height: 420)) {
+            CleanupSheet(snapshotEmergencyArmed: true, onAction: { _ in }, onClose: {})
+        })
+
         return cases
     }
 }

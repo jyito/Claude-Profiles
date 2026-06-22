@@ -106,8 +106,21 @@ struct ProfilesApp: App {
                 onChange: { key, value in Task { await store.setConfig(key, value) } },
                 onClose: { activeSheet = nil }
             )
-        case .cleanup, .remote:
-            // Filled in by Tasks 4, 6.
+        case .cleanup:
+            CleanupSheet(
+                onAction: { action in
+                    let verb: String
+                    switch action {
+                    case .quitAll: verb = "quitall"
+                    case .cleanAll: verb = "cleanall"
+                    case .emergencyStop: verb = "killswitch"
+                    }
+                    Task { await store.perform([verb]) }
+                },
+                onClose: { activeSheet = nil }
+            )
+        case .remote:
+            // Filled in by Task 6.
             EmptyView()
         }
     }
