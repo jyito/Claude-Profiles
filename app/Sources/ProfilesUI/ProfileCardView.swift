@@ -39,9 +39,26 @@ public struct ProfileCardView: View {
             .fill(Theme.surface1)
     }
 
+    /// The severity accent border. Coral is reserved for `.critical` (≥90%);
+    /// `.warning` reads amber; `.calm` (and the restricted default instance) get
+    /// no accent. The coral *selection* ring is a separate concern handled below.
+    private var severityStroke: (color: Color, width: CGFloat)? {
+        guard !stat.isDefault else { return nil }
+        switch state {
+        case .warning: return (Theme.amber, 1.5)
+        case .critical: return (Theme.coral, 1.5)
+        case .calm: return nil
+        }
+    }
+
     private var cardStroke: some View {
-        RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
-            .strokeBorder(selected ? Theme.coral : Theme.hairline, lineWidth: selected ? 1.5 : 1)
+        // Selection (coral) wins over severity so the focused card always reads as
+        // selected; otherwise the severity accent, else the resting hairline.
+        let resolved: (Color, CGFloat) = selected
+            ? (Theme.coral, 1.5)
+            : (severityStroke ?? (Theme.hairline, 1))
+        return RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
+            .strokeBorder(resolved.0, lineWidth: resolved.1)
     }
 
     // MARK: Identity row (shared)

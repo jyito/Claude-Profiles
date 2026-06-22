@@ -47,11 +47,17 @@ public struct HandleGauge: View {
         switch state {
         case .calm:
             return formatHandles(used: used, max: max)
-        case .warning(let climbing):
-            return climbing ? "\(used) leaked  ▲ climbing" : "\(used) leaked"
+        case .warning:
+            return "\(used) leaked"
         case .critical:
             return "\(used) leaked"
         }
+    }
+
+    /// True only in the rising warn band — drives the up-arrow "climbing" tell.
+    private var climbing: Bool {
+        if case .warning(let c) = state { return c }
+        return false
     }
 
     private var labelColor: Color {
@@ -84,6 +90,17 @@ public struct HandleGauge: View {
                     .font(.system(size: 11))
                     .monospacedDigit()
                     .foregroundStyle(labelColor)
+                if climbing {
+                    // The "climbing" tell is an up-arrow (not a second warning
+                    // triangle): ⚠ N leaked  ↑ climbing.
+                    HStack(spacing: 2) {
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 9, weight: .bold))
+                        Text("climbing")
+                            .font(.system(size: 11))
+                    }
+                    .foregroundStyle(Theme.amber)
+                }
             }
         }
         .accessibilityElement(children: .ignore)

@@ -44,8 +44,10 @@ enum SnapshotCases {
                 .padding(Theme.Space.lg)
         })
         cases.append(SnapshotCase("card-running-research-warning", size: CGSize(width: 340, height: 300)) {
+            // Unselected so the amber *severity* border shows (the coral selection
+            // ring would otherwise mask it — that path is covered by window-full).
             ProfileCardView(stat: Fixtures.research, cpu: Fixtures.cpuSeriesHot,
-                            mem: Fixtures.memSeriesHot, state: .warning(climbing: true), selected: true)
+                            mem: Fixtures.memSeriesHot, state: .warning(climbing: true), selected: false)
                 .padding(Theme.Space.lg)
         })
 
