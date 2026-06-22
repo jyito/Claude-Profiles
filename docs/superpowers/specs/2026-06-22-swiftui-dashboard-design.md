@@ -161,9 +161,10 @@ disappear/reappear; Remove = typed-own-name two-step.
 ## Severity / leak model (`PtmxHysteresis`, pure logic)
 
 Per-instance handle pool = `ptmx / ptmxMax`. A sustained-breach state machine with
-hysteresis (in `ProfilesCore`, no view/clock/engine): **escalate** to warning only at
-≥90% of the ceiling **and** only after **N consecutive** breach ticks; **de-escalate**
-only below the 80% low-water band; the breach counter resets on any sub-threshold tick;
+hysteresis (in `ProfilesCore`, no view/clock/engine): enter **warning** at ≥75% of the
+ceiling, and **escalate to critical** only at ≥90% **and** only after **N consecutive**
+breach ticks; **de-escalate** from critical only below the 80% low-water band; the
+breach counter resets on any sub-threshold tick;
 slope sign drives the "▲ climbing" tell (only when rising in the warn band). Three
 always-on channels — color **+** glyph **+** number — so it survives grayscale /
 colorblindness. This is the **prime unit-test target** (crafted tick sequences,

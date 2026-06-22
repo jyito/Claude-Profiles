@@ -200,6 +200,10 @@ intended to go public once docs/screenshots/signing are in place.
 
 ```bash
 bash tests/run-tests.sh    # 124 tests; runs on macOS or Linux (mac tools shimmed)
+# SwiftUI app (Command Line Tools — no Xcode needed):
+cd app && swift build                  # build ProfilesCore + the app shell
+cd app && swift run ProfilesCoreTests  # Layer-1 logic tests (executable runner; XCTest doesn't run under CLT)
+cd app && swift run ProfilesSnapshotTests  # Layer-2 ImageRenderer render proof
 shellcheck -S error src/launcher src/engine.sh cli/claude-profiles.sh scripts/*.sh
 bash scripts/make-icon.sh  # (macOS) regenerate assets/icon.iconset from app-icon.svg via sips
 bash scripts/build.sh      # assembles dist/Claude Profiles.app (+ DMG on macOS)
