@@ -96,9 +96,11 @@ enum SnapshotCases {
 
         // ── Phase 3: Inspector drill-down ──────────────────────────────────────
 
-        // Task 3 — inspector header shell (running fixture)
-        cases.append(SnapshotCase("inspector-header", size: CGSize(width: 340, height: 120)) {
-            InspectorView(stat: Fixtures.business, terminals: [], state: .calm, onAction: { _ in })
+        // Task 3 — inspector header (the identity row over the body's eyebrow).
+        // Uses the default instance with no terminals so only the header + the
+        // "No terminals open" line render — a clean, header-focused proof.
+        cases.append(SnapshotCase("inspector-header", size: CGSize(width: 340, height: 130)) {
+            InspectorView(stat: Fixtures.defaultInstance, terminals: [], state: .calm, onAction: { _ in })
         })
 
         // Task 4 — terminals table (3 rows, the middle one armed → "Confirm")
