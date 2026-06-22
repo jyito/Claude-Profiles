@@ -57,5 +57,14 @@ struct DashboardView: View {
             states[key] = h.ingest(PtmxSample(used: stat.ptmx, max: stat.ptmxMax))
             hysteresis[key] = h
         }
+
+        // Prune per-slug state for profiles that have disappeared (deleted /
+        // transient slug) so these dicts can't grow unbounded over the window's
+        // lifetime. Render is unaffected (it maps over store.profiles).
+        let live = Set(fresh.map(\.effSlug))
+        cpuHistory = cpuHistory.filter { live.contains($0.key) }
+        memHistory = memHistory.filter { live.contains($0.key) }
+        hysteresis = hysteresis.filter { live.contains($0.key) }
+        states     = states.filter     { live.contains($0.key) }
     }
 }
