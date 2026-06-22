@@ -174,6 +174,18 @@ enum SnapshotCases {
             CleanupSheet(snapshotEmergencyArmed: true, onAction: { _ in }, onClose: {})
         })
 
+        // Task 6 — Remote sheet. Fixed RemoteInfo (live session + a fixed Tailscale
+        // IP) so the QR of the local attach command renders deterministically; steps
+        // expanded so the golden covers the setup list too.
+        cases.append(SnapshotCase("sheet-remote", size: CGSize(width: 480, height: 480)) {
+            RemoteSheet(
+                name: "Business",
+                info: RemoteInfo(slug: "business", session: "claude-business", user: "alex",
+                                 host: "studio.local", tailscaleIp: "100.92.18.4", alreadyRunning: true),
+                snapshotStepsExpanded: true,
+                onCopy: { _ in }, onClose: {})
+        })
+
         return cases
     }
 }

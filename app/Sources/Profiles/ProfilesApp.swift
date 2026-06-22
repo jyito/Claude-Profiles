@@ -13,6 +13,9 @@ struct ProfilesApp: App {
     /// Which modal (if any) is presented. The scene owns this — the sheet views are
     /// pure and never call the engine themselves (CLAUDE.md non-negotiables).
     @State private var activeSheet: DashboardSheet?
+    /// The loaded Remote info + display name, set by `presentRemote` before the
+    /// Remote sheet opens (so the sheet renders already populated).
+    @State private var loadedRemote: (name: String, info: RemoteInfo)?
 
     var body: some Scene {
         WindowGroup("Claude Profiles") {
@@ -120,8 +123,16 @@ struct ProfilesApp: App {
                 onClose: { activeSheet = nil }
             )
         case .remote:
-            // Filled in by Task 6.
-            EmptyView()
+            if let loaded = loadedRemote {
+                RemoteSheet(
+                    name: loaded.name,
+                    info: loaded.info,
+                    onCopy: { text in Task { await store.copy(text) } },
+                    onClose: { activeSheet = nil }
+                )
+            } else {
+                EmptyView()
+            }
         }
     }
 
@@ -133,8 +144,15 @@ struct ProfilesApp: App {
     }
 
     @MainActor private func presentRemote(_ slug: String) {
-        // Task 6 loads remoteInfo before presenting; placeholder for now.
-        activeSheet = .remote(slug)
+        // Load the connect info (starts/reuses the screen session) BEFORE presenting
+        // so the sheet opens already populated. The display name comes from the
+        // matching profile (the engine's RemoteInfo carries only the slug).
+        let name = store.profiles.first { $0.effSlug == slug }?.name ?? slug
+        Task {
+            let info = await store.remoteInfo(for: slug)
+            loadedRemote = (name, info)
+            activeSheet = .remote(slug)
+        }
     }
 }
 
