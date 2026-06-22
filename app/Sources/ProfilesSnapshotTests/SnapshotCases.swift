@@ -49,6 +49,18 @@ enum SnapshotCases {
                 .padding(Theme.Space.lg)
         })
 
+        // Task 6 — stopped + default ProfileCard variants
+        cases.append(SnapshotCase("card-stopped-clientx", size: CGSize(width: 340, height: 250)) {
+            ProfileCardView(stat: Fixtures.clientX, cpu: Fixtures.cpuSeries,
+                            mem: Fixtures.memSeries, state: .calm, selected: false)
+                .padding(Theme.Space.lg)
+        })
+        cases.append(SnapshotCase("card-default", size: CGSize(width: 340, height: 280)) {
+            ProfileCardView(stat: Fixtures.defaultInstance, cpu: Fixtures.cpuSeries,
+                            mem: Fixtures.memSeries, state: .calm, selected: false)
+                .padding(Theme.Space.lg)
+        })
+
         return cases
     }
 }
