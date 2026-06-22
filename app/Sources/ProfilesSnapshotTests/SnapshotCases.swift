@@ -149,6 +149,43 @@ enum SnapshotCases {
                           state: .calm) { _ in }
         })
 
+        // ── Phase 4: Sheets ────────────────────────────────────────────────────
+
+        // Task 2 — New Profile sheet with a fixed typed name. "Marketing" → cksum
+        // % 6 == 2 → amber badge with M (the live preview the user sees as they type).
+        cases.append(SnapshotCase("sheet-newprofile", size: CGSize(width: 420, height: 280)) {
+            NewProfileSheet(snapshotText: "Marketing", onCreate: { _ in }, onCancel: {})
+        })
+
+        // Task 3 — Settings sheet. A fixture config with each rule on a non-Off
+        // option (1 GB / 1 hour / 250) so the stand-in pills read distinctly; the
+        // two footgun rules show their amber ⚠ notes.
+        cases.append(SnapshotCase("sheet-settings", size: CGSize(width: 460, height: 470)) {
+            SettingsSheet(
+                config: ProfileConfig(autoCleanThresholdMB: 1024, autoCloseIdleMin: 60, autoRestartLeakAt: 250),
+                onChange: { _, _ in }, onClose: {})
+        })
+
+        // Task 4 — Cleanup sheet, resting + Emergency armed (the 2-step confirm state).
+        cases.append(SnapshotCase("sheet-cleanup", size: CGSize(width: 440, height: 420)) {
+            CleanupSheet(onAction: { _ in }, onClose: {})
+        })
+        cases.append(SnapshotCase("sheet-cleanup-armed", size: CGSize(width: 440, height: 420)) {
+            CleanupSheet(snapshotEmergencyArmed: true, onAction: { _ in }, onClose: {})
+        })
+
+        // Task 6 — Remote sheet. Fixed RemoteInfo (live session + a fixed Tailscale
+        // IP) so the QR of the local attach command renders deterministically; steps
+        // expanded so the golden covers the setup list too.
+        cases.append(SnapshotCase("sheet-remote", size: CGSize(width: 480, height: 480)) {
+            RemoteSheet(
+                name: "Business",
+                info: RemoteInfo(slug: "business", session: "claude-business", user: "alex",
+                                 host: "studio.local", tailscaleIp: "100.92.18.4", alreadyRunning: true),
+                snapshotStepsExpanded: true,
+                onCopy: { _ in }, onClose: {})
+        })
+
         return cases
     }
 }

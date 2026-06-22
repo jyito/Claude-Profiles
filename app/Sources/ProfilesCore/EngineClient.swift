@@ -53,4 +53,53 @@ public struct EngineClient: EngineRunning {
             return try TerminalInfo.decodeList(from: out)
         }.value
     }
+
+    public func getConfig() async throws -> ProfileConfig {
+        let path = enginePath
+        return try await Task.detached(priority: .utility) {
+            let (out, code) = try Self.invoke(path, ["getconfig"])
+            if code != 0 { throw EngineError.nonZeroExit(code) }
+            return try ProfileConfig.decode(from: out)
+        }.value
+    }
+
+    public func setConfig(_ key: String, _ value: Int) async throws {
+        // `setconfig` exits 0 even on `err badkey`/`err badval`; `run` already
+        // surfaces those error tokens as a thrown `actionFailed`.
+        try await run(["setconfig", key, String(value)])
+    }
+
+    public func create(_ name: String) async throws -> String {
+        let path = enginePath
+        return try await Task.detached(priority: .utility) {
+            let (out, code) = try Self.invoke(path, ["create", name])
+            if code != 0 { throw EngineError.nonZeroExit(code) }
+            // `create` prints `ok <slug>` on success or `err <msg>` on failure — both
+            // exit 0, so the slug must be parsed from stdout (the generic `run` would
+            // discard it). Surface `err` as a thrown error.
+            let stdout = String(data: out, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if stdout.hasPrefix("ok ") {
+                let slug = String(stdout.dropFirst(3)).trimmingCharacters(in: .whitespaces)
+                if !slug.isEmpty { return slug }
+            }
+            throw EngineError.actionFailed(stdout.isEmpty ? "err empty create response" : stdout)
+        }.value
+    }
+
+    public func remoteInfo(_ slug: String) async throws -> RemoteInfo {
+        let path = enginePath
+        return try await Task.detached(priority: .utility) {
+            let (out, code) = try Self.invoke(path, ["remoteinfo", slug])
+            if code != 0 { throw EngineError.nonZeroExit(code) }
+            // The engine reports failure inside the JSON (`error` key), so decode
+            // unconditionally and let the sheet branch on `info.error`.
+            return try RemoteInfo.decode(from: out)
+        }.value
+    }
+
+    public func copy(_ text: String) async throws {
+        // `copy` always exits 0 and prints nothing — `run` is a clean fit.
+        try await run(["copy", text])
+    }
 }

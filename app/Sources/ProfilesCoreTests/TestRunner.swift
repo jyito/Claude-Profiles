@@ -36,6 +36,9 @@ struct ProfilesCoreTestsMain {
         await runSuite("StatsStoreTests", StatsStoreTests.allTests, &tally)
         await runSuite("EngineClientTests", EngineClientTests.allTests, &tally)
         await runSuite("EngineSeamTests", EngineSeamTests.allTests, &tally)
+        await runSuite("ConfigTests", ConfigTests.allTests, &tally)
+        await runSuite("BadgePreviewTests", BadgePreviewTests.allTests, &tally)
+        await runSuite("RemoteInfoTests", RemoteInfoTests.allTests, &tally)
         print("Executed \(tally.passed + tally.failed) tests, with \(tally.failed) failures")
         exit(tally.failed == 0 ? 0 : 1)
     }
