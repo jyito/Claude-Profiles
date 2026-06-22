@@ -43,7 +43,8 @@ struct ProfilesApp: App {
             } detail: {
                 DashboardView(store: store, selection: $selection, inspectorShown: $inspectorShown,
                               viewMode: $viewMode,
-                              onRemote: { slug in presentRemote(slug) })
+                              onRemote: { slug in presentRemote(slug) },
+                              onNewProfile: { activeSheet = .newProfile })
                     .navigationTitle("Profiles")
                     .toolbar {
                         ToolbarItem(placement: .navigation) {

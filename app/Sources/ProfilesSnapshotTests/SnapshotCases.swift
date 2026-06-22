@@ -200,6 +200,14 @@ enum SnapshotCases {
             ProfileListSnapshotContent(profiles: Fixtures.all, selection: "research")
         })
 
+        // Task 5 — empty + loading states (shimmer frozen in snapshotMode).
+        cases.append(SnapshotCase("state-empty", size: CGSize(width: 560, height: 400)) {
+            EmptyStateView()
+        })
+        cases.append(SnapshotCase("state-loading", size: CGSize(width: 760, height: 420), tolerance: 0.01) {
+            LoadingSkeletonView()
+        })
+
         return cases
     }
 }

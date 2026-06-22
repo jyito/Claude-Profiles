@@ -16,6 +16,16 @@ struct DashboardView: View {
     @Binding var viewMode: ProfileViewMode
     /// Called when a card's Remote button is tapped (scene presents the Remote sheet).
     var onRemote: (String) -> Void = { _ in }
+    /// Open the New Profile sheet (the empty-state CTA routes here, same as the toolbar).
+    var onNewProfile: () -> Void = {}
+
+    /// Dim the detail content when the window isn't key/active — a quiet inactive
+    /// tell, matching macOS sidebar/material behavior. `\.controlActiveState`
+    /// (`.key`/`.active`/`.inactive`) is the SDK-14 portable signal; macOS 15's
+    /// `\.appearsActive` (the plan's reference) isn't in this toolchain's SDK.
+    @Environment(\.controlActiveState) private var controlActiveState
+
+    private var appearsActive: Bool { controlActiveState != .inactive }
 
     @State private var cpuHistory: [String: [Double]] = [:]
     @State private var memHistory: [String: [Double]] = [:]
@@ -26,6 +36,8 @@ struct DashboardView: View {
 
     var body: some View {
         detailContent
+            // Inactive-window dim: a subtle whole-pane fade when the window loses key.
+            .opacity(appearsActive ? 1 : 0.85)
             .onChange(of: store.profiles) { _, fresh in
                 ingest(fresh)
             }
@@ -42,9 +54,20 @@ struct DashboardView: View {
             }
     }
 
-    /// Grid vs List over the same models. Both feed `selection`, so flipping the
-    /// toolbar control never loses the inspector's open instance.
+    /// State gating, then Grid vs List. The loading skeleton shows until the first
+    /// stats tick lands; an empty roster shows the empty state; otherwise the live
+    /// grid/list (both feed `selection`, so flipping view mode keeps the inspector).
     @ViewBuilder private var detailContent: some View {
+        if !store.hasLoadedOnce {
+            LoadingSkeletonView()
+        } else if store.profiles.isEmpty {
+            EmptyStateView(onNewProfile: onNewProfile)
+        } else {
+            liveContent
+        }
+    }
+
+    @ViewBuilder private var liveContent: some View {
         switch viewMode {
         case .grid:
             DashboardContent(profiles: store.profiles, cards: cards, selection: selection,
