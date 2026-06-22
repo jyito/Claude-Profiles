@@ -107,6 +107,16 @@ enum SnapshotCases {
                 .padding(Theme.Space.lg)
         })
 
+        // Task 5 — leak-restart block (amber, warning) — resting + armed
+        cases.append(SnapshotCase("inspector-leakblock-warning", size: CGSize(width: 340, height: 180)) {
+            LeakBlock(stat: Fixtures.research, state: .warning(climbing: true)) { }
+                .padding(Theme.Space.lg)
+        })
+        cases.append(SnapshotCase("inspector-leakblock-armed", size: CGSize(width: 340, height: 220)) {
+            LeakBlock(stat: Fixtures.research, state: .warning(climbing: true), snapshotArmed: true) { }
+                .padding(Theme.Space.lg)
+        })
+
         return cases
     }
 }

@@ -23,6 +23,8 @@ public struct InspectorView: View {
     let onAction: (InspectorAction) -> Void
     /// Snapshot-only: pre-arm one terminal's Close row so the armed state renders.
     let snapshotArmedDev: String?
+    /// Snapshot-only: render the leak block's armed ("Confirm Restart") state.
+    let snapshotLeakArmed: Bool
 
     @Environment(\.snapshotMode) private var snapshotMode
 
@@ -30,11 +32,13 @@ public struct InspectorView: View {
                 terminals: [TerminalInfo],
                 state: AlertState,
                 snapshotArmedDev: String? = nil,
+                snapshotLeakArmed: Bool = false,
                 onAction: @escaping (InspectorAction) -> Void) {
         self.stat = stat
         self.terminals = terminals
         self.state = state
         self.snapshotArmedDev = snapshotArmedDev
+        self.snapshotLeakArmed = snapshotLeakArmed
         self.onAction = onAction
     }
 
@@ -95,9 +99,10 @@ public struct InspectorView: View {
 
     @ViewBuilder private var stateBody: some View {
         if stat.isDefault {
+            // Restricted default: terminals ONLY — no throttle/leak/clean/badge/remove.
             terminalsSection
         } else if stat.running {
-            terminalsSection
+            runningBody
         } else {
             // Stopped body (clean tiers + badge + remove) assembled in Tasks 6–7.
             EmptyView()
@@ -107,6 +112,27 @@ public struct InspectorView: View {
     private var terminalsSection: some View {
         TerminalsTable(terminals: terminals, snapshotArmedDev: snapshotArmedDev) {
             onAction(.closeTerminal($0))
+        }
+    }
+
+    private var runningBody: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.lg) {
+            terminalsSection
+
+            VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                Button { onAction(.throttle) } label: { Text("Throttle CPU") }
+                    .buttonStyle(PillButtonStyle(.neutral))
+                    .accessibilityIdentifier("inspector-throttle")
+                Text("Lowers priority until restart.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.text3)
+            }
+
+            if stat.ptmx > 0 {
+                LeakBlock(stat: stat, state: state, snapshotArmed: snapshotLeakArmed) {
+                    onAction(.restart)
+                }
+            }
         }
     }
 }
