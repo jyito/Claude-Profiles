@@ -12,10 +12,16 @@ public struct ProfileCardView: View {
     let selected: Bool
     let onDetails: (String) -> Void
     let onRemote: (String) -> Void
+    /// Running/default: raise the instance's windows by PID (in-process focus).
+    let onShowWindow: (String) -> Void
+    /// Stopped: launch the wrapper (`engine open <slug>`).
+    let onOpen: (String) -> Void
 
     public init(stat: ProfileStat, cpu: [Double], mem: [Double], state: AlertState,
                 selected: Bool = false, onDetails: @escaping (String) -> Void = { _ in },
-                onRemote: @escaping (String) -> Void = { _ in }) {
+                onRemote: @escaping (String) -> Void = { _ in },
+                onShowWindow: @escaping (String) -> Void = { _ in },
+                onOpen: @escaping (String) -> Void = { _ in }) {
         self.stat = stat
         self.cpu = cpu
         self.mem = mem
@@ -23,6 +29,8 @@ public struct ProfileCardView: View {
         self.selected = selected
         self.onDetails = onDetails
         self.onRemote = onRemote
+        self.onShowWindow = onShowWindow
+        self.onOpen = onOpen
     }
 
     public var body: some View {
@@ -158,6 +166,7 @@ public struct ProfileCardView: View {
     private var actionRow: some View {
         HStack(spacing: Theme.Space.sm) {
             Button {
+                onShowWindow(stat.effSlug)
             } label: {
                 Text("Show Window")
             }
@@ -218,6 +227,7 @@ public struct ProfileCardView: View {
             Sparkline.ghosted(cpu)
             HStack(spacing: Theme.Space.sm) {
                 Button {
+                    onOpen(stat.effSlug)
                 } label: { Text("Open") }
                     .buttonStyle(PillButtonStyle(.mint))
                     .accessibilityIdentifier("card-\(stat.effSlug)-open")
@@ -248,6 +258,7 @@ public struct ProfileCardView: View {
             // restricted default contract (CLAUDE.md §5) is unbreakable here.
             HStack(spacing: Theme.Space.sm) {
                 Button {
+                    onShowWindow(stat.effSlug)
                 } label: { Text("Show Window") }
                     .buttonStyle(PillButtonStyle(.mint))
                     .accessibilityIdentifier("card-default-showwindow")

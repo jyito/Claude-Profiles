@@ -28,7 +28,9 @@ struct DashboardView: View {
                              selection = slug
                              inspectorShown = true
                          },
-                         onRemote: onRemote)
+                         onRemote: onRemote,
+                         onShowWindow: showWindow,
+                         onOpen: { slug in Task { await store.perform(["open", slug]) } })
             .onChange(of: store.profiles) { _, fresh in
                 ingest(fresh)
             }
@@ -43,6 +45,20 @@ struct DashboardView: View {
                     await store.loadTerminals(for: slug)
                 }
             }
+    }
+
+    // MARK: Show Window (in-process focus)
+
+    /// Resolve the instance's main PID, then raise its windows in-process. This is
+    /// the IN-PROCESS path (NSRunningApplication + a System Events fallback) — it does
+    /// NOT shell `engine focus`. Targets the PID, never the shared bundle id. A
+    /// stopped instance resolves to nil → no-op (its card shows Open, not Show Window).
+    private func showWindow(_ slug: String) {
+        Task {
+            if let pid = await store.mainPid(slug) {
+                Focus.show(pid: pid)
+            }
+        }
     }
 
     // MARK: Inspector
