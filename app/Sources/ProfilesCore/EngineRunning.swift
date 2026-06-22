@@ -23,6 +23,13 @@ public protocol EngineRunning: Sendable {
     /// is parsed and returned (the derived slug differs from the raw name). Throws
     /// `actionFailed` on the engine's `err <msg>` token.
     func create(_ name: String) async throws -> String
+    /// Start/reuse a profile's Claude Code `screen` session and decode the connect
+    /// info (`remoteinfo <slug>`). The engine reports a failure inside the JSON
+    /// (`error` key), not via exit/token, so this returns `RemoteInfo` rather than
+    /// throwing on a missing prerequisite.
+    func remoteInfo(_ slug: String) async throws -> RemoteInfo
+    /// Put text on the clipboard (`copy <text>` → `pbcopy`) for the Remote sheet's Copy buttons.
+    func copy(_ text: String) async throws
 }
 
 public extension EngineRunning {

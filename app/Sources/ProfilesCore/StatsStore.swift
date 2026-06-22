@@ -100,6 +100,28 @@ public final class StatsStore {
         }
     }
 
+    /// Load a profile's Remote-access info for the Remote sheet (starts/reuses its
+    /// Claude Code `screen` session). On a transport error returns a `RemoteInfo`
+    /// carrying the error message so the sheet always has something to show.
+    public func remoteInfo(for slug: String) async -> RemoteInfo {
+        do {
+            let info = try await engine.remoteInfo(slug)
+            lastError = info.error
+            return info
+        } catch {
+            let msg = String(describing: error)
+            lastError = msg
+            return RemoteInfo(slug: slug, session: "", user: "", host: "",
+                              tailscaleIp: "", alreadyRunning: false, error: msg)
+        }
+    }
+
+    /// Copy text to the clipboard (Remote sheet's Copy buttons).
+    public func copy(_ text: String) async {
+        do { try await engine.copy(text); lastError = nil }
+        catch { lastError = String(describing: error) }
+    }
+
     /// Remove a profile: `remove` (delete the wrapper) THEN `purge` (delete its
     /// data dir). The data dir is precious (CLAUDE.md §6), so only report success
     /// when BOTH steps succeed — a failed `purge` (orphaned data dir) must be

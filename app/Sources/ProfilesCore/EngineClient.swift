@@ -86,4 +86,20 @@ public struct EngineClient: EngineRunning {
             throw EngineError.actionFailed(stdout.isEmpty ? "err empty create response" : stdout)
         }.value
     }
+
+    public func remoteInfo(_ slug: String) async throws -> RemoteInfo {
+        let path = enginePath
+        return try await Task.detached(priority: .utility) {
+            let (out, code) = try Self.invoke(path, ["remoteinfo", slug])
+            if code != 0 { throw EngineError.nonZeroExit(code) }
+            // The engine reports failure inside the JSON (`error` key), so decode
+            // unconditionally and let the sheet branch on `info.error`.
+            return try RemoteInfo.decode(from: out)
+        }.value
+    }
+
+    public func copy(_ text: String) async throws {
+        // `copy` always exits 0 and prints nothing — `run` is a clean fit.
+        try await run(["copy", text])
+    }
 }

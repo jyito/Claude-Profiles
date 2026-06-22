@@ -14,6 +14,11 @@ public final class FixtureEngine: EngineRunning, @unchecked Sendable {
     public var createSlug = "newprofile"
     /// Records each `create(name)` argument.
     public private(set) var createNames: [String] = []
+    /// Canned remote info returned by `remoteInfo`.
+    public var remote = RemoteInfo(slug: "work", session: "claude-work", user: "me",
+                                   host: "mac.local", tailscaleIp: "100.64.0.1", alreadyRunning: false)
+    /// Records each text passed to `copy`.
+    public private(set) var copied: [String] = []
     public init(stats: [ProfileStat]) { self.stats = stats }
 
     public func stats() async throws -> [ProfileStat] {
@@ -40,5 +45,13 @@ public final class FixtureEngine: EngineRunning, @unchecked Sendable {
         if shouldThrow { throw EngineError.nonZeroExit(1) }
         createNames.append(name)
         return createSlug
+    }
+    public func remoteInfo(_ slug: String) async throws -> RemoteInfo {
+        if shouldThrow { throw EngineError.nonZeroExit(1) }
+        return remote
+    }
+    public func copy(_ text: String) async throws {
+        if shouldThrow { throw EngineError.nonZeroExit(1) }
+        copied.append(text)
     }
 }
