@@ -104,8 +104,14 @@ public struct InspectorView: View {
         } else if stat.running {
             runningBody
         } else {
-            // Stopped body (clean tiers + badge + remove) assembled in Tasks 6–7.
-            EmptyView()
+            stoppedBody
+        }
+    }
+
+    private var stoppedBody: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.lg) {
+            CleanTiers(disk: stat.disk) { onAction(.clean($0)) }
+            // Badge picker + Remove assembled in Task 7.
         }
     }
 

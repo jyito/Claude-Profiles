@@ -117,6 +117,12 @@ enum SnapshotCases {
                 .padding(Theme.Space.lg)
         })
 
+        // Task 6 — clean tiers (stopped fixture: 920 MB on disk)
+        cases.append(SnapshotCase("inspector-cleantiers", size: CGSize(width: 340, height: 220)) {
+            CleanTiers(disk: Fixtures.clientX.disk) { _ in }
+                .padding(Theme.Space.lg)
+        })
+
         return cases
     }
 }
