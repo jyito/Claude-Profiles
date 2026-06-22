@@ -23,6 +23,20 @@ enum SnapshotCases {
             StatusDot(running: false, size: 8)
         })
 
+        // Task 4 — Sparkline (Swift Charts)
+        cases.append(SnapshotCase("spark-cpu", size: CGSize(width: 140, height: 44)) {
+            Sparkline(values: Fixtures.cpuSeries, tint: Theme.cpuLine)
+                .padding(.horizontal, 6)
+        })
+        cases.append(SnapshotCase("spark-mem", size: CGSize(width: 140, height: 44)) {
+            Sparkline(values: Fixtures.memSeries, tint: Theme.memLine)
+                .padding(.horizontal, 6)
+        })
+        cases.append(SnapshotCase("spark-ghost", size: CGSize(width: 140, height: 44)) {
+            Sparkline.ghosted(Fixtures.cpuSeries)
+                .padding(.horizontal, 6)
+        })
+
         return cases
     }
 }
