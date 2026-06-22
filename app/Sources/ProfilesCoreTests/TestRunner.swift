@@ -37,6 +37,7 @@ struct ProfilesCoreTestsMain {
         await runSuite("EngineClientTests", EngineClientTests.allTests, &tally)
         await runSuite("EngineSeamTests", EngineSeamTests.allTests, &tally)
         await runSuite("MainPidTests", MainPidTests.allTests, &tally)
+        await runSuite("DashboardModeTests", DashboardModeTests.allTests, &tally)
         await runSuite("ConfigTests", ConfigTests.allTests, &tally)
         await runSuite("BadgePreviewTests", BadgePreviewTests.allTests, &tally)
         await runSuite("RemoteInfoTests", RemoteInfoTests.allTests, &tally)

@@ -54,15 +54,18 @@ struct DashboardView: View {
             }
     }
 
-    /// State gating, then Grid vs List. The loading skeleton shows until the first
-    /// stats tick lands; an empty roster shows the empty state; otherwise the live
-    /// grid/list (both feed `selection`, so flipping view mode keeps the inspector).
+    /// State gating, then Grid vs List. The decision lives in `dashboardMode` (pure +
+    /// unit-tested in ProfilesCore) so the empty-state gate can't regress to dead
+    /// code: the engine always emits the default instance, so the onboarding state
+    /// must key off "only the default exists", not "no profiles". The grid/list both
+    /// feed `selection`, so flipping view mode keeps the inspector's open instance.
     @ViewBuilder private var detailContent: some View {
-        if !store.hasLoadedOnce {
+        switch dashboardMode(profiles: store.profiles, hasLoadedOnce: store.hasLoadedOnce) {
+        case .loading:
             LoadingSkeletonView()
-        } else if store.profiles.isEmpty {
+        case .empty:
             EmptyStateView(onNewProfile: onNewProfile)
-        } else {
+        case .content:
             liveContent
         }
     }
