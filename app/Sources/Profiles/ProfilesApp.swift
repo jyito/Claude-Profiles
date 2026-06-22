@@ -90,7 +90,7 @@ struct ProfilesApp: App {
     // closures). Settings/Remote load their data BEFORE presenting so the sheet
     // opens already populated.
 
-    @ViewBuilder private func sheetContent(for sheet: DashboardSheet) -> some View {
+    @MainActor @ViewBuilder private func sheetContent(for sheet: DashboardSheet) -> some View {
         switch sheet {
         case .newProfile:
             NewProfileSheet(
@@ -100,20 +100,26 @@ struct ProfilesApp: App {
                 },
                 onCancel: { activeSheet = nil }
             )
-        case .cleanup, .settings, .remote:
-            // Filled in by Tasks 3, 4, 6.
+        case .settings:
+            SettingsSheet(
+                config: store.config,
+                onChange: { key, value in Task { await store.setConfig(key, value) } },
+                onClose: { activeSheet = nil }
+            )
+        case .cleanup, .remote:
+            // Filled in by Tasks 4, 6.
             EmptyView()
         }
     }
 
-    private func presentSettings() {
+    @MainActor private func presentSettings() {
         Task {
             await store.loadConfig()
             activeSheet = .settings
         }
     }
 
-    private func presentRemote(_ slug: String) {
+    @MainActor private func presentRemote(_ slug: String) {
         // Task 6 loads remoteInfo before presenting; placeholder for now.
         activeSheet = .remote(slug)
     }

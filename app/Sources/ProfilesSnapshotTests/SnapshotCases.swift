@@ -157,6 +157,15 @@ enum SnapshotCases {
             NewProfileSheet(snapshotText: "Marketing", onCreate: { _ in }, onCancel: {})
         })
 
+        // Task 3 — Settings sheet. A fixture config with each rule on a non-Off
+        // option (1 GB / 1 hour / 250) so the stand-in pills read distinctly; the
+        // two footgun rules show their amber ⚠ notes.
+        cases.append(SnapshotCase("sheet-settings", size: CGSize(width: 460, height: 470)) {
+            SettingsSheet(
+                config: ProfileConfig(autoCleanThresholdMB: 1024, autoCloseIdleMin: 60, autoRestartLeakAt: 250),
+                onChange: { _, _ in }, onClose: {})
+        })
+
         return cases
     }
 }
