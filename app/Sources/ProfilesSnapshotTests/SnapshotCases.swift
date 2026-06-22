@@ -72,6 +72,26 @@ enum SnapshotCases {
             SidebarSnapshotContent(profiles: Fixtures.all)
         })
 
+        // Task 9 — full window (sidebar + KPI strip + card grid), looser tolerance.
+        let cards: [CardModel] = [
+            CardModel(stat: Fixtures.defaultInstance, cpu: Fixtures.cpuSeries,
+                      mem: Fixtures.memSeries, state: .calm),
+            CardModel(stat: Fixtures.business, cpu: Fixtures.cpuSeries,
+                      mem: Fixtures.memSeries, state: .calm),
+            CardModel(stat: Fixtures.research, cpu: Fixtures.cpuSeriesHot,
+                      mem: Fixtures.memSeriesHot, state: .warning(climbing: true)),
+            CardModel(stat: Fixtures.clientX, cpu: Fixtures.cpuSeries,
+                      mem: Fixtures.memSeries, state: .calm),
+        ]
+        cases.append(SnapshotCase("window-full", size: CGSize(width: 1080, height: 720), tolerance: 0.01) {
+            HStack(spacing: 0) {
+                SidebarSnapshotContent(profiles: Fixtures.all)
+                    .frame(width: 240, height: 720)
+                DashboardContent(profiles: Fixtures.all, cards: cards, selection: "research", scrolls: false)
+                    .frame(width: 840, height: 720)
+            }
+        })
+
         return cases
     }
 }
