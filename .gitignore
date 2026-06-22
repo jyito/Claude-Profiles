@@ -8,3 +8,5 @@ dist/
 /test.sh
 # Throwaway SwiftUI de-risking spike (never committed; see docs/superpowers/specs/2026-06-21-swiftui-dashboard-spike-design.md)
 /spike/
+# SwiftUI app build artifacts
+app/.build/
