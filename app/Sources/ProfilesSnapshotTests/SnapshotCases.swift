@@ -123,6 +123,16 @@ enum SnapshotCases {
                 .padding(Theme.Space.lg)
         })
 
+        // Task 7 — badge picker (clientX is pink → index 4 ringed) + armed remove
+        cases.append(SnapshotCase("inspector-badgepicker", size: CGSize(width: 340, height: 90)) {
+            BadgePicker(currentHex: Fixtures.clientX.color, slug: Fixtures.clientX.slug) { _ in }
+                .padding(Theme.Space.lg)
+        })
+        cases.append(SnapshotCase("inspector-remove-armed", size: CGSize(width: 340, height: 200)) {
+            RemoveProfile(name: Fixtures.clientX.name, snapshotExpanded: true) { }
+                .padding(Theme.Space.lg)
+        })
+
         return cases
     }
 }

@@ -25,6 +25,8 @@ public struct InspectorView: View {
     let snapshotArmedDev: String?
     /// Snapshot-only: render the leak block's armed ("Confirm Restart") state.
     let snapshotLeakArmed: Bool
+    /// Snapshot-only: render the remove control expanded with the name pre-filled.
+    let snapshotRemoveExpanded: Bool
 
     @Environment(\.snapshotMode) private var snapshotMode
 
@@ -33,12 +35,14 @@ public struct InspectorView: View {
                 state: AlertState,
                 snapshotArmedDev: String? = nil,
                 snapshotLeakArmed: Bool = false,
+                snapshotRemoveExpanded: Bool = false,
                 onAction: @escaping (InspectorAction) -> Void) {
         self.stat = stat
         self.terminals = terminals
         self.state = state
         self.snapshotArmedDev = snapshotArmedDev
         self.snapshotLeakArmed = snapshotLeakArmed
+        self.snapshotRemoveExpanded = snapshotRemoveExpanded
         self.onAction = onAction
     }
 
@@ -111,7 +115,11 @@ public struct InspectorView: View {
     private var stoppedBody: some View {
         VStack(alignment: .leading, spacing: Theme.Space.lg) {
             CleanTiers(disk: stat.disk) { onAction(.clean($0)) }
-            // Badge picker + Remove assembled in Task 7.
+            BadgePicker(currentHex: stat.color, slug: stat.slug) { onAction(.setBadge($0)) }
+            Divider().overlay(Theme.hairline)
+            RemoveProfile(name: stat.name, snapshotExpanded: snapshotRemoveExpanded) {
+                onAction(.remove)
+            }
         }
     }
 
