@@ -186,6 +186,14 @@ enum SnapshotCases {
                 onCopy: { _ in }, onClose: {})
         })
 
+        // ── Phase 5: Menu-bar switcher, List view, States ──────────────────────
+
+        // Task 3 — menu-bar switcher content (stand-in: native menu items render
+        // empty headless). Alive-first rows + New Profile / Quit footer.
+        cases.append(SnapshotCase("menu-content", size: CGSize(width: 240, height: 220)) {
+            MenuContentSnapshot(profiles: Fixtures.all)
+        })
+
         return cases
     }
 }

@@ -77,13 +77,40 @@ struct ProfilesApp: App {
         }
         .windowToolbarStyle(.unified)
 
-        // Menu-bar switcher (live focus wiring is Phase 5 — a static list is fine).
+        // Menu-bar switcher. Shares the one `@Observable StatsStore` with the window,
+        // so the running dots match by construction (no second poll loop). Rebuilds
+        // from `store.profiles` each open; tapping a row raises that instance's
+        // windows in-process (focus by PID — never the shared bundle id). The
+        // template SF Symbol tints to the menu bar automatically.
         MenuBarExtra("Claude Profiles", systemImage: "square.on.square") {
-            ForEach(store.profiles) { stat in
-                Text(stat.name)
+            ForEach(sortProfiles(store.profiles)) { stat in
+                Button {
+                    focusInstance(stat.effSlug)
+                } label: {
+                    // `.menu` style renders these as native menu items; the running
+                    // state reads as a mint-dot suffix (custom swatches don't survive
+                    // the native menu), keeping the tell consistent with the window.
+                    Text(stat.running ? "\(stat.name)  ●" : stat.name)
+                }
+                .accessibilityIdentifier("menubar-row-\(stat.effSlug)")
             }
             Divider()
+            Button("New Profile") { activeSheet = .newProfile }
+                .keyboardShortcut("n", modifiers: .command)
+                .accessibilityIdentifier("menubar-new-profile")
             Button("Quit") { NSApplication.shared.terminate(nil) }
+                .keyboardShortcut("q", modifiers: .command)
+                .accessibilityIdentifier("menubar-quit")
+        }
+    }
+
+    /// Resolve an instance's main PID and raise its windows in-process (shared by the
+    /// menu-bar switcher). Stopped instances resolve to nil → no-op.
+    @MainActor private func focusInstance(_ slug: String) {
+        Task {
+            if let pid = await store.mainPid(slug) {
+                Focus.show(pid: pid)
+            }
         }
     }
 
