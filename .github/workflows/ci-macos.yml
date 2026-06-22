@@ -58,6 +58,28 @@ jobs:
     steps:
       # harden-runner is Linux-only, so it's intentionally omitted on macOS.
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - name: pin Command Line Tools toolchain
+        run: |
+          # Mirror the maintainer's no-Xcode setup so CI fails the way a CLT-only
+          # contributor would. Best-effort: if standalone CLT isn't present, fall
+          # back to the runner's default toolchain (the source is identical).
+          sudo xcode-select -s /Library/Developer/CommandLineTools 2>/dev/null \
+            || echo "standalone CLT not present; using default toolchain"
+          swift --version
+      - name: cache SwiftPM build
+        uses: actions/cache@v4   # pin to a full SHA per repo convention before merge
+        with:
+          path: |
+            app/.build
+            ~/Library/Caches/org.swift.swiftpm
+          key: ${{ runner.os }}-${{ matrix.os }}-spm-${{ hashFiles('app/Package.swift') }}
+          restore-keys: ${{ runner.os }}-${{ matrix.os }}-spm-
+      - name: swift build (app + core, no Xcode)
+        run: cd app && swift build
+      - name: layer 1 — logic tests
+        run: cd app && swift run ProfilesCoreTests
+      - name: layer 2 — snapshot render proof
+        run: cd app && swift run ProfilesSnapshotTests
       - name: test suite
         run: bash tests/run-tests.sh
       - name: regenerate icon (sips reads SVG natively)
