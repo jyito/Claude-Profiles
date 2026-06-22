@@ -1,5 +1,5 @@
 import XCTest
-@testable import ProfilesCore
+import ProfilesCore
 
 final class SortTests: XCTestCase {
     private func stat(_ name: String, slug: String, running: Bool) -> ProfileStat {

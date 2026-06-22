@@ -1,5 +1,5 @@
 import XCTest
-@testable import ProfilesCore
+import ProfilesCore
 
 final class ProfileStatTests: XCTestCase {
     func testDecodesAllFieldsAndDefaultInstance() async throws {
