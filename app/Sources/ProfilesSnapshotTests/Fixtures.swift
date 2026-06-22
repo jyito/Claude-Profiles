@@ -38,6 +38,14 @@ enum Fixtures {
 
     static let all: [ProfileStat] = [defaultInstance, business, research, clientX]
 
+    // Three terminals for the inspector drill-down: an active pty host, an idle
+    // shell, and one with unknown idle (the -1 sentinel → "—").
+    static let terminals: [TerminalInfo] = [
+        TerminalInfo(dev: "/dev/ttys003", pid: 4821, cmd: "node --max-old-space-size=4096 /opt/claude/pty-host.js", idle: 12),
+        TerminalInfo(dev: "/dev/ttys007", pid: 4990, cmd: "-zsh", idle: 540),
+        TerminalInfo(dev: "/dev/ttys011", pid: 5102, cmd: "claude --resume", idle: -1),
+    ]
+
     // Fixed 30-point series. Hand-built so the curve reads clearly in a PNG.
     static let cpuSeries: [Double] = [
         12, 18, 22, 19, 25, 31, 28, 35, 40, 38,

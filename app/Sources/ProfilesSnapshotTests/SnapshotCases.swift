@@ -94,6 +94,61 @@ enum SnapshotCases {
             }
         })
 
+        // ── Phase 3: Inspector drill-down ──────────────────────────────────────
+
+        // Task 3 — inspector header (the identity row over the body's eyebrow).
+        // Uses the default instance with no terminals so only the header + the
+        // "No terminals open" line render — a clean, header-focused proof.
+        cases.append(SnapshotCase("inspector-header", size: CGSize(width: 340, height: 130)) {
+            InspectorView(stat: Fixtures.defaultInstance, terminals: [], state: .calm, onAction: { _ in })
+        })
+
+        // Task 4 — terminals table (3 rows, the middle one armed → "Confirm")
+        cases.append(SnapshotCase("inspector-terminals", size: CGSize(width: 340, height: 180)) {
+            TerminalsTable(terminals: Fixtures.terminals, snapshotArmedDev: "/dev/ttys007") { _ in }
+                .padding(Theme.Space.lg)
+        })
+
+        // Task 5 — leak-restart block (amber, warning) — resting + armed
+        cases.append(SnapshotCase("inspector-leakblock-warning", size: CGSize(width: 340, height: 180)) {
+            LeakBlock(stat: Fixtures.research, state: .warning(climbing: true)) { }
+                .padding(Theme.Space.lg)
+        })
+        cases.append(SnapshotCase("inspector-leakblock-armed", size: CGSize(width: 340, height: 220)) {
+            LeakBlock(stat: Fixtures.research, state: .warning(climbing: true), snapshotArmed: true) { }
+                .padding(Theme.Space.lg)
+        })
+
+        // Task 6 — clean tiers (stopped fixture: 920 MB on disk)
+        cases.append(SnapshotCase("inspector-cleantiers", size: CGSize(width: 340, height: 220)) {
+            CleanTiers(disk: Fixtures.clientX.disk) { _ in }
+                .padding(Theme.Space.lg)
+        })
+
+        // Task 7 — badge picker (clientX is pink → index 4 ringed) + armed remove
+        cases.append(SnapshotCase("inspector-badgepicker", size: CGSize(width: 340, height: 90)) {
+            BadgePicker(currentHex: Fixtures.clientX.color, slug: Fixtures.clientX.slug) { _ in }
+                .padding(Theme.Space.lg)
+        })
+        cases.append(SnapshotCase("inspector-remove-armed", size: CGSize(width: 340, height: 200)) {
+            RemoveProfile(name: Fixtures.clientX.name, snapshotExpanded: true) { }
+                .padding(Theme.Space.lg)
+        })
+
+        // Task 8 — assembled inspector bodies by state (looser tolerance: tall composites)
+        cases.append(SnapshotCase("inspector-running-full", size: CGSize(width: 360, height: 540), tolerance: 0.015) {
+            InspectorView(stat: Fixtures.business, terminals: Fixtures.terminals,
+                          state: .warning(climbing: false)) { _ in }
+        })
+        cases.append(SnapshotCase("inspector-stopped-full", size: CGSize(width: 360, height: 480), tolerance: 0.015) {
+            InspectorView(stat: Fixtures.clientX, terminals: [], state: .calm) { _ in }
+        })
+        cases.append(SnapshotCase("inspector-default", size: CGSize(width: 360, height: 320), tolerance: 0.015) {
+            // Restricted default: terminals ONLY — structurally no clean/badge/remove.
+            InspectorView(stat: Fixtures.defaultInstance, terminals: Fixtures.terminals,
+                          state: .calm) { _ in }
+        })
+
         return cases
     }
 }

@@ -9,11 +9,16 @@ struct ProfilesApp: App {
         clock: RealClock()
     )
     @State private var selection: String?
+    @State private var inspectorShown = false
 
     var body: some Scene {
         WindowGroup("Claude Profiles") {
             NavigationSplitView {
                 SidebarView(profiles: store.profiles, selection: $selection)
+                    .onChange(of: selection) { _, new in
+                        // Selecting a sidebar row opens the inspector; clearing it closes it.
+                        inspectorShown = (new != nil)
+                    }
                     .background(VisualEffectView())
                     .navigationSplitViewColumnWidth(min: 220, ideal: 240, max: 280)
                     .safeAreaInset(edge: .bottom) {
@@ -28,7 +33,7 @@ struct ProfilesApp: App {
                         .accessibilityIdentifier("sidebar-new-profile")
                     }
             } detail: {
-                DashboardView(store: store, selection: selection)
+                DashboardView(store: store, selection: $selection, inspectorShown: $inspectorShown)
                     .navigationTitle("Profiles")
                     .toolbar {
                         ToolbarItem(placement: .navigation) {

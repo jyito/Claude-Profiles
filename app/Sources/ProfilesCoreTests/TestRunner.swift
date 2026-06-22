@@ -29,11 +29,13 @@ struct ProfilesCoreTestsMain {
     static func main() async {
         var tally = TestTally()
         await runSuite("ProfileStatTests", ProfileStatTests.allTests, &tally)
+        await runSuite("TerminalInfoTests", TerminalInfoTests.allTests, &tally)
         await runSuite("FormatterTests", FormatterTests.allTests, &tally)
         await runSuite("SortTests", SortTests.allTests, &tally)
         await runSuite("PtmxHysteresisTests", PtmxHysteresisTests.allTests, &tally)
         await runSuite("StatsStoreTests", StatsStoreTests.allTests, &tally)
         await runSuite("EngineClientTests", EngineClientTests.allTests, &tally)
+        await runSuite("EngineSeamTests", EngineSeamTests.allTests, &tally)
         print("Executed \(tally.passed + tally.failed) tests, with \(tally.failed) failures")
         exit(tally.failed == 0 ? 0 : 1)
     }
