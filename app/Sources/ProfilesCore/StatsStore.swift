@@ -116,6 +116,20 @@ public final class StatsStore {
         }
     }
 
+    /// Resolve an instance's main PID for in-process focus (Show Window / the
+    /// menu-bar switcher). Returns nil if not running (or on a transport error,
+    /// surfaced via `lastError`) — the caller no-ops rather than focusing pid 0.
+    public func mainPid(_ slug: String) async -> Int32? {
+        do {
+            let pid = try await engine.mainPid(slug)
+            lastError = nil
+            return pid
+        } catch {
+            lastError = String(describing: error)
+            return nil
+        }
+    }
+
     /// Copy text to the clipboard (Remote sheet's Copy buttons).
     public func copy(_ text: String) async {
         do { try await engine.copy(text); lastError = nil }

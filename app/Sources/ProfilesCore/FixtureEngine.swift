@@ -19,6 +19,10 @@ public final class FixtureEngine: EngineRunning, @unchecked Sendable {
                                    host: "mac.local", tailscaleIp: "100.64.0.1", alreadyRunning: false)
     /// Records each text passed to `copy`.
     public private(set) var copied: [String] = []
+    /// The pid `mainPid` returns (nil simulates a stopped instance).
+    public var mainPidValue: Int32? = 4242
+    /// Records each slug passed to `mainPid`.
+    public private(set) var mainPidSlugs: [String] = []
     public init(stats: [ProfileStat]) { self.stats = stats }
 
     public func stats() async throws -> [ProfileStat] {
@@ -53,5 +57,10 @@ public final class FixtureEngine: EngineRunning, @unchecked Sendable {
     public func copy(_ text: String) async throws {
         if shouldThrow { throw EngineError.nonZeroExit(1) }
         copied.append(text)
+    }
+    public func mainPid(_ slug: String) async throws -> Int32? {
+        if shouldThrow { throw EngineError.nonZeroExit(1) }
+        mainPidSlugs.append(slug)
+        return mainPidValue
     }
 }

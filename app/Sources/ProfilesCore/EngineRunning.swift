@@ -30,6 +30,12 @@ public protocol EngineRunning: Sendable {
     func remoteInfo(_ slug: String) async throws -> RemoteInfo
     /// Put text on the clipboard (`copy <text>` → `pbcopy`) for the Remote sheet's Copy buttons.
     func copy(_ text: String) async throws
+    /// Resolve an instance's main process PID for in-process focus (`mainpid <slug>`,
+    /// or `defaultpid` when `slug == "default"`). Stdout is a single PID or empty;
+    /// empty (not running) → `nil`. No error-token handling — the engine never
+    /// prints one here. The PID, never the bundle id, is the focus target (all
+    /// instances share Claude's bundle id).
+    func mainPid(_ slug: String) async throws -> Int32?
 }
 
 public extension EngineRunning {
