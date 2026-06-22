@@ -15,6 +15,14 @@ public protocol EngineRunning: Sendable {
     func run(_ args: [String]) async throws
     /// Typed terminals drill-down for `slug` (`"default"` for the default instance).
     func terminals(_ slug: String) async throws -> [TerminalInfo]
+    /// Decode `getconfig` into the two opt-in automation knobs.
+    func getConfig() async throws -> ProfileConfig
+    /// Persist one config key (`setconfig <key> <int>`); throws on the engine's `err` token.
+    func setConfig(_ key: String, _ value: Int) async throws
+    /// Create a profile wrapper for `name`. The engine prints `ok <slug>`; the slug
+    /// is parsed and returned (the derived slug differs from the raw name). Throws
+    /// `actionFailed` on the engine's `err <msg>` token.
+    func create(_ name: String) async throws -> String
 }
 
 public extension EngineRunning {
