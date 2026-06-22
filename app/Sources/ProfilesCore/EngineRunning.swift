@@ -1,6 +1,12 @@
 import Foundation
 
-public enum EngineError: Error, Equatable { case nonZeroExit(Int32) }
+public enum EngineError: Error, Equatable {
+    case nonZeroExit(Int32)
+    /// An action verb exited 0 but printed an engine error token (`err <msg>` /
+    /// `refused` / `baddev`) — engine.sh reports action failures on stdout, not via
+    /// the exit code, so these must be detected explicitly. Payload is the token.
+    case actionFailed(String)
+}
 
 /// The seam between the app and engine.sh. EngineClient is the real impl; FixtureEngine is the test double.
 public protocol EngineRunning: Sendable {

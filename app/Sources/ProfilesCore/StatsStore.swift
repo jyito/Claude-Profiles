@@ -35,12 +35,37 @@ public final class StatsStore {
     }
 
     /// Fire an engine action (the inspector's `onAction` sink maps to this), then
-    /// refresh stats so the UI reflects the result. Errors are surfaced via
-    /// `lastError`; a failed action never blanks the last-good profiles.
-    public func perform(_ args: [String]) async {
+    /// refresh stats so the UI reflects the result. Returns whether the action
+    /// succeeded; on failure the error is surfaced via `lastError` and the
+    /// last-good profiles are kept (the refresh never blanks the UI on one bad tick).
+    @discardableResult
+    public func perform(_ args: [String]) async -> Bool {
+        var ok = true
         do { try await engine.run(args) }
-        catch { lastError = String(describing: error) }
+        catch {
+            lastError = String(describing: error)
+            ok = false
+        }
         await refreshOnce()
+        return ok
+    }
+
+    /// Remove a profile: `remove` (delete the wrapper) THEN `purge` (delete its
+    /// data dir). The data dir is precious (CLAUDE.md §6), so only report success
+    /// when BOTH steps succeed — a failed `purge` (orphaned data dir) must be
+    /// visible, not silent. Returns `true` only if both engine calls succeeded.
+    public func removeProfile(_ slug: String) async -> Bool {
+        do {
+            try await engine.run(["remove", slug])
+            try await engine.run(["purge", slug])
+            lastError = nil
+            await refreshOnce()
+            return true
+        } catch {
+            lastError = String(describing: error)
+            await refreshOnce()
+            return false
+        }
     }
 
     public func start() {

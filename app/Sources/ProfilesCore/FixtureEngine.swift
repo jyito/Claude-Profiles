@@ -8,11 +8,6 @@ public final class FixtureEngine: EngineRunning, @unchecked Sendable {
     public private(set) var ranArgs: [[String]] = []
     public init(stats: [ProfileStat]) { self.stats = stats }
 
-    /// Derived view for the common two-arg verbs: `[verb, slug]` rows of `ranArgs`.
-    public var ranVerbs: [(String, String)] {
-        ranArgs.compactMap { $0.count == 2 ? ($0[0], $0[1]) : nil }
-    }
-
     public func stats() async throws -> [ProfileStat] {
         if shouldThrow { throw EngineError.nonZeroExit(1) }
         return stats

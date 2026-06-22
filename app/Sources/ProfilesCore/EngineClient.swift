@@ -32,8 +32,16 @@ public struct EngineClient: EngineRunning {
     public func run(_ args: [String]) async throws {
         let path = enginePath
         try await Task.detached(priority: .utility) {
-            let (_, code) = try Self.invoke(path, args)
+            let (out, code) = try Self.invoke(path, args)
             if code != 0 { throw EngineError.nonZeroExit(code) }
+            // engine.sh action verbs exit 0 even on failure, printing an error
+            // token to stdout (`err <msg>` / `refused` / `baddev`). Surface those
+            // as a thrown error so a failed action never reports success.
+            let stdout = String(data: out, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if stdout == "refused" || stdout == "baddev" || stdout.hasPrefix("err") {
+                throw EngineError.actionFailed(stdout)
+            }
         }.value
     }
 

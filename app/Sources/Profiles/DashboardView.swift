@@ -88,11 +88,16 @@ struct DashboardView: View {
             case .setBadge(let index):
                 await store.perform(["setbadge", slug, String(index)])
             case .remove:
-                await store.perform(["remove", slug])
-                await store.perform(["purge", slug])
-                // The profile is gone — collapse the inspector.
-                selection = nil
-                inspectorShown = false
+                // Both `remove` and `purge` must succeed before we collapse: a failed
+                // `purge` may have orphaned the (precious) data dir, so keep the
+                // inspector open and let `store.lastError` surface it. Return early —
+                // never `loadTerminals` against the just-deleted slug; the selection
+                // change (on success) already triggers `.task(id: selection)`.
+                if await store.removeProfile(slug) {
+                    selection = nil
+                    inspectorShown = false
+                }
+                return
             }
             // Keep the open terminals table fresh after an action.
             await store.loadTerminals(for: slug)
