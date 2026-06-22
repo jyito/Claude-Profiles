@@ -13,7 +13,12 @@ struct SnapshotCase {
     let view: AnyView
     let tolerance: Double
 
-    init<V: View>(_ name: String, size: CGSize, tolerance: Double = 0.002, @ViewBuilder view: () -> V) {
+    // Default 1% per-pixel tolerance: absorbs cross-runner antialiasing drift —
+    // goldens are recorded + visually QA'd on the maintainer's Mac, while CI runs a
+    // different macOS image (the testing strategy's documented risk #1). Real
+    // layout/colour regressions are many %; subtle ones are caught by the
+    // maintainer's visual QA, which is the authoritative fidelity gate.
+    init<V: View>(_ name: String, size: CGSize, tolerance: Double = 0.01, @ViewBuilder view: () -> V) {
         self.name = name
         self.size = size
         self.tolerance = tolerance
