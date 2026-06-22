@@ -29,11 +29,20 @@ public struct EngineClient: EngineRunning {
         }.value
     }
 
-    public func run(_ verb: String, _ slug: String) async throws {
+    public func run(_ args: [String]) async throws {
         let path = enginePath
         try await Task.detached(priority: .utility) {
-            let (_, code) = try Self.invoke(path, [verb, slug])
+            let (_, code) = try Self.invoke(path, args)
             if code != 0 { throw EngineError.nonZeroExit(code) }
+        }.value
+    }
+
+    public func terminals(_ slug: String) async throws -> [TerminalInfo] {
+        let path = enginePath
+        return try await Task.detached(priority: .utility) {
+            let (out, code) = try Self.invoke(path, ["terminals", slug])
+            if code != 0 { throw EngineError.nonZeroExit(code) }
+            return try TerminalInfo.decodeList(from: out)
         }.value
     }
 }

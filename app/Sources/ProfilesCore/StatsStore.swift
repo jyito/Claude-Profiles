@@ -5,6 +5,7 @@ import Observation
 @Observable
 public final class StatsStore {
     public private(set) var profiles: [ProfileStat] = []
+    public private(set) var terminals: [TerminalInfo] = []
     public private(set) var lastError: String?
 
     private let engine: any EngineRunning
@@ -24,6 +25,13 @@ public final class StatsStore {
         } catch {
             lastError = String(describing: error)   // keep last-good profiles — don't blank the UI on one bad tick
         }
+    }
+
+    /// Load the terminals drill-down for one instance. A failed load empties
+    /// `terminals` rather than leaving a stale list under the inspector.
+    public func loadTerminals(for slug: String) async {
+        do { terminals = try await engine.terminals(slug) }
+        catch { terminals = [] }
     }
 
     public func start() {
