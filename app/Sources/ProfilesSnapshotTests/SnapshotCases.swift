@@ -67,6 +67,11 @@ enum SnapshotCases {
                 .padding(Theme.Space.lg)
         })
 
+        // Task 8 — sidebar (row content over solid canvas; not the live material)
+        cases.append(SnapshotCase("sidebar", size: CGSize(width: 240, height: 320)) {
+            SidebarSnapshotContent(profiles: Fixtures.all)
+        })
+
         return cases
     }
 }
