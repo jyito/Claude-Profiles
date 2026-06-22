@@ -94,6 +94,13 @@ enum SnapshotCases {
             }
         })
 
+        // ── Phase 3: Inspector drill-down ──────────────────────────────────────
+
+        // Task 3 — inspector header shell (running fixture)
+        cases.append(SnapshotCase("inspector-header", size: CGSize(width: 340, height: 120)) {
+            InspectorView(stat: Fixtures.business, terminals: [], state: .calm, onAction: { _ in })
+        })
+
         return cases
     }
 }

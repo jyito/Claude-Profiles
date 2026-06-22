@@ -10,13 +10,16 @@ public struct ProfileCardView: View {
     let mem: [Double]
     let state: AlertState
     let selected: Bool
+    let onDetails: (String) -> Void
 
-    public init(stat: ProfileStat, cpu: [Double], mem: [Double], state: AlertState, selected: Bool = false) {
+    public init(stat: ProfileStat, cpu: [Double], mem: [Double], state: AlertState,
+                selected: Bool = false, onDetails: @escaping (String) -> Void = { _ in }) {
         self.stat = stat
         self.cpu = cpu
         self.mem = mem
         self.state = state
         self.selected = selected
+        self.onDetails = onDetails
     }
 
     public var body: some View {
@@ -173,6 +176,7 @@ public struct ProfileCardView: View {
             Spacer(minLength: 0)
 
             Button {
+                onDetails(stat.effSlug)
             } label: {
                 HStack(spacing: 2) {
                     Text("Details")
@@ -215,6 +219,7 @@ public struct ProfileCardView: View {
                     .accessibilityIdentifier("card-\(stat.effSlug)-open")
                 Spacer(minLength: 0)
                 Button {
+                    onDetails(stat.effSlug)
                 } label: {
                     HStack(spacing: 2) {
                         Text("Details")

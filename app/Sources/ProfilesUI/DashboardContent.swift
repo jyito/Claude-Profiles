@@ -27,15 +27,18 @@ public struct DashboardContent: View {
     let cards: [CardModel]
     let selection: String?
     let scrolls: Bool
+    let onDetails: (String) -> Void
 
     /// `scrolls: false` is for snapshots — `ImageRenderer` does not lay out a
     /// `ScrollView`'s content (it renders empty), so the harness renders the bare
     /// VStack at a fixed frame. The live app uses the scrolling default.
-    public init(profiles: [ProfileStat], cards: [CardModel], selection: String? = nil, scrolls: Bool = true) {
+    public init(profiles: [ProfileStat], cards: [CardModel], selection: String? = nil,
+                scrolls: Bool = true, onDetails: @escaping (String) -> Void = { _ in }) {
         self.profiles = profiles
         self.cards = cards
         self.selection = selection
         self.scrolls = scrolls
+        self.onDetails = onDetails
     }
 
     private let columns = [GridItem(.adaptive(minimum: 300, maximum: 380), spacing: Theme.Space.lg)]
@@ -46,7 +49,8 @@ public struct DashboardContent: View {
             LazyVGrid(columns: columns, alignment: .leading, spacing: Theme.Space.lg) {
                 ForEach(cards) { m in
                     ProfileCardView(stat: m.stat, cpu: m.cpu, mem: m.mem,
-                                    state: m.state, selected: selection == m.id)
+                                    state: m.state, selected: selection == m.id,
+                                    onDetails: onDetails)
                 }
             }
             Spacer(minLength: 0)

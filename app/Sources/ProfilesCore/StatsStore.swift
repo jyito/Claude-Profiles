@@ -34,6 +34,15 @@ public final class StatsStore {
         catch { terminals = [] }
     }
 
+    /// Fire an engine action (the inspector's `onAction` sink maps to this), then
+    /// refresh stats so the UI reflects the result. Errors are surfaced via
+    /// `lastError`; a failed action never blanks the last-good profiles.
+    public func perform(_ args: [String]) async {
+        do { try await engine.run(args) }
+        catch { lastError = String(describing: error) }
+        await refreshOnce()
+    }
+
     public func start() {
         guard task == nil else { return }
         task = Task { [weak self] in
