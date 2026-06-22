@@ -61,6 +61,12 @@ enum SnapshotCases {
                 .padding(Theme.Space.lg)
         })
 
+        // Task 7 — KPI instrument strip
+        cases.append(SnapshotCase("kpi-strip", size: CGSize(width: 820, height: 110)) {
+            KPIStripView(profiles: Fixtures.all)
+                .padding(Theme.Space.lg)
+        })
+
         return cases
     }
 }
