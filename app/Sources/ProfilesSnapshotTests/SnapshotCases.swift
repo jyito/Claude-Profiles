@@ -37,6 +37,18 @@ enum SnapshotCases {
                 .padding(.horizontal, 6)
         })
 
+        // Task 5 — running ProfileCard (calm) + warning gauge
+        cases.append(SnapshotCase("card-running-business", size: CGSize(width: 340, height: 300)) {
+            ProfileCardView(stat: Fixtures.business, cpu: Fixtures.cpuSeries,
+                            mem: Fixtures.memSeries, state: .calm, selected: false)
+                .padding(Theme.Space.lg)
+        })
+        cases.append(SnapshotCase("card-running-research-warning", size: CGSize(width: 340, height: 300)) {
+            ProfileCardView(stat: Fixtures.research, cpu: Fixtures.cpuSeriesHot,
+                            mem: Fixtures.memSeriesHot, state: .warning(climbing: true), selected: true)
+                .padding(Theme.Space.lg)
+        })
+
         return cases
     }
 }
