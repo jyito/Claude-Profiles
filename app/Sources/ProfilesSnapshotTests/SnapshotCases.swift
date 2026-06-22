@@ -8,7 +8,21 @@ import ProfilesUI
 enum SnapshotCases {
     static func all() -> [SnapshotCase] {
         var cases: [SnapshotCase] = []
-        // Cases are registered by later tasks (BadgeDisc, StatusDot, Sparkline, …).
+
+        // Task 3 — BadgeDisc + StatusDot
+        cases.append(SnapshotCase("badge-business", size: CGSize(width: 60, height: 60)) {
+            BadgeDisc(name: "Business", colorHex: "#3B7DD8", slug: "business", size: 34)
+        })
+        cases.append(SnapshotCase("badge-default-lock", size: CGSize(width: 60, height: 60)) {
+            BadgeDisc(name: "Claude (default)", colorHex: "#6E6A62", slug: "", size: 34, isDefault: true)
+        })
+        cases.append(SnapshotCase("dot-running", size: CGSize(width: 40, height: 40)) {
+            StatusDot(running: true, size: 8)
+        })
+        cases.append(SnapshotCase("dot-stopped", size: CGSize(width: 40, height: 40)) {
+            StatusDot(running: false, size: 8)
+        })
+
         return cases
     }
 }
