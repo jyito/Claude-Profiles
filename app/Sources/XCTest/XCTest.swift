@@ -1,5 +1,10 @@
 @_exported import Foundation
 
+// Single shared failure sink — there is NO cross-test isolation: the runner
+// `reset()`s it before each case and reads `failures` right after. Test bodies
+// must therefore finish recording within their own `await` — never spawn a
+// detached or un-awaited Task that calls an XCTAssert later, or its failure
+// lands in (and is attributed to) whichever case happens to be running then.
 public final class _XCTState: @unchecked Sendable {
     public static let shared = _XCTState()
     public private(set) var failures: [String] = []

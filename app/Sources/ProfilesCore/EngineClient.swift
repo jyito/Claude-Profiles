@@ -10,7 +10,10 @@ public struct EngineClient: EngineRunning {
         p.arguments = [path] + args
         let outPipe = Pipe()
         p.standardOutput = outPipe
-        p.standardError = Pipe()
+        // stderr is intentionally discarded; route to /dev/null rather than an
+        // undrained Pipe (an undrained stderr Pipe deadlocks waitUntilExit() once
+        // the child writes past the ~64KB pipe buffer — nobody reads it back).
+        p.standardError = FileHandle.nullDevice
         try p.run()
         let out = outPipe.fileHandleForReading.readDataToEndOfFile()
         p.waitUntilExit()

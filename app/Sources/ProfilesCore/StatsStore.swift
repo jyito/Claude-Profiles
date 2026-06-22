@@ -30,8 +30,11 @@ public final class StatsStore {
         guard task == nil else { return }
         task = Task { [weak self] in
             while !Task.isCancelled {
-                await self?.refreshOnce()
-                await self?.clock.sleepTick()
+                // Bail if the store has been deinited — optional-chained no-ops
+                // would otherwise busy-spin (the while condition stays true).
+                guard let self else { return }
+                await self.refreshOnce()
+                await self.clock.sleepTick()
             }
         }
     }
