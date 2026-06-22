@@ -1,5 +1,5 @@
 import XCTest
-@testable import ProfilesCore
+import ProfilesCore
 
 final class PtmxHysteresisTests: XCTestCase {
     private func feed(_ ratios: [Double], max: Int = 100) -> AlertState {

@@ -1,12 +1,64 @@
 import SwiftUI
 import ProfilesCore
+import ProfilesUI
 
 @main
 struct ProfilesApp: App {
+    @State private var store = StatsStore(
+        engine: EngineClient(enginePath: resolveEnginePath()),
+        clock: RealClock()
+    )
+    @State private var selection: String?
+
     var body: some Scene {
         WindowGroup("Claude Profiles") {
-            Text("Claude Profiles \(ProfilesCore.version)")
-                .frame(minWidth: 480, minHeight: 320)
+            NavigationSplitView {
+                SidebarView(profiles: store.profiles, selection: $selection)
+                    .background(VisualEffectView())
+                    .navigationSplitViewColumnWidth(min: 220, ideal: 240, max: 280)
+                    .safeAreaInset(edge: .bottom) {
+                        Button {
+                            // New Profile sheet is Phase 4.
+                        } label: {
+                            Label("New Profile", systemImage: "plus")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(PillButtonStyle(.prominentCoral))
+                        .padding(Theme.Space.md)
+                        .accessibilityIdentifier("sidebar-new-profile")
+                    }
+            } detail: {
+                DashboardView(store: store, selection: selection)
+                    .navigationTitle("Profiles")
+                    .toolbar {
+                        ToolbarItem(placement: .navigation) {
+                            Image(systemName: "square.on.square")
+                                .foregroundStyle(Theme.coral)
+                        }
+                        ToolbarItem(placement: .primaryAction) {
+                            Button {
+                                // New Profile sheet is Phase 4.
+                            } label: {
+                                Label("New Profile", systemImage: "plus")
+                            }
+                            .accessibilityIdentifier("toolbar-new-profile")
+                        }
+                    }
+            }
+            .frame(minWidth: 840, minHeight: 560)
+            .background(Theme.canvas)
+            .preferredColorScheme(.dark)
+            .onAppear { store.start() }
+        }
+        .windowToolbarStyle(.unified)
+
+        // Menu-bar switcher (live focus wiring is Phase 5 — a static list is fine).
+        MenuBarExtra("Claude Profiles", systemImage: "square.on.square") {
+            ForEach(store.profiles) { stat in
+                Text(stat.name)
+            }
+            Divider()
+            Button("Quit") { NSApplication.shared.terminate(nil) }
         }
     }
 }

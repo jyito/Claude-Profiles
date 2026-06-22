@@ -1,5 +1,5 @@
 import XCTest
-@testable import ProfilesCore
+import ProfilesCore
 
 final class EngineClientTests: XCTestCase {
     func testRealProcessBridgeDecodes() async throws {
