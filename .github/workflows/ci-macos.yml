@@ -67,7 +67,7 @@ jobs:
             || echo "standalone CLT not present; using default toolchain"
           swift --version
       - name: cache SwiftPM build
-        uses: actions/cache@v4   # pin to a full SHA per repo convention before merge
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             app/.build
