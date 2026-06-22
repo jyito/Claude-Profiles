@@ -12,6 +12,8 @@ struct DashboardView: View {
     let store: StatsStore
     @Binding var selection: String?
     @Binding var inspectorShown: Bool
+    /// Called when a card's Remote button is tapped (scene presents the Remote sheet).
+    var onRemote: (String) -> Void = { _ in }
 
     @State private var cpuHistory: [String: [Double]] = [:]
     @State private var memHistory: [String: [Double]] = [:]
@@ -25,7 +27,8 @@ struct DashboardView: View {
                          onDetails: { slug in
                              selection = slug
                              inspectorShown = true
-                         })
+                         },
+                         onRemote: onRemote)
             .onChange(of: store.profiles) { _, fresh in
                 ingest(fresh)
             }

@@ -149,6 +149,14 @@ enum SnapshotCases {
                           state: .calm) { _ in }
         })
 
+        // ── Phase 4: Sheets ────────────────────────────────────────────────────
+
+        // Task 2 — New Profile sheet with a fixed typed name. "Marketing" → cksum
+        // % 6 == 2 → amber badge with M (the live preview the user sees as they type).
+        cases.append(SnapshotCase("sheet-newprofile", size: CGSize(width: 420, height: 280)) {
+            NewProfileSheet(snapshotText: "Marketing", onCreate: { _ in }, onCancel: {})
+        })
+
         return cases
     }
 }

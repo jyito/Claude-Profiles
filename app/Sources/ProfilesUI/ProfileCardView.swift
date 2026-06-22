@@ -11,15 +11,18 @@ public struct ProfileCardView: View {
     let state: AlertState
     let selected: Bool
     let onDetails: (String) -> Void
+    let onRemote: (String) -> Void
 
     public init(stat: ProfileStat, cpu: [Double], mem: [Double], state: AlertState,
-                selected: Bool = false, onDetails: @escaping (String) -> Void = { _ in }) {
+                selected: Bool = false, onDetails: @escaping (String) -> Void = { _ in },
+                onRemote: @escaping (String) -> Void = { _ in }) {
         self.stat = stat
         self.cpu = cpu
         self.mem = mem
         self.state = state
         self.selected = selected
         self.onDetails = onDetails
+        self.onRemote = onRemote
     }
 
     public var body: some View {
@@ -162,6 +165,7 @@ public struct ProfileCardView: View {
             .accessibilityIdentifier("card-\(stat.effSlug)-showwindow")
 
             Button {
+                onRemote(stat.effSlug)
             } label: {
                 HStack(spacing: 5) {
                     if stat.remote {
@@ -248,6 +252,7 @@ public struct ProfileCardView: View {
                     .buttonStyle(PillButtonStyle(.mint))
                     .accessibilityIdentifier("card-default-showwindow")
                 Button {
+                    onRemote(stat.effSlug)
                 } label: {
                     HStack(spacing: 5) {
                         if stat.remote { Circle().fill(Theme.mint).frame(width: 6, height: 6) }
