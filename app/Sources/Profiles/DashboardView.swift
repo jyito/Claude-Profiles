@@ -12,6 +12,8 @@ struct DashboardView: View {
     let store: StatsStore
     @Binding var selection: String?
     @Binding var inspectorShown: Bool
+    /// Grid (cards) vs List (dense table); driven by the toolbar segmented control.
+    @Binding var viewMode: ProfileViewMode
     /// Called when a card's Remote button is tapped (scene presents the Remote sheet).
     var onRemote: (String) -> Void = { _ in }
 
@@ -23,14 +25,7 @@ struct DashboardView: View {
     private static let historyLen = 30
 
     var body: some View {
-        DashboardContent(profiles: store.profiles, cards: cards, selection: selection,
-                         onDetails: { slug in
-                             selection = slug
-                             inspectorShown = true
-                         },
-                         onRemote: onRemote,
-                         onShowWindow: showWindow,
-                         onOpen: { slug in Task { await store.perform(["open", slug]) } })
+        detailContent
             .onChange(of: store.profiles) { _, fresh in
                 ingest(fresh)
             }
@@ -45,6 +40,28 @@ struct DashboardView: View {
                     await store.loadTerminals(for: slug)
                 }
             }
+    }
+
+    /// Grid vs List over the same models. Both feed `selection`, so flipping the
+    /// toolbar control never loses the inspector's open instance.
+    @ViewBuilder private var detailContent: some View {
+        switch viewMode {
+        case .grid:
+            DashboardContent(profiles: store.profiles, cards: cards, selection: selection,
+                             onDetails: { slug in
+                                 selection = slug
+                                 inspectorShown = true
+                             },
+                             onRemote: onRemote,
+                             onShowWindow: showWindow,
+                             onOpen: { slug in Task { await store.perform(["open", slug]) } })
+        case .list:
+            ProfileListView(profiles: store.profiles, selection: $selection)
+                .onChange(of: selection) { _, new in
+                    // A row selection opens the inspector (matching the grid's Details tap).
+                    inspectorShown = (new != nil)
+                }
+        }
     }
 
     // MARK: Show Window (in-process focus)

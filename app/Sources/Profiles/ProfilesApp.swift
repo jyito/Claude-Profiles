@@ -10,6 +10,8 @@ struct ProfilesApp: App {
     )
     @State private var selection: String?
     @State private var inspectorShown = false
+    /// Detail layout: card grid (default) or the dense list. Toolbar-driven.
+    @State private var viewMode: ProfileViewMode = .grid
     /// Which modal (if any) is presented. The scene owns this — the sheet views are
     /// pure and never call the engine themselves (CLAUDE.md non-negotiables).
     @State private var activeSheet: DashboardSheet?
@@ -40,12 +42,24 @@ struct ProfilesApp: App {
                     }
             } detail: {
                 DashboardView(store: store, selection: $selection, inspectorShown: $inspectorShown,
+                              viewMode: $viewMode,
                               onRemote: { slug in presentRemote(slug) })
                     .navigationTitle("Profiles")
                     .toolbar {
                         ToolbarItem(placement: .navigation) {
                             Image(systemName: "square.on.square")
                                 .foregroundStyle(Theme.coral)
+                        }
+                        ToolbarItem(placement: .principal) {
+                            Picker("View", selection: $viewMode) {
+                                ForEach(ProfileViewMode.allCases) { mode in
+                                    Image(systemName: mode.symbol)
+                                        .accessibilityLabel(mode.label)
+                                        .tag(mode)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                            .accessibilityIdentifier("toolbar-viewmode")
                         }
                         ToolbarItemGroup(placement: .primaryAction) {
                             Button { activeSheet = .cleanup } label: {

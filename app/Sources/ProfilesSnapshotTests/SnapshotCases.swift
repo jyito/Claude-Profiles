@@ -194,6 +194,12 @@ enum SnapshotCases {
             MenuContentSnapshot(profiles: Fixtures.all)
         })
 
+        // Task 4 — dense List view (stand-in: native Table renders empty headless).
+        // "research" selected so the coral selection wash shows.
+        cases.append(SnapshotCase("list-view", size: CGSize(width: 760, height: 260), tolerance: 0.01) {
+            ProfileListSnapshotContent(profiles: Fixtures.all, selection: "research")
+        })
+
         return cases
     }
 }
