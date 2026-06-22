@@ -12,8 +12,20 @@ struct DashboardView: View {
     let store: StatsStore
     @Binding var selection: String?
     @Binding var inspectorShown: Bool
+    /// Grid (cards) vs List (dense table); driven by the toolbar segmented control.
+    @Binding var viewMode: ProfileViewMode
     /// Called when a card's Remote button is tapped (scene presents the Remote sheet).
     var onRemote: (String) -> Void = { _ in }
+    /// Open the New Profile sheet (the empty-state CTA routes here, same as the toolbar).
+    var onNewProfile: () -> Void = {}
+
+    /// Dim the detail content when the window isn't key/active — a quiet inactive
+    /// tell, matching macOS sidebar/material behavior. `\.controlActiveState`
+    /// (`.key`/`.active`/`.inactive`) is the SDK-14 portable signal; macOS 15's
+    /// `\.appearsActive` (the plan's reference) isn't in this toolchain's SDK.
+    @Environment(\.controlActiveState) private var controlActiveState
+
+    private var appearsActive: Bool { controlActiveState != .inactive }
 
     @State private var cpuHistory: [String: [Double]] = [:]
     @State private var memHistory: [String: [Double]] = [:]
@@ -23,12 +35,9 @@ struct DashboardView: View {
     private static let historyLen = 30
 
     var body: some View {
-        DashboardContent(profiles: store.profiles, cards: cards, selection: selection,
-                         onDetails: { slug in
-                             selection = slug
-                             inspectorShown = true
-                         },
-                         onRemote: onRemote)
+        detailContent
+            // Inactive-window dim: a subtle whole-pane fade when the window loses key.
+            .opacity(appearsActive ? 1 : 0.85)
             .onChange(of: store.profiles) { _, fresh in
                 ingest(fresh)
             }
@@ -43,6 +52,56 @@ struct DashboardView: View {
                     await store.loadTerminals(for: slug)
                 }
             }
+    }
+
+    /// State gating, then Grid vs List. The decision lives in `dashboardMode` (pure +
+    /// unit-tested in ProfilesCore) so the empty-state gate can't regress to dead
+    /// code: the engine always emits the default instance, so the onboarding state
+    /// must key off "only the default exists", not "no profiles". The grid/list both
+    /// feed `selection`, so flipping view mode keeps the inspector's open instance.
+    @ViewBuilder private var detailContent: some View {
+        switch dashboardMode(profiles: store.profiles, hasLoadedOnce: store.hasLoadedOnce) {
+        case .loading:
+            LoadingSkeletonView()
+        case .empty:
+            EmptyStateView(onNewProfile: onNewProfile)
+        case .content:
+            liveContent
+        }
+    }
+
+    @ViewBuilder private var liveContent: some View {
+        switch viewMode {
+        case .grid:
+            DashboardContent(profiles: store.profiles, cards: cards, selection: selection,
+                             onDetails: { slug in
+                                 selection = slug
+                                 inspectorShown = true
+                             },
+                             onRemote: onRemote,
+                             onShowWindow: showWindow,
+                             onOpen: { slug in Task { await store.perform(["open", slug]) } })
+        case .list:
+            ProfileListView(profiles: store.profiles, selection: $selection)
+                .onChange(of: selection) { _, new in
+                    // A row selection opens the inspector (matching the grid's Details tap).
+                    inspectorShown = (new != nil)
+                }
+        }
+    }
+
+    // MARK: Show Window (in-process focus)
+
+    /// Resolve the instance's main PID, then raise its windows in-process. This is
+    /// the IN-PROCESS path (NSRunningApplication + a System Events fallback) — it does
+    /// NOT shell `engine focus`. Targets the PID, never the shared bundle id. A
+    /// stopped instance resolves to nil → no-op (its card shows Open, not Show Window).
+    private func showWindow(_ slug: String) {
+        Task {
+            if let pid = await store.mainPid(slug) {
+                Focus.show(pid: pid)
+            }
+        }
     }
 
     // MARK: Inspector

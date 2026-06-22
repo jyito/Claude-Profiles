@@ -186,6 +186,28 @@ enum SnapshotCases {
                 onCopy: { _ in }, onClose: {})
         })
 
+        // ── Phase 5: Menu-bar switcher, List view, States ──────────────────────
+
+        // Task 3 — menu-bar switcher content (stand-in: native menu items render
+        // empty headless). Alive-first rows + New Profile / Quit footer.
+        cases.append(SnapshotCase("menu-content", size: CGSize(width: 240, height: 220)) {
+            MenuContentSnapshot(profiles: Fixtures.all)
+        })
+
+        // Task 4 — dense List view (stand-in: native Table renders empty headless).
+        // "research" selected so the coral selection wash shows.
+        cases.append(SnapshotCase("list-view", size: CGSize(width: 760, height: 260), tolerance: 0.01) {
+            ProfileListSnapshotContent(profiles: Fixtures.all, selection: "research")
+        })
+
+        // Task 5 — empty + loading states (shimmer frozen in snapshotMode).
+        cases.append(SnapshotCase("state-empty", size: CGSize(width: 560, height: 400)) {
+            EmptyStateView()
+        })
+        cases.append(SnapshotCase("state-loading", size: CGSize(width: 760, height: 420), tolerance: 0.01) {
+            LoadingSkeletonView()
+        })
+
         return cases
     }
 }

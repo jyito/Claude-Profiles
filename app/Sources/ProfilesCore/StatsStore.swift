@@ -8,6 +8,11 @@ public final class StatsStore {
     public private(set) var terminals: [TerminalInfo] = []
     public private(set) var config = ProfileConfig()
     public private(set) var lastError: String?
+    /// False until the first `refreshOnce` completes (success OR error) — drives the
+    /// loading skeleton so the grid fills in rather than popping in from empty. Once
+    /// true it stays true (a later bad tick keeps the last-good UI, never reverts to
+    /// the skeleton).
+    public private(set) var hasLoadedOnce = false
 
     private let engine: any EngineRunning
     private let clock: any PollClock
@@ -26,6 +31,9 @@ public final class StatsStore {
         } catch {
             lastError = String(describing: error)   // keep last-good profiles — don't blank the UI on one bad tick
         }
+        // The first tick is done (even if it failed) — drop the loading skeleton so a
+        // persistent error doesn't shimmer forever. Set once; never reverts.
+        hasLoadedOnce = true
     }
 
     /// Load the terminals drill-down for one instance. A failed load empties
@@ -113,6 +121,20 @@ public final class StatsStore {
             lastError = msg
             return RemoteInfo(slug: slug, session: "", user: "", host: "",
                               tailscaleIp: "", alreadyRunning: false, error: msg)
+        }
+    }
+
+    /// Resolve an instance's main PID for in-process focus (Show Window / the
+    /// menu-bar switcher). Returns nil if not running (or on a transport error,
+    /// surfaced via `lastError`) — the caller no-ops rather than focusing pid 0.
+    public func mainPid(_ slug: String) async -> Int32? {
+        do {
+            let pid = try await engine.mainPid(slug)
+            lastError = nil
+            return pid
+        } catch {
+            lastError = String(describing: error)
+            return nil
         }
     }
 

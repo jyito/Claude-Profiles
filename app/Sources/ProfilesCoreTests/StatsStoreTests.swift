@@ -29,8 +29,24 @@ final class StatsStoreTests: XCTestCase {
         XCTAssertNotNil(err)                         // but the error is surfaced
     }
 
+    func testHasLoadedOnceGatesTheLoadingSkeleton() async throws {
+        let engine = FixtureEngine(stats: [stat("Able", running: true)])
+        let store = StatsStore(engine: engine, clock: ImmediateClock())
+        let before = await MainActor.run { store.hasLoadedOnce }
+        XCTAssertFalse(before)                       // skeleton shows before the first tick
+        await store.refreshOnce()
+        let after = await MainActor.run { store.hasLoadedOnce }
+        XCTAssertTrue(after)                         // first tick done → grid takes over
+        // A later FAILED tick must NOT revert to the skeleton.
+        engine.shouldThrow = true
+        await store.refreshOnce()
+        let stillLoaded = await MainActor.run { store.hasLoadedOnce }
+        XCTAssertTrue(stillLoaded)
+    }
+
     static let allTests: [(String, (StatsStoreTests) -> () async throws -> Void)] = [
         ("testRefreshPopulatesAndSorts", testRefreshPopulatesAndSorts),
         ("testBadTickKeepsLastGoodProfiles", testBadTickKeepsLastGoodProfiles),
+        ("testHasLoadedOnceGatesTheLoadingSkeleton", testHasLoadedOnceGatesTheLoadingSkeleton),
     ]
 }

@@ -102,4 +102,20 @@ public struct EngineClient: EngineRunning {
         // `copy` always exits 0 and prints nothing — `run` is a clean fit.
         try await run(["copy", text])
     }
+
+    public func mainPid(_ slug: String) async throws -> Int32? {
+        let path = enginePath
+        // The default instance has no slug-dir to match — `defaultpid` finds the
+        // Claude main process that carries NO `--user-data-dir` flag instead.
+        let args = (slug == "default") ? ["defaultpid"] : ["mainpid", slug]
+        return try await Task.detached(priority: .utility) {
+            let (out, code) = try Self.invoke(path, args)
+            if code != 0 { throw EngineError.nonZeroExit(code) }
+            // Stdout is a single PID line or empty (instance not running). Empty /
+            // unparseable → nil so a stopped instance never resolves to pid 0.
+            let stdout = String(data: out, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return Int32(stdout)
+        }.value
+    }
 }
