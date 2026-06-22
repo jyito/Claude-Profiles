@@ -30,6 +30,7 @@ struct ProfilesCoreTestsMain {
         var tally = TestTally()
         await runSuite("ProfileStatTests", ProfileStatTests.allTests, &tally)
         await runSuite("FormatterTests", FormatterTests.allTests, &tally)
+        await runSuite("SortTests", SortTests.allTests, &tally)
         print("Executed \(tally.passed + tally.failed) tests, with \(tally.failed) failures")
         exit(tally.failed == 0 ? 0 : 1)
     }
