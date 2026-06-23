@@ -34,12 +34,12 @@ That means:
 - **No credential handling, ever.** The launcher never sees, stores, or transmits passwords or tokens. Claude Desktop manages its own session inside each profile's folder, exactly like two browser profiles.
 - **No telemetry, no network connections.** The only stats are a small local text file per profile (launch history, last 50 entries) shown in the dashboard. Delete it any time.
 - **No modification of Claude.app.** The official app's code signature stays intact; auto-updates keep working.
-- **No dependencies.** Plain bash + AppleScriptObjC, all macOS built-ins. No Node, no Python, no Homebrew, no compilation.
+- **No runtime dependencies.** The dashboard is a native SwiftUI binary built with the macOS Command Line Tools (no Xcode) and pulls in **zero** third-party SwiftPM packages; the `engine.sh` backend is pure bash on macOS built-ins. No Node, no Python, no Homebrew at runtime.
 
 ## Features
 
 - **One-click profiles** — create a profile from a dialog; a native app appears instantly with the real Claude icon. Sign in once; it's permanent.
-- **Live dashboard** — a native window (NSWindow + WKWebView, spun up by `osascript`) showing each instance's CPU, memory, process count, terminals, and disk, with rolling sparklines, refreshed every 2 seconds. Stats are strictly per-instance: one account's numbers can never bleed into another's.
+- **Live dashboard** — a native **SwiftUI** split-view app: a permanent vibrant sidebar, a KPI strip, and master-detail profile pages with hero trend charts and a handle-leak verdict. Live cards show each instance's CPU, memory, process count, terminals, and disk, with rolling sparklines and a leak gauge, refreshed every 2 seconds. Stats are strictly per-instance: one account's numbers can never bleed into another's.
 - **Per-instance drill-down** — expand any card in place. A *running* profile reveals a live table of its terminal sessions (device, command, idle time) with one-click close; a *stopped* profile reveals granular cleanup tiers — Caches / GPU / Logs / Everything. A **Throttle** control lowers a CPU-hogging instance's priority without quitting it.
 
   <!-- SCREENSHOT — save as assets/drilldown.png (≥1000px wide). An expanded running card showing the terminals table; crop to the card. -->
@@ -51,7 +51,7 @@ That means:
 - **Show Window** — with many instances and many windows, one click raises every window of a *specific* instance. It targets the process by PID via `NSRunningApplication`, which works even though all instances share Claude's bundle identifier — and needs no Accessibility permissions.
 - **Cleanup utilities** — graceful quit, force-quit of a full process tree (releases stuck terminals), per-profile cache clearing, and an Emergency Stop killswitch. Cache clearing only ever deletes regenerable Electron caches; it refuses to run against a live instance and never touches sign-ins.
 - **Safe removal** — deleting a profile's app takes one confirmation; deleting its saved login requires literally typing `DELETE`.
-- **Graceful degradation** — if the dashboard window can't open on a given macOS version, the app automatically falls back to a native-dialog interface with the same capabilities.
+- **Scriptable, too** — every action the dashboard performs is also reachable from `cli/claude-profiles.sh`, which drives the same `engine.sh` backend, so the whole tool is usable headlessly.
 - **Remote, from your iPad** — each card's **Remote** button runs that profile's Claude Code session in `screen` and shows copy-paste SSH lines (same-network and, with Tailscale, any-network) so you can **SSH into it from your iPad** — real remote sessions, no network server. A mint dot marks accounts whose session is already live, and the modal includes a **QR of the attach line** to read straight onto your phone's camera. (See [docs/REMOTE.md](docs/REMOTE.md).)
 - **CLI for power users** — `cli/claude-profiles.sh` mirrors everything for scripting, plus a `code-alias` command for per-account [Claude Code](https://docs.claude.com/en/docs/claude-code/overview) config dirs and the same `remote` flow on the command line.
 
@@ -61,8 +61,10 @@ That means:
   flow rely on macOS 14+ behaviour; older versions aren't supported.
 - **[Claude Desktop](https://claude.ai/download)** installed (this tool launches
   the real app — it never bundles or modifies it).
-- Nothing else: no Homebrew, Node, Python, or admin rights. It's bash +
-  AppleScript + macOS built-ins, which is also why the download is so small.
+- Nothing else to install: no Homebrew, Node, Python, or admin rights. The app
+  is a self-contained native SwiftUI binary plus a bash `engine.sh`, all on
+  macOS built-ins — which is also why the download is so small. (Building from
+  source needs the free Command Line Tools; running the release does not.)
 
 ## Install (users)
 
@@ -76,40 +78,49 @@ brew install --cask jyito/tap/claude-profiles
 
 ## Build from source
 
+Building needs the macOS **Command Line Tools** (`xcode-select --install`) for
+the Swift toolchain — no full Xcode required.
+
 ```bash
 git clone https://github.com/jyito/Claude-Profiles.git
 cd Claude-Profiles
-bash scripts/build.sh        # assembles dist/Claude Profiles.app (+ DMG on macOS)
-bash tests/run-tests.sh      # full test suite, runs on macOS or Linux
+cd app && swift build         # compile the native SwiftUI app (ProfilesCore + UI + Profiles)
+cd ..
+bash scripts/build.sh         # release-build + assemble dist/Claude Profiles.app (+ DMG on macOS)
+bash tests/run-tests.sh       # bash/engine suite, runs on macOS or Linux
 ```
 
-There is no compile step — `build.sh` just assembles the bundle from `src/`.
+`build.sh` runs `swift build -c release`, then drops the `Profiles` binary into
+the bundle alongside `engine.sh`. The Swift logic + render tests run as
+executable runners (`swift run ProfilesCoreTests`, `swift run ProfilesSnapshotTests`)
+because XCTest needs full Xcode.
 
 ## Repository layout
 
 ```
-src/        the app: launcher (GUI manager), engine.sh (stats/actions),
-            dashboard.html (window UI), dashboard.applescript (window host)
-cli/        standalone CLI with the same engine
-scripts/    build.sh (assemble bundle), make-dmg.sh (native DMG, macOS)
+app/        native SwiftUI package (SwiftPM): ProfilesCore (pure logic + engine
+            seam), ProfilesUI (Theme + views), Profiles (the @main app binary)
+src/        engine.sh (stats/actions backend), badge-icon.applescript (icon
+            compositor), Info.plist
+cli/        standalone CLI driving the same engine.sh
+scripts/    build.sh (compile + assemble bundle), make-dmg.sh (native DMG, macOS)
 docs/       INSTALL.md (end users), REMOTE.md (terminal access), ARCHITECTURE.md (how it all works)
-tests/      Linux-compatible suite with shimmed macOS tools
+tests/      Linux-compatible bash/engine suite with shimmed macOS tools
 ```
 
 ## Architecture in one paragraph
 
-A profile is a generated `.app` bundle whose entire executable is a short bash script: `open -n -a Claude.app --args --user-data-dir=~/.claude-instances/<slug>`. The manager app is the same kind of bundle, with a menu. The dashboard is a WKWebView in an NSWindow created by AppleScriptObjC through plain `osascript`; the page's buttons communicate to native code by setting `document.title` (polled every 0.25 s — a block-free, subclass-free bridge), and native pushes JSON stats back with `evaluateJavaScript`. Stats come from `engine.sh`, which attributes processes to instances by their `--user-data-dir` argument and walks the child tree for helpers. Full detail in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+A profile is a generated `.app` bundle whose entire executable is a short bash script: `open -n -a Claude.app --args --user-data-dir=~/.claude-instances/<slug>`. The manager is a native **SwiftUI** app (`Profiles.app`): a `NavigationSplitView` dashboard plus a `MenuBarExtra` switcher. It never talks to Claude's servers — its only backend is `engine.sh`, which it runs with `Process` and decodes from JSON via `Codable` (a real typed boundary). The engine attributes processes to instances by their `--user-data-dir` argument and walks the child tree for helpers. Show Window raises an instance's windows by PID. Full detail in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ```mermaid
 flowchart TD
-    U([You]) -->|click| DASH["Dashboard window<br/>NSWindow + WKWebView"]
-    DASH <-->|"document.title bridge<br/>· evaluateJavaScript push"| APPLET["Stay-open applet<br/>AppleScriptObjC, main thread"]
-    LAUNCH["launcher (bash)"] -->|"osacompile -s<br/>(reused if unchanged)"| APPLET
-    APPLET -->|stats · actions| ENGINE["engine.sh<br/>bash · macOS built-ins only"]
+    U([You]) -->|click| APP["Profiles.app<br/>native SwiftUI<br/>(dashboard + MenuBarExtra)"]
+    APP -->|"Process + Codable<br/>(stats · actions)"| ENGINE["engine.sh<br/>bash · macOS built-ins only"]
     ENGINE -->|ps · lsof · du| PROCS[("Running Claude<br/>process trees")]
     ENGINE -->|reads / cleans caches| DIRS[("~/.claude-instances/&lt;slug&gt;<br/>per-profile data dir")]
-    APPLET -.->|launch| WRAP["Profile wrapper .app<br/>open -n -a Claude.app --user-data-dir=…"]
+    ENGINE -.->|"create writes"| WRAP["Profile wrapper .app<br/>open -n -a Claude.app --user-data-dir=…"]
     WRAP -->|spawns| PROCS
+    APP -.->|"Show Window by PID"| PROCS
 ```
 
 ## Known limitations
@@ -128,7 +139,7 @@ flowchart TD
 - [x] Keyboard profile switching (⌘⌥1–9 + optional global Hammerspoon recipe)
 - [x] Developer ID signing + notarization for friction-free public distribution (v0.6.0)
 - [x] Homebrew cask — `brew install --cask jyito/tap/claude-profiles` (v0.6.0)
-- [ ] Compiled SwiftUI dashboard (current window host is AppleScriptObjC by design — zero deps — but a signed Swift app unlocks richer UI)
+- [x] Native SwiftUI dashboard — split-view, hero trend charts, leak verdict, MenuBarExtra switcher (v0.7.0; replaces the AppleScriptObjC + WebView host)
 
 ## Contributing
 
