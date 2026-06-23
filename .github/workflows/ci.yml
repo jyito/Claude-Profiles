@@ -44,19 +44,8 @@ jobs:
       - name: run suite
         run: bash tests/run-tests.sh
 
-  build:
-    name: build assembles
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
-        with:
-          egress-policy: audit
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-      - name: assemble bundle + zip
-        run: |
-          bash scripts/build.sh
-          test -f "dist/Claude-Profiles.zip"
+  # NOTE: the bundle build moved to ci-macos.yml — `scripts/build.sh` now runs
+  # `swift build` of the SwiftUI app, which is macOS-only (no Linux assemble job).
 
   secrets:
     name: secret scan (gitleaks)

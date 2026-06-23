@@ -9,7 +9,7 @@
 	<key>CFBundleIdentifier</key>
 	<string>local.claude-profiles.manager</string>
 	<key>CFBundleExecutable</key>
-	<string>launcher</string>
+	<string>Profiles</string>
 	<key>CFBundleIconFile</key>
 	<string>app</string>
 	<key>CFBundlePackageType</key>
@@ -18,8 +18,6 @@
 	<string>0.6.2</string>
 	<key>CFBundleShortVersionString</key>
 	<string>0.6.2</string>
-	<key>LSUIElement</key>
-	<true/>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
 </dict>
