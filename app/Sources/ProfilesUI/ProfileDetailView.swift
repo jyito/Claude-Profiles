@@ -9,12 +9,18 @@ import ProfilesCore
 ///
 /// Composed from existing pieces so it can never drift from the cards / inspector:
 ///
-/// - header — `BadgeDisc` + name + the same status line as the card, plus the
-///   PRIMARY actions (Show Window + Remote for running/default, Open for stopped);
+/// - header — `BadgeDisc` + name + the same status line as the card;
+/// - a consolidated ACTION BAR directly below the header, holding the quick
+///   lifecycle actions in ONE row: running/default → Show Window · Remote ·
+///   Throttle CPU · Restart · a `⋯` overflow with Quit / Force Quit; stopped →
+///   Open · Remote (nothing to throttle/restart/quit). This is the single home for
+///   the quick actions (they were previously split between the header and the
+///   sections below the terminals table);
 /// - the live metric row (CPU / MEMORY with `Sparkline`s), echoing the card layout;
-/// - the shared `InstanceSections` drill-down (terminals + Throttle + leak block /
-///   clean tiers + badge + Remove / terminals-only default) with the same
-///   `InspectorAction` wiring the scene already performs.
+/// - the shared `InstanceSections` drill-down (terminals + leak block / clean tiers
+///   + badge + Remove / terminals-only default) with the same `InspectorAction`
+///   wiring the scene already performs. Throttle no longer lives there — it moved up
+///   into the action bar — so the sections are pure drill-down content.
 ///
 /// Pure: no store/clock reads. The live `DashboardView` hands the rolling CPU/Mem
 /// series + `AlertState`; the snapshot harness hands fixtures. The scrollable wrap
@@ -32,6 +38,10 @@ public struct ProfileDetailView: View {
     let onRemote: (String) -> Void
     let onOpen: (String) -> Void
     let onAction: (InspectorAction) -> Void
+    /// Lifecycle overflow (Quit / Force Quit), keyed off the same `CardAction` the
+    /// cards emit. The scene owns the confirmation + default-verb mapping (so the
+    /// detail page stays pure of engine calls, exactly like the cards).
+    let onCardAction: (CardAction) -> Void
     /// Snapshot-only: pre-arm one terminal's Close row so the armed state renders.
     let snapshotArmedDev: String?
     /// Snapshot-only: render the leak block's armed ("Confirm Restart") state.
@@ -53,6 +63,7 @@ public struct ProfileDetailView: View {
                 onShowWindow: @escaping (String) -> Void = { _ in },
                 onRemote: @escaping (String) -> Void = { _ in },
                 onOpen: @escaping (String) -> Void = { _ in },
+                onCardAction: @escaping (CardAction) -> Void = { _ in },
                 onAction: @escaping (InspectorAction) -> Void) {
         self.stat = stat
         self.cpu = cpu
@@ -68,12 +79,14 @@ public struct ProfileDetailView: View {
         self.onShowWindow = onShowWindow
         self.onRemote = onRemote
         self.onOpen = onOpen
+        self.onCardAction = onCardAction
         self.onAction = onAction
     }
 
     private var content: some View {
         VStack(alignment: .leading, spacing: Theme.Space.xl) {
             header
+            actionBar
             Divider().overlay(Theme.hairline)
             // Metrics are meaningful only while the instance is alive; a stopped
             // profile shows its sections (clean tiers / badge / remove) directly.
@@ -114,7 +127,7 @@ public struct ProfileDetailView: View {
         .accessibilityIdentifier("profile-detail-\(stat.effSlug)")
     }
 
-    // MARK: Header (identity + primary actions)
+    // MARK: Header (identity)
 
     private var header: some View {
         HStack(alignment: .center, spacing: Theme.Space.lg) {
@@ -127,7 +140,6 @@ public struct ProfileDetailView: View {
                 statusLine
             }
             Spacer(minLength: Theme.Space.lg)
-            primaryActions
         }
     }
 
@@ -151,27 +163,75 @@ public struct ProfileDetailView: View {
         return "Stopped · opened \(stat.opens)× · last \(stat.last)"
     }
 
-    /// Running/default → Show Window + Remote; stopped → Open. Mirrors the card's
-    /// primary action set (the secondary drill-down actions live in the sections).
-    @ViewBuilder private var primaryActions: some View {
+    // MARK: Action bar (consolidated quick actions)
+
+    /// The single home for the profile's quick lifecycle actions, directly below the
+    /// header. Running/default → Show Window · Remote · Throttle CPU · Restart · a `⋯`
+    /// overflow (Quit / Force Quit); stopped → Open · Remote (there's nothing to
+    /// throttle/restart/quit on a stopped instance — Remove stays in its section).
+    /// Throttle/Restart go through `onAction` (`InspectorAction`); Quit/Force Quit go
+    /// through `onCardAction` (the scene confirms + maps the default verbs).
+    @ViewBuilder private var actionBar: some View {
         HStack(spacing: Theme.Space.sm) {
             if stat.running || stat.isDefault {
                 Button { onShowWindow(stat.effSlug) } label: { Text("Show Window") }
                     .buttonStyle(PillButtonStyle(.mint))
                     .accessibilityIdentifier("detail-\(stat.effSlug)-showwindow")
-                Button { onRemote(stat.effSlug) } label: {
-                    HStack(spacing: 5) {
-                        if stat.remote { Circle().fill(Theme.mint).frame(width: 6, height: 6) }
-                        Text("Remote")
-                    }
-                }
-                .buttonStyle(PillButtonStyle(.neutral))
-                .accessibilityIdentifier("detail-\(stat.effSlug)-remote")
+                remoteButton
+                Button { onAction(.throttle) } label: { Text("Throttle CPU") }
+                    .buttonStyle(PillButtonStyle(.neutral))
+                    .accessibilityIdentifier("detail-\(stat.effSlug)-throttle")
+                Button { onAction(.restart) } label: { Text("Restart") }
+                    .buttonStyle(PillButtonStyle(.neutral))
+                    .accessibilityIdentifier("detail-\(stat.effSlug)-restart")
+                overflowControl
             } else {
                 Button { onOpen(stat.effSlug) } label: { Text("Open") }
                     .buttonStyle(PillButtonStyle(.mint))
                     .accessibilityIdentifier("detail-\(stat.effSlug)-open")
+                remoteButton
             }
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// Remote pill with the mint live-dot when the profile's Claude Code session is
+    /// up. Shared by both action-bar variants (running/default and stopped).
+    private var remoteButton: some View {
+        Button { onRemote(stat.effSlug) } label: {
+            HStack(spacing: 5) {
+                if stat.remote { Circle().fill(Theme.mint).frame(width: 6, height: 6) }
+                Text("Remote")
+            }
+        }
+        .buttonStyle(PillButtonStyle(.neutral))
+        .accessibilityIdentifier("detail-\(stat.effSlug)-remote")
+    }
+
+    private var overflowGlyph: some View {
+        Image(systemName: "ellipsis.circle")
+            .font(.system(size: 16))
+            .foregroundStyle(Theme.text3)
+    }
+
+    /// Native `Menu` live; a plain glyph under `ImageRenderer` (a `Menu` paints empty
+    /// headless, so snapshotMode keeps the deterministic glyph — same pattern as the
+    /// card's overflow, goldens stay clean).
+    @ViewBuilder private var overflowControl: some View {
+        if snapshotMode {
+            overflowGlyph
+                .accessibilityIdentifier("detail-\(stat.effSlug)-overflow")
+        } else {
+            Menu {
+                Button("Quit") { onCardAction(.quit) }
+                Button("Force Quit", role: .destructive) { onCardAction(.force) }
+            } label: {
+                overflowGlyph
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .accessibilityIdentifier("detail-\(stat.effSlug)-overflow")
         }
     }
 

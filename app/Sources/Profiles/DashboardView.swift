@@ -138,6 +138,9 @@ struct DashboardView: View {
                 onShowWindow: showWindow,
                 onRemote: onRemote,
                 onOpen: { s in Task { await store.perform(["open", s]) } },
+                // The detail-page overflow (Quit / Force Quit) reuses the SAME scene
+                // handler the cards do — confirmation + default-verb mapping included.
+                onCardAction: { onCardAction($0, stat.effSlug) },
                 onAction: { handle($0, for: stat) }
             )
         } else {

@@ -6,9 +6,13 @@ import ProfilesCore
 /// Pure: takes a `ProfileStat`, its loaded `terminals`, the precomputed
 /// `AlertState`, and an `onAction` sink. The body switches by instance kind —
 ///
-/// - running → terminals table + Throttle + (if leaking) the leak-restart block;
+/// - running → terminals table + (if leaking) the leak-restart block;
 /// - stopped → clean tiers + badge picker + Remove (typed-DELETE flow);
 /// - default → terminals ONLY (gated structurally by `isDefault`, CLAUDE.md §5).
+///
+/// Throttle CPU used to live in the running body (below the terminals table); it
+/// moved up into `ProfileDetailView`'s consolidated action bar, so these sections
+/// are pure drill-down content now.
 ///
 /// Extracted from `InspectorView` so the maximized detail page reuses the exact
 /// same sections (and the same `InspectorAction` wiring) instead of duplicating
@@ -72,15 +76,6 @@ public struct InstanceSections: View {
     private var runningBody: some View {
         VStack(alignment: .leading, spacing: Theme.Space.lg) {
             terminalsSection
-
-            VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                Button { onAction(.throttle) } label: { Text("Throttle CPU") }
-                    .buttonStyle(PillButtonStyle(.neutral))
-                    .accessibilityIdentifier("inspector-throttle")
-                Text("Lowers priority until restart.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.text3)
-            }
 
             if stat.ptmx > 0 {
                 LeakBlock(stat: stat, state: state, snapshotArmed: snapshotLeakArmed) {
