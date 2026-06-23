@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [0.7.2] — 2026-06-23
+
+- **Changed:** the handle-leak gauge now flags **actual leaks**, not just near-exhaustion.
+  A tile turns **amber** when an instance is actively leaking — held `/dev/ptmx` masters
+  climbing beyond its live terminals, sustained ~6s — and stays calm otherwise. The
+  near-ceiling coral tier is gone; a leak is a leak at any level.
+- **New:** the default Claude card now shows its own handle/leak readout (informational —
+  the protected default is never auto-restarted, per its contract).
+- **Changed:** every tile reports handles consistently as **"N handles"**; the system
+  ceiling stays where it belongs — the KPI strip and the detail-page handle-pool chart.
+
 ## [0.7.1] — 2026-06-23
 
 - **Fixed:** quitting the **default** Claude instance left its card stuck on "Running"
