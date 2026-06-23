@@ -36,6 +36,16 @@ enum Fixtures {
         last: "", color: "#6E6A62", remote: false
     )
 
+    // The default (system) instance after the user quits it: empty slug (→ default),
+    // `running:false`, zeroed metrics. Drives the `card-default-stopped` golden — the
+    // relaunch affordance (Open → opendefault) that the bug used to suppress.
+    static let defaultStopped = ProfileStat(
+        name: "Claude (default)", slug: "", running: false,
+        cpu: 0, mem: 0, procs: 0, ptys: 0,
+        ptmx: 0, ptmxMax: 512, disk: -1, opens: 0,
+        last: "", color: "#6E6A62", remote: false
+    )
+
     static let all: [ProfileStat] = [defaultInstance, business, research, clientX]
 
     // Three terminals for the inspector drill-down: an active pty host, an idle

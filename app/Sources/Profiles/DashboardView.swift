@@ -114,7 +114,7 @@ struct DashboardView: View {
                              onDetails: { open($0) },
                              onRemote: onRemote,
                              onShowWindow: showWindow,
-                             onOpen: { slug in Task { await store.perform(["open", slug]) } },
+                             onOpen: openInstance,
                              onCardAction: onCardAction)
         case .list:
             // A row selection pushes that profile's detail page (matching the grid's
@@ -137,7 +137,7 @@ struct DashboardView: View {
                 terminals: store.terminals,
                 onShowWindow: showWindow,
                 onRemote: onRemote,
-                onOpen: { s in Task { await store.perform(["open", s]) } },
+                onOpen: openInstance,
                 // The detail-page overflow (Quit / Force Quit) reuses the SAME scene
                 // handler the cards do — confirmation + default-verb mapping included.
                 onCardAction: { onCardAction($0, stat.effSlug) },
@@ -167,6 +167,19 @@ struct DashboardView: View {
             if let pid = await store.mainPid(slug) {
                 Focus.show(pid: pid)
             }
+        }
+    }
+
+    // MARK: Open (relaunch)
+
+    /// Relaunch a stopped instance. A real profile uses `engine open <slug>`; the
+    /// DEFAULT instance has its own verb — `engine open default` is wrong (there's no
+    /// `default` wrapper), so it routes through `opendefault`, which relaunches the
+    /// real Claude.app with its default data dir. This is the only Open mapping that
+    /// honors the restricted default contract.
+    private func openInstance(_ slug: String) {
+        Task {
+            await store.perform(slug == "default" ? ["opendefault"] : ["open", slug])
         }
     }
 

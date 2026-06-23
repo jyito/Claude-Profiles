@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [0.7.1] — 2026-06-23
+
+- **Fixed:** quitting the **default** Claude instance left its card stuck on "Running"
+  with a dead Show Window button. The default card now flips to a **Stopped** state with
+  an **Open** button (relaunches via the engine's `opendefault`); the detail-page action
+  bar does the same. The restricted-default contract is unchanged (no clean/details/disk).
+
 ## [0.7.0] — 2026-06-22
 
 The dashboard is now a **native SwiftUI app** — a full rewrite replacing the
