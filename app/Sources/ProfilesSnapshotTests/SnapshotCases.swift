@@ -62,6 +62,14 @@ enum SnapshotCases {
                             mem: Fixtures.memSeries, state: .calm, selected: false)
                 .padding(Theme.Space.lg)
         })
+        // The quit default: stopped status line + protected note + an Open / Remote
+        // row (the relaunch affordance the bug suppressed). Restricted-default
+        // contract holds — no metrics, no Details, no clean tiers.
+        cases.append(SnapshotCase("card-default-stopped", size: CGSize(width: 340, height: 200)) {
+            ProfileCardView(stat: Fixtures.defaultStopped, cpu: Fixtures.cpuSeries,
+                            mem: Fixtures.memSeries, state: .calm, selected: false)
+                .padding(Theme.Space.lg)
+        })
 
         // Task 7 — KPI instrument strip
         cases.append(SnapshotCase("kpi-strip", size: CGSize(width: 820, height: 110)) {

@@ -173,7 +173,11 @@ public struct ProfileDetailView: View {
     /// through `onCardAction` (the scene confirms + maps the default verbs).
     @ViewBuilder private var actionBar: some View {
         HStack(spacing: Theme.Space.sm) {
-            if stat.running || stat.isDefault {
+            // Show-Window vs Open keys off `running`, NOT `isDefault` — a quit default
+            // (engine reports `running:false`) must offer Open (→ opendefault), not a
+            // dead Show Window. Throttle/Restart/overflow stay running-only: a stopped
+            // instance has nothing to throttle, restart, or quit.
+            if stat.running {
                 Button { onShowWindow(stat.effSlug) } label: { Text("Show Window") }
                     .buttonStyle(PillButtonStyle(.mint))
                     .accessibilityIdentifier("detail-\(stat.effSlug)-showwindow")

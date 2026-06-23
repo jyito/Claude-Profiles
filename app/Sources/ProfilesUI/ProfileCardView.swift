@@ -157,7 +157,7 @@ public struct ProfileCardView: View {
 
     @ViewBuilder private var content: some View {
         if stat.isDefault {
-            defaultContent
+            if stat.running { defaultContent } else { defaultStoppedContent }
         } else if stat.running {
             runningContent
         } else {
@@ -339,6 +339,57 @@ public struct ProfileCardView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("card-default-details")
+            }
+            .font(.system(size: 12, weight: .medium))
+        }
+    }
+
+    // MARK: Default — stopped
+
+    /// The default instance after the user quits it. The engine reports it
+    /// `running:false`; this is the relaunch affordance (the bug fix — the card used
+    /// to stay stuck reading "Running · 0 Procs" with a dead Show Window button).
+    ///
+    /// Honors the SAME restricted default contract as `defaultContent` (CLAUDE.md §5):
+    /// structurally NO clean tiers, NO Details drill-down, NO badge picker, NO disk
+    /// read. Just a stopped status line, the protected note (kept for visual parity
+    /// with the running default), and an Open (→ `opendefault`) + Remote action row.
+    /// No metric row / sparklines — the instance is off. `fillsHeight` equalizes the
+    /// card height in the grid, so this stays deliberately lightweight.
+    private var defaultStoppedContent: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.md) {
+            HStack(spacing: Theme.Space.sm) {
+                StatusDot(running: false)
+                Text("Stopped · default instance")
+                    .font(.system(size: 12))
+                    .monospacedDigit()
+                    .foregroundStyle(Theme.text3)
+            }
+            HStack(spacing: Theme.Space.sm) {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Theme.text3)
+                Text("Read-only · default instance is protected")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.text3)
+            }
+            HStack(spacing: Theme.Space.sm) {
+                Button {
+                    onOpen(stat.effSlug)
+                } label: { Text("Open") }
+                    .buttonStyle(PillButtonStyle(.mint))
+                    .accessibilityIdentifier("card-default-open")
+                Button {
+                    onRemote(stat.effSlug)
+                } label: {
+                    HStack(spacing: 5) {
+                        if stat.remote { Circle().fill(Theme.mint).frame(width: 6, height: 6) }
+                        Text("Remote")
+                    }
+                }
+                .buttonStyle(PillButtonStyle(.neutral))
+                .accessibilityIdentifier("card-default-remote")
+                Spacer(minLength: 0)
             }
             .font(.system(size: 12, weight: .medium))
         }
