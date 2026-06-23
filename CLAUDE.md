@@ -133,38 +133,6 @@ is still a tiny `.app` whose executable is an inline bash `launcher` that runs
   `closeterm`/`throttle` are guarded to the instance's own tree — never an
   arbitrary pid. `autotick` enforces the opt-in auto-clean / auto-close
   settings (stored under `.runtime/settings`), a cheap no-op while disabled.
-- **`dashboard.html`** — the entire UI. Dark theme (#1A1915 bg, #21201A
-  cards, coral #D85A30 accent, mint #5DCAA5 running state). 30-point rolling
-  sparkline history per profile. New Profile = modal over a scrim (Escape /
-  scrim-click close, Enter creates). Remove = in-card two-step with typed
-  DELETE. `uiLock` pauses live re-render during any form/confirm so the 2s
-  tick can't eat input (but NOT during drill-down, so live stats keep ticking
-  under an open panel). Cards expand in place (full grid width, one at a time,
-  Escape collapses): running → terminals table with per-row close + Throttle;
-  stopped → clean tiers. Each card's secondary controls are a row of two
-  button-styled controls — **Remote** (`act('remote')` → `cp:remote` →
-  `pushRemote` → `updateRemote` opens the Remote modal of copy-paste SSH
-  commands + in-app Tailscale steps; Copy buttons go `cp:copy` → `pbcopy`) and
-  **+ Details** (the drill-down toggle, formerly the "Terminals/Cleanup" text
-  link). Settings modal drives `getconfig`/`setconfig`.
-  Buttons are Title Case (Apple HIG) with hover/press/focus-visible states; a
-  startup loading splash shows until the first stats render. Other copy is
-  sentence case.
-- **`dashboard.applescript`** — window host SOURCE. The launcher substitutes
-  `__RESOURCES__` and compiles it with `osacompile -s` into a stay-open applet
-  at `~/.claude-instances/.runtime/`, REUSING the compiled applet when the
-  source is unchanged (a stable ad-hoc signature keeps the one-time Automation
-  grant alive across launches), then `open`s it (re-`open` focuses the existing
-  instance). Bridges `terminals`/`getconfig` back to the page via
-  `updateTerminals`/`updateConfig`; runs `autotick` every ~16th idle tick.
-  Also hosts the **menu-bar switcher**: an `NSStatusItem` (retained in a property,
-  template SF Symbol) whose menu rebuilds on open via the `menuNeedsUpdate:`
-  delegate from `engine menulist` (slug⇥name⇥running), each row reusing
-  `focusInstance` by PID. Because the status item must persist, closing the window
-  no longer quits — `on idle` just stops the stats sweep while hidden; **Quit** is
-  on the menu (or ⌘Q), and `on reopen` re-shows the window. Menu-item target/action
-  (`setTarget:me` + `menuClicked:`) is one of the few callbacks AppleScriptObjC can
-  do without the title-bridge.
 - **`badge-icon.applescript`** — zero-dep AppleScriptObjC icon compositor called
   by `engine.sh`'s `badge_icon`. Draws a colored disc + the profile's initial
   onto a base icon in a headless `NSBitmapImageRep` context (no window — runs
@@ -174,59 +142,19 @@ is still a tiny `.app` whose executable is an inline bash `launcher` that runs
 
 ## Hard-won lessons (do not relearn these)
 
-- **`osascript` runs scripts on a background thread; AppKit/WebKit require
-  the main thread for window creation.** That's why the host is compiled to
-  an applet (applets run handlers on the main thread). Do not "simplify"
-  back to plain `osascript` execution — it fails at runtime.
-- **`run` is an AppleScript command name.** `NSApp's run()` is a PARSE error
-  (we hit it at char 2326). Pipe-escape reserved words: `|center|()`, etc.
-- **JS→native bridge is title polling.** AppleScriptObjC cannot implement
-  WKScriptMessageHandler (no subclassing) or completion-handler blocks. The
-  page sets `document.title = "cp:verb[:arg]"`; a 250ms NSTimer (safe on the
-  applet's main thread) polls `theWebView's title()` (KVO-readable, no block
-  needed), resets it, dispatches. Native→JS via
-  `evaluateJavaScript:completionHandler:(missing value)` (fire-and-forget is
-  block-free). Stats push on the applet's `on idle` every 2s.
-- **The title bridge can feed back on itself — don't push stats after the page's
-  OWN auto-refresh.** An open drill-down keeps itself live by having `updateStats`
-  set `document.title = "cp:terminals:<slug>"` each tick. `checkBridge` (250ms)
-  dispatches that title and used to also call `pushStats` afterward — but
-  `pushStats` runs `updateStats`, which re-sets the `cp:terminals` title, which
-  the next poll catches, re-pushes… so the whole refresh+rebuild cycle ran at
-  ~4Hz whenever a terminals panel was open (and only then — that's the tell). The
-  fix: in `checkBridge`, only `pushStats` for real user actions, i.e. skip it when
-  `rawTitle starts with "cp:terminals"`. Any new self-arming `cp:` verb needs the
-  same exclusion. (The dashboard also defers DOM updates while the user is
-  actively scrolling, and `render()` patches in place unless structure changed —
-  see the in-place-patch note in dashboard.html.)
 - **Show Window targets a PID, not a bundle ID** — all instances share
-  Claude's bundle ID. `NSRunningApplication
-  runningApplicationWithProcessIdentifier:` + `activateWithOptions:3`,
-  needing no permissions. macOS 14+ cooperative activation can ignore it
-  (other Spaces/displays/fullscreen), so after 0.3s, if `isActive` is false,
-  fall back to System Events `set frontmost of (first application process
-  whose unix id is N) to true` — triggers a ONE-TIME Automation permission
-  prompt, the only permission in the project. Also user-dependent: Desktop &
-  Dock → "switch to a Space with open windows" affects the jump.
-- **Replacing an applet's `applet.icns` is NOT enough to brand its Dock
-  icon.** osacompile embeds an `Assets.car` and sets `CFBundleIconName`,
-  which outranks `CFBundleIconFile` on modern macOS — the Dock keeps showing
-  the stock AppleScript scroll. `launch_dashboard` must delete the
-  `CFBundleIconName` key and `Assets.car` after compiling (and sets a unique
-  `CFBundleIdentifier`, since iconservices caches per bundle id). Don't
-  "clean up" that block.
+  Claude's bundle ID. The SwiftUI `Focus.show(pid:)` resolves the instance's
+  main PID via the engine (`mainpid`/`defaultpid`), then
+  `NSRunningApplication runningApplicationWithProcessIdentifier:` +
+  `activateWithOptions:`, needing no permissions. macOS 14+ cooperative
+  activation can ignore it (other Spaces/displays/fullscreen), so if the app
+  isn't frontmost, fall back to System Events `set frontmost of (first
+  application process whose unix id is N) to true` — triggers a ONE-TIME
+  Automation permission prompt, the only permission in the project. Also
+  user-dependent: Desktop & Dock → "switch to a Space with open windows"
+  affects the jump.
 - **`kill` is a bash builtin** — PATH shims can't intercept it; that's why
   the test suite doesn't exercise quit/force, by design. Keep it that way.
-- **A cached applet can outlive the install path it was compiled for** → blank
-  white dashboard. The runtime applet bakes the manager's Resources path into
-  `loadFileURL:`; if the app moves (`~/Applications` → `/Applications`), the
-  reused applet loads a dead `dashboard.html` and WKWebView paints nothing (no
-  error). `launch_dashboard` self-heals via `runtime_applet_stale` —
-  **exact-match** the baked `resourcesDir` (NOT substring: `/Applications/…` is
-  a substring of `/Users/x/Applications/…`, the exact case that bit us) and
-  recompile on mismatch. Recovery for users: `rm -rf ~/.claude-instances/.runtime`.
-  White (not the dark `#1A1915` splash) = document never loaded; a JS error
-  would still paint the splash. See `docs/postmortems/2026-06-13-white-screen-on-launch.md`.
 - **Locally generated/built bundles carry no quarantine** — no Gatekeeper
   friction for the maintainer or for wrappers the app generates. DOWNLOADED
   zips/DMGs are quarantined: right-click → Open until Developer ID signing +
@@ -234,6 +162,57 @@ is still a tiny `.app` whose executable is an inline bash `launcher` that runs
 - **Deep-link logins:** macOS routes `claude://` to one instance; if the
   browser login lands in the wrong window, use the login page's copy-code
   path. Once per profile. Don't attempt LSHandlerRoles hacks.
+
+### Historical (pre-SwiftUI, ≤ v0.6)
+
+These lessons are about the **retired AppleScriptObjC + WebView host** (the
+`dashboard.html` / `dashboard.applescript` / `launcher` layer, deleted at the
+v0.7.0 SwiftUI cutover). Kept as history so future readers know why the applet
+existed and what its constraints were — they no longer apply to the native
+SwiftUI `app/`.
+
+- **`osascript` runs scripts on a background thread; AppKit/WebKit require
+  the main thread for window creation.** That's why the host was compiled to
+  an applet (applets run handlers on the main thread) rather than run as plain
+  `osascript` — that failed at runtime.
+- **`run` is an AppleScript command name.** `NSApp's run()` is a PARSE error
+  (we hit it at char 2326). Pipe-escape reserved words: `|center|()`, etc.
+- **JS→native bridge was title polling.** AppleScriptObjC cannot implement
+  WKScriptMessageHandler (no subclassing) or completion-handler blocks. The
+  page set `document.title = "cp:verb[:arg]"`; a 250ms NSTimer (safe on the
+  applet's main thread) polled `theWebView's title()` (KVO-readable, no block
+  needed), reset it, dispatched. Native→JS via
+  `evaluateJavaScript:completionHandler:(missing value)` (fire-and-forget is
+  block-free). Stats pushed on the applet's `on idle` every 2s. (The SwiftUI
+  app replaces this entirely with the typed `Process` + `Codable` `EngineClient`
+  boundary.)
+- **The title bridge could feed back on itself — don't push stats after the
+  page's OWN auto-refresh.** An open drill-down kept itself live by having
+  `updateStats` set `document.title = "cp:terminals:<slug>"` each tick.
+  `checkBridge` (250ms) dispatched that title and used to also call `pushStats`
+  afterward — but `pushStats` ran `updateStats`, which re-set the `cp:terminals`
+  title, which the next poll caught, re-pushed… so the whole refresh+rebuild
+  cycle ran at ~4Hz whenever a terminals panel was open (and only then — that's
+  the tell). The fix: in `checkBridge`, only `pushStats` for real user actions,
+  i.e. skip it when `rawTitle starts with "cp:terminals"`. (The dashboard also
+  deferred DOM updates while the user was actively scrolling, and `render()`
+  patched in place unless structure changed.)
+- **Replacing an applet's `applet.icns` is NOT enough to brand its Dock
+  icon.** osacompile embeds an `Assets.car` and sets `CFBundleIconName`,
+  which outranks `CFBundleIconFile` on modern macOS — the Dock kept showing
+  the stock AppleScript scroll. `launch_dashboard` had to delete the
+  `CFBundleIconName` key and `Assets.car` after compiling (and set a unique
+  `CFBundleIdentifier`, since iconservices caches per bundle id).
+- **A cached applet could outlive the install path it was compiled for** → blank
+  white dashboard. The runtime applet baked the manager's Resources path into
+  `loadFileURL:`; if the app moved (`~/Applications` → `/Applications`), the
+  reused applet loaded a dead HTML page and WKWebView painted nothing (no
+  error). `launch_dashboard` self-healed via `runtime_applet_stale` —
+  **exact-match** the baked `resourcesDir` (NOT substring: `/Applications/…` is
+  a substring of `/Users/x/Applications/…`, the exact case that bit us) and
+  recompile on mismatch. White (not the dark `#1A1915` splash) = document never
+  loaded; a JS error would still paint the splash. See
+  `docs/postmortems/2026-06-13-white-screen-on-launch.md`.
 
 ## Build / test / release
 
@@ -243,7 +222,7 @@ bash tests/run-tests.sh    # 124 tests; runs on macOS or Linux (mac tools shimme
 cd app && swift build                  # build ProfilesCore + the app shell
 cd app && swift run ProfilesCoreTests  # Layer-1 logic tests (executable runner; XCTest doesn't run under CLT)
 cd app && swift run ProfilesSnapshotTests  # Layer-2 ImageRenderer render proof
-shellcheck -S error src/launcher src/engine.sh cli/claude-profiles.sh scripts/*.sh
+shellcheck -S error src/engine.sh cli/claude-profiles.sh scripts/*.sh
 bash scripts/make-icon.sh  # (macOS) regenerate assets/icon.iconset from app-icon.svg via sips
 bash scripts/build.sh      # assembles dist/Claude Profiles.app (+ DMG on macOS)
 SIGN_IDENTITY="Developer ID Application: …" NOTARY_PROFILE=notary \
@@ -253,9 +232,12 @@ SIGN_IDENTITY="Developer ID Application: …" NOTARY_PROFILE=notary \
 CI (`.github/workflows/ci.yml`) runs the first three (tests, shellcheck, build)
 on ubuntu-latest; `make-icon.sh` is macOS-only and `sign.sh` is release-only.
 Run tests + shellcheck + build before every commit — the suite has already
-caught its own author once. New engine features need a test. Changes to
-`dashboard.applescript` MUST be tested on real macOS (the one layer the
-suite can't run) and PRs should state which macOS versions.
+caught its own author once. New engine features need a test. SwiftUI view
+changes are gated by the golden-snapshot harness (`ProfilesSnapshotTests`) plus
+maintainer visual/live QA of the running window (the one layer CI can't fully
+exercise). The only AppleScript left is `badge-icon.applescript` (the icon
+compositor `engine.sh` shells out to); its changes are osacompile parse-checked
+on real macOS in `ci-macos.yml` and the rendered PNG verified by hand.
 
 Local install loop during development:
 ```bash

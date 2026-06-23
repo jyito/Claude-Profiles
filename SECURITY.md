@@ -12,9 +12,13 @@ under the Security tab) rather than a public issue. We'll acknowledge within
 - The tool makes **no network connections**. Anything observed phoning home
   is a critical finding.
 - Interesting attack surface: profile-name templating into bash/AppleScript/
-  plists (sanitization in `src/launcher`), `rm -rf` paths in cache cleanup
-  (`src/engine.sh`, every one `${var:?}`-guarded), and the `document.title`
-  action bridge (`src/dashboard.applescript`).
+  plists and `rm -rf` paths in cache cleanup (`src/engine.sh`, every one
+  `${var:?}`-guarded). The SwiftUI app invokes the engine via
+  `Foundation.Process` with an explicit argument array (no shell-string
+  interpolation, so no command-injection seam); `engine.sh`'s own input
+  handling is the relevant boundary. The engine's typed `Process` + `Codable`
+  boundary in the app (`EngineClient`) replaces the old `document.title` action
+  bridge.
 - Process-signal / cache-deletion paths (`closeterm`, `throttle`, `clean`,
   `autotick`) are guarded to each instance's **own** process tree / data dir —
   they can never target an arbitrary PID or another instance. The `remote`

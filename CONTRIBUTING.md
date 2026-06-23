@@ -17,10 +17,13 @@ Thanks for helping! Ground rules and workflow:
 ## Workflow
 - Run `bash tests/run-tests.sh` before pushing — it runs on Linux or macOS
   (macOS tools are shimmed), so CI mirrors your local run.
-- Run `shellcheck src/launcher src/engine.sh cli/claude-profiles.sh`.
+- Run `shellcheck src/engine.sh cli/claude-profiles.sh`.
   Annotate intentional violations (e.g. PID word-splitting for `kill`).
-- Changes to `src/dashboard.applescript` must be tested on real macOS and
-  the PR should state which macOS version(s) you tested.
+- SwiftUI view changes are covered by the golden-snapshot harness
+  (`swift run ProfilesSnapshotTests`) plus maintainer visual/live QA of the
+  running window. The only AppleScript left is `src/badge-icon.applescript`
+  (the icon compositor); changes there must be osacompile parse-checked /
+  rendered on real macOS, and the PR should state which macOS version(s).
 - Keep dialog copy in sentence case, button labels in Title Case (HIG).
 - New engine features need a test in `tests/run-tests.sh`.
 
