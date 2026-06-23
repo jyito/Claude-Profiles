@@ -77,7 +77,10 @@ public struct InstanceSections: View {
         VStack(alignment: .leading, spacing: Theme.Space.lg) {
             terminalsSection
 
-            if stat.ptmx > 0 {
+            // The leak-restart tile appears only on an ACTIVE leak — not merely
+            // because some masters are held (a few always are). A calm instance shows
+            // just its terminals.
+            if state == .leaking {
                 LeakBlock(stat: stat, state: state, snapshotArmed: snapshotLeakArmed) {
                     onAction(.restart)
                 }

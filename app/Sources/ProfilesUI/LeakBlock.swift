@@ -1,11 +1,11 @@
 import SwiftUI
 import ProfilesCore
 
-/// The leaked-handle restart tile. Shown when `ptmx > 0`: macOS can't reclaim the
-/// `/dev/ptmx` masters Claude Desktop leaks (bundled node-pty bug) — only a restart
-/// frees them. Framing follows severity (amber at `.warning`, coral at `.critical`,
-/// otherwise a calm amber tint). The Restart is **2-step** (arm → confirm) and the
-/// confirm copy spells out the quit/reopen so it never surprises.
+/// The leaked-handle restart tile. Shown only when the instance is actively leaking:
+/// macOS can't reclaim the `/dev/ptmx` masters Claude Desktop leaks (bundled node-pty
+/// bug) — only a restart frees them. Always amber (no coral/critical tier — a leak is
+/// a leak). The Restart is **2-step** (arm → confirm) and the confirm copy spells out
+/// the quit/reopen so it never surprises.
 public struct LeakBlock: View {
     let stat: ProfileStat
     let state: AlertState
@@ -28,13 +28,9 @@ public struct LeakBlock: View {
 
     private var isArmed: Bool { snapshotArmed || armed }
 
-    /// Accent follows severity; default to amber when merely leaking but not yet warning.
-    private var accent: Color {
-        switch state {
-        case .critical: return Theme.coral
-        case .warning, .calm: return Theme.amber
-        }
-    }
+    /// Single amber accent — the leak tile only appears when leaking, and a leak has
+    /// no severity gradient anymore.
+    private var accent: Color { Theme.amber }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.sm) {

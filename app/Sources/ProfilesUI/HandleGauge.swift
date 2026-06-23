@@ -1,10 +1,11 @@
 import SwiftUI
 import ProfilesCore
 
-/// The leaked-handle (ptmx) capacity gauge. Three always-on channels — color +
-/// glyph + number — so it survives grayscale / colorblindness. Calm gray under
-/// warning; amber + triangle + "N leaked" (+ "▲ climbing" when rising) at
-/// warning; coral at critical.
+/// The leaked-handle (ptmx) capacity gauge. Two always-on channels for the leak
+/// verdict — color + glyph + number — so it survives grayscale / colorblindness:
+/// calm reads gray with a `terminal` glyph and "N / max handles"; an active leak
+/// reads amber with a warning triangle, "N leaked", and a "↑ climbing" tell. There
+/// is no coral/critical tier — any active leak is amber, regardless of ceiling.
 public struct HandleGauge: View {
     let used: Int
     let max: Int
@@ -20,53 +21,19 @@ public struct HandleGauge: View {
 
     private var ratio: Double { max > 0 ? Swift.min(Double(used) / Double(max), 1.0) : 0 }
 
-    private var barColor: Color {
-        switch state {
-        case .calm: return Theme.text4
-        case .warning: return Theme.amber
-        case .critical: return Theme.coral
-        }
-    }
+    private var leaking: Bool { state == .leaking }
 
-    private var glyph: String {
-        switch state {
-        case .calm: return "terminal"
-        case .warning, .critical: return "exclamationmark.triangle.fill"
-        }
-    }
+    private var barColor: Color { leaking ? Theme.amber : Theme.text4 }
 
-    private var glyphColor: Color {
-        switch state {
-        case .calm: return Theme.text3
-        case .warning: return Theme.amber
-        case .critical: return Theme.coral
-        }
-    }
+    private var glyph: String { leaking ? "exclamationmark.triangle.fill" : "terminal" }
+
+    private var glyphColor: Color { leaking ? Theme.amber : Theme.text3 }
 
     private var label: String {
-        switch state {
-        case .calm:
-            return formatHandles(used: used, max: max)
-        case .warning:
-            return "\(used) leaked"
-        case .critical:
-            return "\(used) leaked"
-        }
+        leaking ? "\(used) leaked" : formatHandles(used: used, max: max)
     }
 
-    /// True only in the rising warn band — drives the up-arrow "climbing" tell.
-    private var climbing: Bool {
-        if case .warning(let c) = state { return c }
-        return false
-    }
-
-    private var labelColor: Color {
-        switch state {
-        case .calm: return Theme.text3
-        case .warning: return Theme.amber
-        case .critical: return Theme.coral
-        }
-    }
+    private var labelColor: Color { leaking ? Theme.amber : Theme.text3 }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
@@ -90,7 +57,7 @@ public struct HandleGauge: View {
                     .font(.system(size: 11))
                     .monospacedDigit()
                     .foregroundStyle(labelColor)
-                if climbing {
+                if leaking {
                     // The "climbing" tell is an up-arrow (not a second warning
                     // triangle): ⚠ N leaked  ↑ climbing.
                     HStack(spacing: 2) {

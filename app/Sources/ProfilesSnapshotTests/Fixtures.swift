@@ -12,11 +12,15 @@ enum Fixtures {
         last: "2026-06-20", color: "#3B7DD8", remote: true
     )
 
-    // A leak-warning, running profile (purple badge) at high ptmx.
+    // An actively-leaking, running profile (purple badge): it holds far more ptmx
+    // masters (held handles) than it has live terminals (5) — the leak signature. The
+    // absolute level is well under any ceiling, the whole point of the amber-only
+    // rework: a real leak shows amber regardless of how far the system pool is from
+    // exhaustion. Drives the amber `.leaking` card / detail / leak-block goldens.
     static let research = ProfileStat(
         name: "Research", slug: "research", running: true,
         cpu: 118.0, mem: 5400, procs: 11, ptys: 5,
-        ptmx: 410, ptmxMax: 512, disk: 3120, opens: 58,
+        ptmx: 96, ptmxMax: 512, disk: 3120, opens: 58,
         last: "2026-06-21", color: "#7C5CC4", remote: false
     )
 
@@ -33,6 +37,17 @@ enum Fixtures {
         name: "Claude (default)", slug: "", running: true,
         cpu: 18.0, mem: 1180, procs: 5, ptys: 2,
         ptmx: 22, ptmxMax: 512, disk: -1, opens: 0,
+        last: "", color: "#6E6A62", remote: false
+    )
+
+    // The default (system) instance while it is itself leaking handles. Same protected
+    // contract as `defaultInstance` (no CTA), but its informational leak line reads
+    // amber "⚠ N leaked". Drives the `card-default-leaking` golden — the maintainer's
+    // original concern (the default card previously showed NO leak readout at all).
+    static let defaultLeaking = ProfileStat(
+        name: "Claude (default)", slug: "", running: true,
+        cpu: 18.0, mem: 1180, procs: 5, ptys: 2,
+        ptmx: 58, ptmxMax: 512, disk: -1, opens: 0,
         last: "", color: "#6E6A62", remote: false
     )
 
@@ -82,12 +97,13 @@ enum Fixtures {
         5200, 5400, 5600, 5300, 5400, 5500, 5300, 5400, 5400, 5400,
     ]
 
-    // Research's leaked-handle (ptmx) history climbing toward the 512 ceiling —
-    // ends at 410 (matching `research.ptmx`) so the handle hero trend reads as a
-    // rising leak against its dashed limit.
+    // Research's leaked-handle (ptmx) history climbing steadily — ends at 96 (matching
+    // `research.ptmx`), far below the 512 ceiling. The rising slope under a flat
+    // ceiling rule is the leak tell; the amber verdict no longer waits for the pool to
+    // approach exhaustion.
     static let ptmxSeriesHot: [Double] = [
-        60, 72, 88, 95, 110, 124, 140, 155, 170, 188,
-        205, 220, 238, 250, 268, 282, 300, 318, 330, 348,
-        360, 372, 388, 395, 400, 404, 406, 408, 409, 410,
+        18, 22, 26, 30, 33, 38, 42, 45, 49, 52,
+        55, 58, 60, 63, 66, 68, 71, 74, 77, 79,
+        82, 84, 86, 88, 90, 91, 92, 94, 95, 96,
     ]
 }

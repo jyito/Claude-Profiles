@@ -2,54 +2,110 @@ import XCTest
 import ProfilesCore
 
 final class PtmxHysteresisTests: XCTestCase {
-    private func feed(_ ratios: [Double], max: Int = 100) -> AlertState {
+    /// Feed a series of `(used, terminals)` pairs and return the final state. `max`
+    /// (the ptmx ceiling) is fixed high — it no longer gates color, so it's only here
+    /// to prove a huge ceiling never matters.
+    private func feed(_ samples: [(used: Int, terminals: Int)], max: Int = 512) -> AlertState {
         var h = PtmxHysteresis()
         var state = AlertState.calm
-        for r in ratios { state = h.ingest(PtmxSample(used: Int((r * Double(max)).rounded()), max: max)) }
+        for s in samples {
+            state = h.ingest(PtmxSample(used: s.used, max: max, terminals: s.terminals))
+        }
         return state
     }
 
-    func testCalmBelowWarn() async throws {
-        XCTAssertEqual(feed([0.10, 0.50, 0.74]), .calm)
+    // Flat: held handles exactly match live terminals — never a leak, at any level.
+    func testFlatEqualsTerminalsIsCalm() async throws {
+        XCTAssertEqual(feed([(2, 2), (2, 2), (2, 2)]), .calm)
+        // Even a *high* flat count is calm if it equals the terminals (no excess).
+        XCTAssertEqual(feed([(40, 40), (40, 40)]), .calm)
     }
-    func testWarnAtSeventyFive() async throws {
-        XCTAssertEqual(feed([0.50, 0.76]), .warning(climbing: true))     // rising into warn band
+
+    // Opening terminals: `used` rises but tracks `terminals` 1:1 — no excess, so the
+    // rising count must NOT trip the gauge (the key false-positive guard).
+    func testOpeningTerminalsStaysCalm() async throws {
+        XCTAssertEqual(feed([(2, 2), (4, 4), (6, 6), (8, 8)]), .calm)
     }
-    func testNoCriticalUntilSustained() async throws {
-        // one tick at 92% must NOT be critical yet (needs 3 consecutive)
-        XCTAssertEqual(feed([0.50, 0.92]), .warning(climbing: true))
-        XCTAssertEqual(feed([0.92, 0.92]), .warning(climbing: false))   // 2 ticks: still not critical
+
+    // A real leak: terminals are stable/low while held handles climb past them.
+    func testExcessAndClimbingIsLeaking() async throws {
+        XCTAssertEqual(feed([(2, 2), (4, 2), (6, 2), (8, 2)]), .leaking)
     }
-    func testCriticalAfterThreeConsecutive() async throws {
-        XCTAssertEqual(feed([0.92, 0.92, 0.92]), .critical)
+
+    // Excess WITHOUT climbing isn't enough — a flat excess (e.g. one stuck handle that
+    // never grows) shouldn't alarm; the leak signal is a *rising* pool.
+    func testFlatExcessIsCalm() async throws {
+        // used sits 1 above terminals but never climbs by climbDelta → calm.
+        XCTAssertEqual(feed([(3, 2), (3, 2), (3, 2)]), .calm)
     }
-    func testBreachStreakResetsOnDip() async throws {
-        // 2 breach ticks, a dip resets the streak, so the next single breach isn't critical
-        XCTAssertEqual(feed([0.92, 0.92, 0.50, 0.92]), .warning(climbing: true))
+
+    // Climbing WITHOUT excess isn't enough either — covered by openingTerminals, but
+    // assert the pure "climb but used==terminals" case directly.
+    func testClimbingWithoutExcessIsCalm() async throws {
+        XCTAssertEqual(feed([(2, 2), (10, 10)]), .calm)
     }
-    func testHysteresisHoldsCriticalUntilBelowEighty() async throws {
-        // escalate, then sit at 85% — must STAY critical (de-escalates only < 80%)
-        XCTAssertEqual(feed([0.92, 0.92, 0.92, 0.85]), .critical)
-        // drop below the 80% low-water → leaves critical (still ≥75% → warning)
-        XCTAssertEqual(feed([0.92, 0.92, 0.92, 0.79]), .warning(climbing: false))
+
+    // Restart drops the held pool back to ~terminals → the gauge clears to calm.
+    func testDropAfterRestartIsCalm() async throws {
+        // climb into leaking, then a restart frees the masters (used collapses to 2,
+        // matching 2 terminals) → calm again.
+        XCTAssertEqual(feed([(2, 2), (6, 2), (10, 2), (2, 2)]), .calm)
     }
-    func testBoundaryArithmetic() async throws {
-        XCTAssertEqual(feed([0.90, 0.90, 0.90]), .critical)             // exactly 90% counts as breach
-        XCTAssertEqual(feed([0.75]), .warning(climbing: true))         // exactly 75% is warning
-        XCTAssertEqual(feed([0.74]), .calm)                            // just under
+
+    // Hysteresis: once leaking, a small wobble down (still well above terminals and
+    // above the floor) keeps it leaking — it only clears when handles are actually
+    // freed (back to/below the floor margin) or used drops to terminals.
+    func testHysteresisHoldsLeakingThroughWobble() async throws {
+        // 2→8 (leaking), then a 1-handle dip to 7 — still excess, still near the high
+        // water → stays leaking (avoids flicker).
+        XCTAssertEqual(feed([(2, 2), (8, 2), (7, 2)]), .leaking)
     }
-    func testZeroCeilingIsCalm() async throws {
-        var h = PtmxHysteresis()
-        XCTAssertEqual(h.ingest(PtmxSample(used: 9, max: 0)), .calm)    // ptmxMax unreadable → no divide-by-zero, no alarm
+
+    // The leak clears when the pool falls back toward the floor (handles freed) even
+    // without a full restart-to-terminals collapse.
+    func testLeakingClearsWhenHandlesFreed() async throws {
+        // climb to 12 (leaking), then drain back to 3 (floor was 2; 3 <= floor+margin)
+        // → calm.
+        XCTAssertEqual(feed([(2, 2), (12, 2), (3, 2)]), .calm)
     }
+
+    // The floor tracks the running minimum: a dip re-bases the floor so a later climb
+    // is measured from the NEW low, not the original.
+    func testFloorRebasesOnDip() async throws {
+        // 2→3 (excess but < climbDelta from floor 2 → calm), drop to 2 (floor still 2),
+        // then climb 2→4→6 from that floor → leaking.
+        XCTAssertEqual(feed([(2, 2), (3, 2), (2, 2), (4, 2), (6, 2)]), .leaking)
+    }
+
+    // Zero ceiling (sysctl unreadable) must never crash or alarm by itself — the rule
+    // is ceiling-independent now, but assert the divide-by-zero guard still holds.
+    func testZeroCeilingDoesNotCrash() async throws {
+        // used==terminals → calm regardless of a 0 max.
+        XCTAssertEqual(feed([(5, 5)], max: 0), .calm)
+        // a genuine leak still reads leaking with an unreadable ceiling.
+        XCTAssertEqual(feed([(2, 2), (6, 2), (10, 2)], max: 0), .leaking)
+    }
+
+    // climbDelta boundary: a climb of exactly climbDelta above the floor (with excess)
+    // trips it; one less does not.
+    func testClimbDeltaBoundary() async throws {
+        // floor 2, climb to 4 (= +climbDelta=2) with excess (terminals 2) → leaking.
+        XCTAssertEqual(feed([(2, 2), (4, 2)]), .leaking)
+        // floor 2, climb to 3 (= +1, under climbDelta) with excess → calm.
+        XCTAssertEqual(feed([(2, 2), (3, 2)]), .calm)
+    }
+
     static let allTests: [(String, (PtmxHysteresisTests) -> () async throws -> Void)] = [
-        ("testCalmBelowWarn", testCalmBelowWarn),
-        ("testWarnAtSeventyFive", testWarnAtSeventyFive),
-        ("testNoCriticalUntilSustained", testNoCriticalUntilSustained),
-        ("testCriticalAfterThreeConsecutive", testCriticalAfterThreeConsecutive),
-        ("testBreachStreakResetsOnDip", testBreachStreakResetsOnDip),
-        ("testHysteresisHoldsCriticalUntilBelowEighty", testHysteresisHoldsCriticalUntilBelowEighty),
-        ("testBoundaryArithmetic", testBoundaryArithmetic),
-        ("testZeroCeilingIsCalm", testZeroCeilingIsCalm),
+        ("testFlatEqualsTerminalsIsCalm", testFlatEqualsTerminalsIsCalm),
+        ("testOpeningTerminalsStaysCalm", testOpeningTerminalsStaysCalm),
+        ("testExcessAndClimbingIsLeaking", testExcessAndClimbingIsLeaking),
+        ("testFlatExcessIsCalm", testFlatExcessIsCalm),
+        ("testClimbingWithoutExcessIsCalm", testClimbingWithoutExcessIsCalm),
+        ("testDropAfterRestartIsCalm", testDropAfterRestartIsCalm),
+        ("testHysteresisHoldsLeakingThroughWobble", testHysteresisHoldsLeakingThroughWobble),
+        ("testLeakingClearsWhenHandlesFreed", testLeakingClearsWhenHandlesFreed),
+        ("testFloorRebasesOnDip", testFloorRebasesOnDip),
+        ("testZeroCeilingDoesNotCrash", testZeroCeilingDoesNotCrash),
+        ("testClimbDeltaBoundary", testClimbDeltaBoundary),
     ]
 }

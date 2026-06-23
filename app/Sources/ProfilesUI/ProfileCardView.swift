@@ -72,16 +72,13 @@ public struct ProfileCardView: View {
             .fill(Theme.surface1)
     }
 
-    /// The severity accent border. Coral is reserved for `.critical` (≥90%);
-    /// `.warning` reads amber; `.calm` (and the restricted default instance) get
-    /// no accent. The coral *selection* ring is a separate concern handled below.
+    /// The leak accent border: amber when actively leaking, nothing otherwise. There's
+    /// no coral tier anymore — a leak is a leak. The restricted default instance never
+    /// gets the accent border (its leak shows as an informational line in-card). The
+    /// coral *selection* ring is a separate concern handled below.
     private var severityStroke: (color: Color, width: CGFloat)? {
         guard !stat.isDefault else { return nil }
-        switch state {
-        case .warning: return (Theme.amber, 1.5)
-        case .critical: return (Theme.coral, 1.5)
-        case .calm: return nil
-        }
+        return state == .leaking ? (Theme.amber, 1.5) : nil
     }
 
     private var cardStroke: some View {
@@ -293,24 +290,57 @@ public struct ProfileCardView: View {
         }
     }
 
-    // MARK: Default (filled in Task 6)
+    // MARK: Default
+
+    /// The informational leak line under the default card's metrics. Honors the
+    /// restricted-default contract (CLAUDE.md §5) — DISPLAY-ONLY from the engine's
+    /// `ptmx`, no restart/clean/Details affordance. Leaking → amber "⚠ N leaked"; calm
+    /// → the read-only note with a muted "· N handles" tail so the count is always
+    /// visible without ever implying an action.
+    @ViewBuilder private var defaultLeakLine: some View {
+        if state == .leaking {
+            HStack(spacing: Theme.Space.sm) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Theme.amber)
+                Text("\(stat.ptmx) leaked")
+                    .font(.system(size: 11, weight: .medium))
+                    .monospacedDigit()
+                    .foregroundStyle(Theme.amber)
+                Text("· read-only, can't restart the default")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.text3)
+            }
+            .accessibilityIdentifier("card-default-leak")
+        } else {
+            HStack(spacing: Theme.Space.sm) {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Theme.text3)
+                Text("Read-only · protected")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.text3)
+                    .layoutPriority(1)
+                Text("· \(stat.ptmx) handles")
+                    .font(.system(size: 11))
+                    .monospacedDigit()
+                    .foregroundStyle(Theme.text4)
+            }
+            .accessibilityIdentifier("card-default-leak")
+        }
+    }
 
     private var defaultContent: some View {
         VStack(alignment: .leading, spacing: Theme.Space.md) {
             statusLine
             metricRow
-            // Structurally no disk / clean tiers / badge / leak-restart — the
-            // restricted default contract (CLAUDE.md §5) is unbreakable here. A
-            // read-only placeholder fills the handle-gauge slot so the default card
-            // matches running cards' height (uniform grid rows).
-            HStack(spacing: Theme.Space.sm) {
-                Image(systemName: "lock.fill")
-                    .font(.system(size: 10))
-                    .foregroundStyle(Theme.text3)
-                Text("Read-only · default instance is protected")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.text3)
-            }
+            // Structurally no disk / clean tiers / badge / leak-RESTART — the
+            // restricted default contract (CLAUDE.md §5) is unbreakable here. The
+            // line below the metrics is INFORMATIONAL only: it reads the engine's
+            // `ptmx` (a process metric, never the data dir) and surfaces an active
+            // leak in amber, but offers NO restart/clean/Details CTA. It also fills
+            // the handle-gauge slot so the default card matches running cards' height.
+            defaultLeakLine
             HStack(spacing: Theme.Space.sm) {
                 Button {
                     onShowWindow(stat.effSlug)
