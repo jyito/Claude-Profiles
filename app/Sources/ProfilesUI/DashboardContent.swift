@@ -61,6 +61,9 @@ public struct DashboardContent: View {
                                     state: m.state, selected: selection == m.id,
                                     onDetails: onDetails, onRemote: onRemote,
                                     onShowWindow: onShowWindow, onOpen: onOpen)
+                        // Fill the grid cell so cards in a row share the tallest's
+                        // height — uniform card sizes regardless of variant.
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 }
             }
             Spacer(minLength: 0)

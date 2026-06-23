@@ -254,8 +254,18 @@ public struct ProfileCardView: View {
         VStack(alignment: .leading, spacing: Theme.Space.md) {
             statusLine
             metricRow
-            // NOTE: structurally no disk / clean tiers / badge / leak-restart — the
-            // restricted default contract (CLAUDE.md §5) is unbreakable here.
+            // Structurally no disk / clean tiers / badge / leak-restart — the
+            // restricted default contract (CLAUDE.md §5) is unbreakable here. A
+            // read-only placeholder fills the handle-gauge slot so the default card
+            // matches running cards' height (uniform grid rows).
+            HStack(spacing: Theme.Space.sm) {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Theme.text3)
+                Text("Read-only · default instance is protected")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.text3)
+            }
             HStack(spacing: Theme.Space.sm) {
                 Button {
                     onShowWindow(stat.effSlug)
