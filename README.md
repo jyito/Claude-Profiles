@@ -8,12 +8,7 @@
 
 Run multiple Claude accounts side by side on one Mac — each in its own Claude Desktop instance, permanently signed in, with a native dashboard for live resource monitoring and one-click management.
 
-<!-- HERO IMAGE — save as assets/hero-dashboard.png (≥1400px wide). Capture the dashboard window ONLY (⌘⇧5 → window) with 2+ running profiles and live sparklines. Earlier captures leaked Messages content — crop tight to the window. -->
-<!-- ![The Claude Profiles dashboard — multiple accounts, live per-instance stats](assets/hero-dashboard.png) — uncomment once the screenshot exists -->
-
-
-<!-- DEMO VIDEO — drag a ~15s screen recording into the GitHub editor here once captured (ends on a Show Window jump). GitHub hosts the upload and rewrites this to a player. Keep the line below as the fallback link until then. -->
-> 🎥 **[Demo video coming soon]** — a 15-second tour ending on a one-click Show Window jump.
+![The Claude Profiles dashboard — multiple Claude accounts running side by side with live per-instance CPU, memory, terminal, and handle-pool stats](assets/hero-dashboard.png)
 
 > **Unofficial.** This is a community tool, not an Anthropic product, and is not affiliated with or endorsed by Anthropic. "Claude" is a trademark of Anthropic, PBC. The tool is a thin launcher around the official Claude Desktop app; it never modifies it.
 
