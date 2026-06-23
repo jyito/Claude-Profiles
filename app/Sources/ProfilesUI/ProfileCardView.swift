@@ -284,6 +284,7 @@ public struct ProfileCardView: View {
                 .accessibilityIdentifier("card-default-remote")
                 Spacer(minLength: 0)
                 Button {
+                    onDetails(stat.effSlug)
                 } label: {
                     HStack(spacing: 2) {
                         Text("Details")
