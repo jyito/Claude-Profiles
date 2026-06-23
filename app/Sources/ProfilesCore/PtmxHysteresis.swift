@@ -36,16 +36,27 @@ public struct PtmxSample: Sendable {
 ///      (the running minimum, which re-bases downward whenever `used` drops). A flat
 ///      excess (one stuck handle that never grows) isn't the signal; a *rising* pool is.
 ///
+/// Sustain: the leak condition (excess + climbing) must hold for `sustainTicks`
+/// CONSECUTIVE samples before the state flips to `.leaking`. At the 2s poll that's
+/// ~6s of a genuinely rising, excess pool — enough to ride out brief churn (a terminal
+/// opening and closing within a couple of ticks) and err toward calm. While the
+/// condition holds but the streak hasn't reached the threshold the state stays `.calm`;
+/// any tick that breaks the condition resets the streak to zero.
+///
 /// Hysteresis: once `.leaking`, it stays leaking through small downward wobble and only
 /// clears to `.calm` when the handles are actually freed — `used` falls back to/below
 /// `floor + margin` (drained toward the low-water mark) OR `used <= terminals` (parity
-/// restored, e.g. after a restart). This avoids amber flicker on a 1-handle jitter.
+/// restored, e.g. after a restart). This avoids amber flicker on a 1-handle jitter. The
+/// sustain streak resets on clear, so re-arming a leak needs a fresh run of ticks.
 ///
 /// The ceiling (`kern.tty.ptmx_max`) no longer participates in the color decision; it
 /// survives only on `PtmxSample` for the detail page's dashed ceiling rule.
 public struct PtmxHysteresis: Sendable {
-    /// A climb of this many handles above the floor (with excess) trips the leak.
+    /// A climb of this many handles above the floor (with excess) qualifies a tick.
     public static let climbDelta = 2
+    /// Consecutive qualifying ticks the leak condition must hold before flipping to
+    /// `.leaking` (~6s at the 2s poll). Errs toward calm on brief churn.
+    public static let sustainTicks = 3
     /// Hysteresis clear band: leaking clears once `used` drains to within this of the
     /// floor (handles freed). 1 keeps a single-handle wobble from clearing prematurely.
     public static let margin = 1
@@ -55,6 +66,8 @@ public struct PtmxHysteresis: Sendable {
     /// stale historic high. `nil` until the first sample seeds it.
     private var floor: Int?
     private var isLeaking = false
+    /// Count of consecutive ticks the leak condition has held while not yet leaking.
+    private var sustain = 0
 
     public init() {}
 
@@ -74,9 +87,19 @@ public struct PtmxHysteresis: Sendable {
             // floor, or parity with live terminals restored.
             if used <= sample.terminals || used <= base + Self.margin {
                 isLeaking = false
+                sustain = 0
             }
         } else if excess && climbing {
-            isLeaking = true
+            // Condition holds — count it. Flip only once the streak reaches the
+            // sustain threshold (errs toward calm on brief churn).
+            sustain += 1
+            if sustain >= Self.sustainTicks {
+                isLeaking = true
+                sustain = 0
+            }
+        } else {
+            // Condition broke this tick — reset the streak.
+            sustain = 0
         }
 
         return isLeaking ? .leaking : .calm
