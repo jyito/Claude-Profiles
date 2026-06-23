@@ -69,9 +69,12 @@ enum SnapshotCases {
                 .padding(Theme.Space.lg)
         })
 
-        // Task 8 — sidebar (row content over solid canvas; not the live material)
+        // Task 8 — sidebar. The REAL hand-built `SidebarView` (it renders headlessly
+        // now — no native `List`), so the golden verifies what ships. A constant
+        // selection drives the highlight.
         cases.append(SnapshotCase("sidebar", size: CGSize(width: 240, height: 320)) {
-            SidebarSnapshotContent(profiles: Fixtures.all)
+            SidebarView(profiles: Fixtures.all, selection: .constant(nil))
+                .background(Theme.canvas)
         })
 
         // Task 9 — full window (sidebar + KPI strip + card grid), looser tolerance.
@@ -87,7 +90,8 @@ enum SnapshotCases {
         ]
         cases.append(SnapshotCase("window-full", size: CGSize(width: 1080, height: 720), tolerance: 0.01) {
             HStack(spacing: 0) {
-                SidebarSnapshotContent(profiles: Fixtures.all)
+                SidebarView(profiles: Fixtures.all, selection: .constant(nil))
+                    .background(Theme.canvas)
                     .frame(width: 240, height: 720)
                 DashboardContent(profiles: Fixtures.all, cards: cards, selection: "research", scrolls: false)
                     .frame(width: 840, height: 720)
@@ -149,6 +153,23 @@ enum SnapshotCases {
                           state: .calm) { _ in }
         })
 
+        // Task 9 — maximized master-detail page (the `.inspector` replacement). A
+        // running profile: header (badge + name + status) over the consolidated action
+        // bar (Show Window · Remote · Throttle CPU · Restart · ⋯ overflow glyph) over
+        // the three hero trend charts (CPU coral / MEMORY teal / HANDLE POOL amber with
+        // a dashed ceiling rule + a "▲ climbing — restart soon" verdict) and the stat
+        // strip (procs · terminals · disk · opened · last · remote) over the shared
+        // `InstanceSections` (terminals + leak block — Throttle moved up to the action
+        // bar). Looser tolerance: tall composite. snapshotMode renders the bare VStack
+        // (no ScrollView) and the overflow glyph (a `Menu` paints empty headless).
+        cases.append(SnapshotCase("profile-detail", size: CGSize(width: 720, height: 820), tolerance: 0.015) {
+            ProfileDetailView(
+                stat: Fixtures.research, cpu: Fixtures.cpuSeriesHot, mem: Fixtures.memSeriesHot,
+                ptmx: Fixtures.ptmxSeriesHot,
+                state: .warning(climbing: true), terminals: Fixtures.terminals,
+                onAction: { _ in })
+        })
+
         // ── Phase 4: Sheets ────────────────────────────────────────────────────
 
         // Task 2 — New Profile sheet with a fixed typed name. "Marketing" → cksum
@@ -194,10 +215,11 @@ enum SnapshotCases {
             MenuContentSnapshot(profiles: Fixtures.all)
         })
 
-        // Task 4 — dense List view (stand-in: native Table renders empty headless).
+        // Task 4 — dense List view. The REAL hand-built `ProfileListView` (it renders
+        // headlessly now — no native `Table`), so the golden verifies what ships.
         // "research" selected so the coral selection wash shows.
         cases.append(SnapshotCase("list-view", size: CGSize(width: 760, height: 260), tolerance: 0.01) {
-            ProfileListSnapshotContent(profiles: Fixtures.all, selection: "research")
+            ProfileListView(profiles: Fixtures.all, selection: .constant("research"))
         })
 
         // Task 5 — empty + loading states (shimmer frozen in snapshotMode).

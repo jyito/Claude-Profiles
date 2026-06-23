@@ -9,7 +9,10 @@ struct ProfilesApp: App {
         clock: RealClock()
     )
     @State private var selection: String?
-    @State private var inspectorShown = false
+    /// The detail column's master-detail navigation stack. Empty = the overview
+    /// (card grid / list); a single pushed slug = that profile's maximized detail
+    /// page. Kept in sync with `selection` by `DashboardView`.
+    @State private var navPath: [String] = []
     /// Detail layout: card grid (default) or the dense list. Toolbar-driven.
     @State private var viewMode: ProfileViewMode = .grid
     /// Which modal (if any) is presented. The scene owns this — the sheet views are
@@ -18,15 +21,20 @@ struct ProfilesApp: App {
     /// The loaded Remote info + display name, set by `presentRemote` before the
     /// Remote sheet opens (so the sheet renders already populated).
     @State private var loadedRemote: (name: String, info: RemoteInfo)?
+    /// A card overflow action awaiting confirmation. Force Quit and Restart kill /
+    /// cycle the user's live Claude, so they route through a `.confirmationDialog`
+    /// before firing; graceful Quit fires directly (no pending). Cleared on confirm
+    /// or cancel.
+    @State private var pendingCardAction: PendingCardAction?
 
     var body: some Scene {
         WindowGroup("Claude Profiles") {
             NavigationSplitView {
                 SidebarView(profiles: store.profiles, selection: $selection)
-                    .onChange(of: selection) { _, new in
-                        // Selecting a sidebar row opens the inspector; clearing it closes it.
-                        inspectorShown = (new != nil)
-                    }
+                    // Selecting a sidebar row pushes that profile's detail page;
+                    // clearing it pops back to the grid. The selection→navPath sync
+                    // lives in `DashboardView` so the grid's "Details ›" and the
+                    // sidebar share one path.
                     .background(VisualEffectView())
                     .navigationSplitViewColumnWidth(min: 220, ideal: 240, max: 280)
                     .safeAreaInset(edge: .bottom) {
@@ -41,10 +49,11 @@ struct ProfilesApp: App {
                         .accessibilityIdentifier("sidebar-new-profile")
                     }
             } detail: {
-                DashboardView(store: store, selection: $selection, inspectorShown: $inspectorShown,
+                DashboardView(store: store, selection: $selection, navPath: $navPath,
                               viewMode: $viewMode,
                               onRemote: { slug in presentRemote(slug) },
-                              onNewProfile: { activeSheet = .newProfile })
+                              onNewProfile: { activeSheet = .newProfile },
+                              onCardAction: { action, slug in handleCardAction(action, slug) })
                     .navigationTitle("Profiles")
                     .toolbar {
                         ToolbarItem(placement: .navigation) {
@@ -82,12 +91,28 @@ struct ProfilesApp: App {
                         }
                     }
             }
-            .frame(minWidth: 840, minHeight: 560)
+            .navigationSplitViewStyle(.balanced)
+            .frame(minWidth: 1000, minHeight: 620)
             .background(Theme.canvas)
             .preferredColorScheme(.dark)
             .onAppear { store.start() }
             .sheet(item: $activeSheet) { sheet in
                 sheetContent(for: sheet)
+            }
+            // Disruptive card actions (Force Quit / Restart) confirm before firing.
+            // Graceful Quit never reaches here — it fires directly in `handleCardAction`.
+            .confirmationDialog(
+                pendingCardAction?.title ?? "",
+                isPresented: pendingDialogBinding,
+                titleVisibility: .visible,
+                presenting: pendingCardAction
+            ) { pending in
+                Button(pending.confirmLabel, role: pending.confirmRole) {
+                    runCardAction(pending)
+                }
+                Button("Cancel", role: .cancel) { pendingCardAction = nil }
+            } message: { pending in
+                Text(pending.message)
             }
         }
         .windowToolbarStyle(.unified)
@@ -117,6 +142,65 @@ struct ProfilesApp: App {
                 .keyboardShortcut("q", modifiers: .command)
                 .accessibilityIdentifier("menubar-quit")
         }
+    }
+
+    // MARK: Card overflow (Restart / Quit / Force Quit)
+    //
+    // The scene owns the engine call (CLAUDE.md non-negotiables); the card just emits
+    // the intent. Graceful Quit fires immediately; the disruptive pair (Force Quit /
+    // Restart) route through a `.confirmationDialog` since they kill / cycle the user's
+    // live Claude.
+
+    /// Binding the `.confirmationDialog` reads: presented iff a pending action exists.
+    /// Setting it false (Cancel / dismiss) clears the pending action.
+    private var pendingDialogBinding: Binding<Bool> {
+        Binding(
+            get: { pendingCardAction != nil },
+            set: { if !$0 { pendingCardAction = nil } }
+        )
+    }
+
+    /// Route a card's overflow action. Quit (graceful) fires straight away; Force Quit
+    /// and Restart stash a `PendingCardAction` so the confirmationDialog gates them.
+    @MainActor private func handleCardAction(_ action: CardAction, _ slug: String) {
+        let stat = store.profiles.first { $0.effSlug == slug }
+        let isDefault = stat?.isDefault ?? (slug == "default")
+        let name = stat?.name ?? slug
+        switch action {
+        case .quit:
+            // Graceful — no confirmation needed.
+            let verbs = quitVerbs(slug: slug, isDefault: isDefault)
+            Task { await store.perform(verbs) }
+        case .force, .restart:
+            pendingCardAction = PendingCardAction(
+                action: action, slug: slug, name: name, isDefault: isDefault
+            )
+        }
+    }
+
+    /// Fire a confirmed (Force Quit / Restart) action, then clear the pending state.
+    @MainActor private func runCardAction(_ pending: PendingCardAction) {
+        let verbs: [String]
+        switch pending.action {
+        case .force: verbs = forceVerbs(slug: pending.slug, isDefault: pending.isDefault)
+        case .restart: verbs = restartVerbs(slug: pending.slug, isDefault: pending.isDefault)
+        case .quit: verbs = quitVerbs(slug: pending.slug, isDefault: pending.isDefault)
+        }
+        Task { await store.perform(verbs) }
+        pendingCardAction = nil
+    }
+
+    // Engine verb mapping — the default instance is signal-only (`quitdefault` /
+    // `forcedefault`), while `restart` accepts the literal `default` slug. Regular
+    // profiles take their own slug. (Verbs confirmed in src/engine.sh dispatch.)
+    private func quitVerbs(slug: String, isDefault: Bool) -> [String] {
+        isDefault ? ["quitdefault"] : ["quit", slug]
+    }
+    private func forceVerbs(slug: String, isDefault: Bool) -> [String] {
+        isDefault ? ["forcedefault"] : ["force", slug]
+    }
+    private func restartVerbs(slug: String, isDefault: Bool) -> [String] {
+        isDefault ? ["restart", "default"] : ["restart", slug]
     }
 
     /// Resolve an instance's main PID and raise its windows in-process (shared by the
@@ -195,6 +279,54 @@ struct ProfilesApp: App {
             loadedRemote = (name, info)
             activeSheet = .remote(slug)
         }
+    }
+}
+
+/// A card overflow action (Force Quit / Restart) awaiting confirmation. Carries the
+/// resolved display name + the default-vs-regular flag so the dialog copy and the
+/// engine verb mapping both read off one value. (Graceful Quit never becomes a
+/// pending action — it fires without a dialog.)
+struct PendingCardAction: Identifiable {
+    let action: CardAction
+    let slug: String
+    let name: String
+    let isDefault: Bool
+    var id: String { "\(slug)-\(verbKey)" }
+
+    private var verbKey: String {
+        switch action {
+        case .quit: return "quit"
+        case .force: return "force"
+        case .restart: return "restart"
+        }
+    }
+
+    var title: String {
+        switch action {
+        case .force: return "Force-quit \(name)?"
+        case .restart: return "Restart \(name)?"
+        case .quit: return "Quit \(name)?"
+        }
+    }
+
+    var message: String {
+        switch action {
+        case .force: return "Unsaved work in that Claude may be lost."
+        case .restart: return "Its windows and terminals close and reopen; login and chats are kept."
+        case .quit: return ""
+        }
+    }
+
+    var confirmLabel: String {
+        switch action {
+        case .force: return "Force Quit"
+        case .restart: return "Restart"
+        case .quit: return "Quit"
+        }
+    }
+
+    var confirmRole: ButtonRole? {
+        action == .force ? .destructive : nil
     }
 }
 

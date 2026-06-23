@@ -96,57 +96,20 @@ public struct InspectorView: View {
 
     // MARK: Body routing
     //
-    // running → terminals table (+ throttle + leak block, Task 5);
-    // stopped → clean tiers + badge picker + remove (Tasks 6–7);
-    // default → terminals ONLY (gated structurally by isDefault — Task 8).
-    // Snapshot-only `snapshotArmedDev` pre-arms one Close row for the golden.
+    // The state-routed sections now live in the shared `InstanceSections` (reused by
+    // the maximized master-detail `ProfileDetailView`), so the inspector and the
+    // detail page can never drift. Snapshot-only `snapshotArmedDev` pre-arms one
+    // Close row for the golden.
 
-    @ViewBuilder private var stateBody: some View {
-        if stat.isDefault {
-            // Restricted default: terminals ONLY — no throttle/leak/clean/badge/remove.
-            terminalsSection
-        } else if stat.running {
-            runningBody
-        } else {
-            stoppedBody
-        }
-    }
-
-    private var stoppedBody: some View {
-        VStack(alignment: .leading, spacing: Theme.Space.lg) {
-            CleanTiers(disk: stat.disk) { onAction(.clean($0)) }
-            BadgePicker(currentHex: stat.color, slug: stat.slug) { onAction(.setBadge($0)) }
-            Divider().overlay(Theme.hairline)
-            RemoveProfile(name: stat.name, snapshotExpanded: snapshotRemoveExpanded) {
-                onAction(.remove)
-            }
-        }
-    }
-
-    private var terminalsSection: some View {
-        TerminalsTable(terminals: terminals, snapshotArmedDev: snapshotArmedDev) {
-            onAction(.closeTerminal($0))
-        }
-    }
-
-    private var runningBody: some View {
-        VStack(alignment: .leading, spacing: Theme.Space.lg) {
-            terminalsSection
-
-            VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                Button { onAction(.throttle) } label: { Text("Throttle CPU") }
-                    .buttonStyle(PillButtonStyle(.neutral))
-                    .accessibilityIdentifier("inspector-throttle")
-                Text("Lowers priority until restart.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.text3)
-            }
-
-            if stat.ptmx > 0 {
-                LeakBlock(stat: stat, state: state, snapshotArmed: snapshotLeakArmed) {
-                    onAction(.restart)
-                }
-            }
-        }
+    private var stateBody: some View {
+        InstanceSections(
+            stat: stat,
+            terminals: terminals,
+            state: state,
+            snapshotArmedDev: snapshotArmedDev,
+            snapshotLeakArmed: snapshotLeakArmed,
+            snapshotRemoveExpanded: snapshotRemoveExpanded,
+            onAction: onAction
+        )
     }
 }

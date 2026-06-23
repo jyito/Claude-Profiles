@@ -71,4 +71,13 @@ enum Fixtures {
         5300, 5600, 5800, 5700, 5900, 5400, 5600, 5800, 5500, 5400,
         5200, 5400, 5600, 5300, 5400, 5500, 5300, 5400, 5400, 5400,
     ]
+
+    // Research's leaked-handle (ptmx) history climbing toward the 512 ceiling —
+    // ends at 410 (matching `research.ptmx`) so the handle hero trend reads as a
+    // rising leak against its dashed limit.
+    static let ptmxSeriesHot: [Double] = [
+        60, 72, 88, 95, 110, 124, 140, 155, 170, 188,
+        205, 220, 238, 250, 268, 282, 300, 318, 330, 348,
+        360, 372, 388, 395, 400, 404, 406, 408, 409, 410,
+    ]
 }

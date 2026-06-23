@@ -12,17 +12,20 @@ public enum ProfileViewMode: String, CaseIterable, Identifiable, Sendable {
     public var label: String { self == .grid ? "Grid" : "List" }
 }
 
-/// The dense List-view alternative to the card grid. A native `Table` over the
-/// same `ProfileStat` models, with `selection` bound to the same `String?` slug
-/// so the inspector works identically in either view mode.
+/// The dense List-view alternative to the card grid. A hand-built header + row
+/// stack over the same `ProfileStat` models, with `selection` bound to the same
+/// `String?` slug so the inspector works identically in either view mode.
 ///
 /// Columns: identity (dot · badge · name) · status · CPU% · MEM · terminals ·
 /// handle-pool (used/ceiling). Numeric columns are monospacedDigit so they don't
 /// jitter as live values tick.
 ///
-/// The native `Table` renders empty under `ImageRenderer` (like `Menu`/`Form`), so
-/// the golden uses `ProfileListSnapshotContent` — a hand-built header + row stack
-/// over the canvas — the established native-control stand-in pattern.
+/// Hand-built rather than a native `Table`: the native Table renders EMPTY under
+/// `ImageRenderer` (like `Menu`/`Form`), so it was never visually verified and
+/// shipped as blank striped rows in the live app. This layout (promoted from the
+/// former `ProfileListSnapshotContent`) renders headlessly AND is interactive —
+/// each row taps to set `selection`, with the coral selection wash — so the golden
+/// tests the real view.
 public struct ProfileListView: View {
     let profiles: [ProfileStat]
     @Binding var selection: String?
@@ -32,83 +35,9 @@ public struct ProfileListView: View {
         self._selection = selection
     }
 
-    /// Alive-first, matching the grid + sidebar order.
     private var ordered: [ProfileStat] { sortProfiles(profiles) }
 
-    public var body: some View {
-        Table(ordered, selection: $selection) {
-            TableColumn("Profile") { stat in
-                HStack(spacing: Theme.Space.sm) {
-                    StatusDot(running: stat.running, size: 7)
-                    BadgeDisc(stat: stat, size: 18)
-                    Text(stat.name)
-                        .font(.system(size: 13))
-                        .foregroundStyle(Theme.text)
-                        .lineLimit(1)
-                }
-                .accessibilityIdentifier("list-row-\(stat.effSlug)")
-            }
-            .width(min: 180, ideal: 220)
-
-            TableColumn("Status") { stat in
-                Text(stat.running ? "Running" : "Stopped")
-                    .font(.system(size: 12))
-                    .foregroundStyle(stat.running ? Theme.mint : Theme.text3)
-            }
-            .width(min: 70, ideal: 84)
-
-            TableColumn("CPU") { stat in
-                Text(stat.running ? formatCPU(stat.cpu) : "—")
-                    .font(.system(size: 12)).monospacedDigit()
-                    .foregroundStyle(Theme.text2)
-            }
-            .width(min: 56, ideal: 64)
-
-            TableColumn("Memory") { stat in
-                Text(stat.running ? formatMemoryMB(stat.mem) : "—")
-                    .font(.system(size: 12)).monospacedDigit()
-                    .foregroundStyle(Theme.text2)
-            }
-            .width(min: 72, ideal: 88)
-
-            TableColumn("Terminals") { stat in
-                Text(stat.running ? "\(stat.ptys)" : "—")
-                    .font(.system(size: 12)).monospacedDigit()
-                    .foregroundStyle(Theme.text2)
-            }
-            .width(min: 64, ideal: 76)
-
-            TableColumn("Handles") { stat in
-                // The default instance never leak-alerts in UI; still show its pool.
-                Text(stat.running ? "\(stat.ptmx)/\(stat.ptmxMax)" : "—")
-                    .font(.system(size: 12)).monospacedDigit()
-                    .foregroundStyle(Theme.text2)
-            }
-            .width(min: 72, ideal: 88)
-        }
-        .accessibilityIdentifier("profile-table")
-        .background(Theme.canvas)
-        .scrollContentBackground(.hidden)
-    }
-}
-
-// MARK: - Snapshot stand-in
-
-/// Deterministic stand-in for `ProfileListView` — a header row + one row per
-/// profile over the canvas, mirroring the `Table`'s columns. Native `Table`
-/// renders empty under `ImageRenderer`, so the golden uses this hand-built layout.
-public struct ProfileListSnapshotContent: View {
-    let profiles: [ProfileStat]
-    let selection: String?
-
-    public init(profiles: [ProfileStat], selection: String? = nil) {
-        self.profiles = profiles
-        self.selection = selection
-    }
-
-    private var ordered: [ProfileStat] { sortProfiles(profiles) }
-
-    // Column widths mirror the Table's ideals so the stand-in reads true.
+    // Column widths read true against the identity column (which fills remaining width).
     private enum Col {
         static let status: CGFloat = 84
         static let cpu: CGFloat = 64
@@ -178,24 +107,45 @@ public struct ProfileListSnapshotContent: View {
             RoundedRectangle(cornerRadius: Theme.Radius.button, style: .continuous)
                 .fill(isSel ? Theme.coral.opacity(0.16) : Color.clear)
         )
+        .contentShape(Rectangle())
+        .onTapGesture { selection = stat.effSlug }
+        .accessibilityIdentifier("list-row-\(stat.effSlug)")
+    }
+
+    @Environment(\.snapshotMode) private var snapshotMode
+
+    private var rows: some View {
+        VStack(spacing: 1) {
+            ForEach(ordered) { stat in
+                row(stat)
+                if stat.id != ordered.last?.id {
+                    Divider().overlay(Theme.hairline).padding(.horizontal, Theme.Space.md)
+                }
+            }
+        }
     }
 
     public var body: some View {
         VStack(spacing: 0) {
             header
             Divider().overlay(Theme.hairline)
-            VStack(spacing: 1) {
-                ForEach(ordered) { stat in
-                    row(stat)
-                    if stat.id != ordered.last?.id {
-                        Divider().overlay(Theme.hairline).padding(.horizontal, Theme.Space.md)
-                    }
+            // `ImageRenderer` (the snapshot harness) proposes a nil height into a
+            // `ScrollView`, collapsing its content to empty — the very blank-rows
+            // bug we're fixing. So render the rows directly under the snapshot, and
+            // only wrap them in a live `ScrollView` for the real, scrollable app.
+            if snapshotMode {
+                rows
+                Spacer(minLength: 0)
+            } else {
+                ScrollView {
+                    rows
                 }
+                .scrollContentBackground(.hidden)
             }
-            Spacer(minLength: 0)
         }
         .padding(Theme.Space.sm)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Theme.canvas)
+        .accessibilityIdentifier("profile-table")
     }
 }

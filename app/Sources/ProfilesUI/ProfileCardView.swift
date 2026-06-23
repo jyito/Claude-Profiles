@@ -1,10 +1,19 @@
 import SwiftUI
 import ProfilesCore
 
+/// Lifecycle actions raised by a card's overflow (ellipsis) menu. The scene maps
+/// these to engine verbs (accounting for the default instance) and confirms the
+/// disruptive ones before firing.
+public enum CardAction: Sendable, Equatable {
+    case quit, force, restart
+}
+
 /// One profile card. Renders the running / stopped / default layout off a
 /// `ProfileStat` + precomputed `AlertState` + rolling CPU/Mem series. Deterministic:
 /// no time/env/material reads inside the snapshotted content.
 public struct ProfileCardView: View {
+    @Environment(\.snapshotMode) private var snapshotMode
+
     let stat: ProfileStat
     let cpu: [Double]
     let mem: [Double]
@@ -16,12 +25,20 @@ public struct ProfileCardView: View {
     let onShowWindow: (String) -> Void
     /// Stopped: launch the wrapper (`engine open <slug>`).
     let onOpen: (String) -> Void
+    /// Overflow menu (running/default only): Restart / Quit / Force Quit.
+    let onCardAction: (CardAction) -> Void
+    /// When true (the grid), the card SURFACE stretches to fill its cell so every card
+    /// in a row is exactly the same height regardless of content. False (single-card
+    /// snapshots) keeps natural height.
+    let fillsHeight: Bool
 
     public init(stat: ProfileStat, cpu: [Double], mem: [Double], state: AlertState,
                 selected: Bool = false, onDetails: @escaping (String) -> Void = { _ in },
                 onRemote: @escaping (String) -> Void = { _ in },
                 onShowWindow: @escaping (String) -> Void = { _ in },
-                onOpen: @escaping (String) -> Void = { _ in }) {
+                onOpen: @escaping (String) -> Void = { _ in },
+                onCardAction: @escaping (CardAction) -> Void = { _ in },
+                fillsHeight: Bool = false) {
         self.stat = stat
         self.cpu = cpu
         self.mem = mem
@@ -31,6 +48,8 @@ public struct ProfileCardView: View {
         self.onRemote = onRemote
         self.onShowWindow = onShowWindow
         self.onOpen = onOpen
+        self.onCardAction = onCardAction
+        self.fillsHeight = fillsHeight
     }
 
     public var body: some View {
@@ -39,7 +58,7 @@ public struct ProfileCardView: View {
             content
         }
         .padding(Theme.Space.lg)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: fillsHeight ? .infinity : nil, alignment: .topLeading)
         .background(cardSurface)
         .overlay(cardStroke)
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
@@ -95,15 +114,41 @@ public struct ProfileCardView: View {
                 }
             }
             Spacer(minLength: Theme.Space.sm)
-            // Overflow (Quit/Force/Restart) is wired in Phase 3; a plain glyph
-            // button renders deterministically where a `Menu` paints empty headless.
-            Button {
-            } label: {
-                Image(systemName: "ellipsis.circle")
-                    .font(.system(size: 16))
-                    .foregroundStyle(Theme.text3)
+            // Overflow (Restart / Quit / Force Quit) — running instances only; a
+            // stopped profile has nothing to quit/restart, so it gets no menu.
+            if showsOverflow {
+                overflowControl
             }
-            .buttonStyle(.plain)
+        }
+    }
+
+    /// Only running instances (running profile OR the running default) expose the
+    /// lifecycle overflow — there's nothing to quit/restart on a stopped card.
+    private var showsOverflow: Bool { stat.running }
+
+    private var overflowGlyph: some View {
+        Image(systemName: "ellipsis.circle")
+            .font(.system(size: 16))
+            .foregroundStyle(Theme.text3)
+    }
+
+    /// Native `Menu` live; a plain glyph under `ImageRenderer` (a `Menu` paints empty
+    /// headless, so snapshotMode keeps the deterministic glyph — goldens unchanged).
+    @ViewBuilder private var overflowControl: some View {
+        if snapshotMode {
+            overflowGlyph
+                .accessibilityIdentifier("card-\(stat.effSlug)-overflow")
+        } else {
+            Menu {
+                Button("Restart") { onCardAction(.restart) }
+                Button("Quit") { onCardAction(.quit) }
+                Button("Force Quit", role: .destructive) { onCardAction(.force) }
+            } label: {
+                overflowGlyph
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
             .accessibilityIdentifier("card-\(stat.effSlug)-overflow")
         }
     }
@@ -254,8 +299,18 @@ public struct ProfileCardView: View {
         VStack(alignment: .leading, spacing: Theme.Space.md) {
             statusLine
             metricRow
-            // NOTE: structurally no disk / clean tiers / badge / leak-restart — the
-            // restricted default contract (CLAUDE.md §5) is unbreakable here.
+            // Structurally no disk / clean tiers / badge / leak-restart — the
+            // restricted default contract (CLAUDE.md §5) is unbreakable here. A
+            // read-only placeholder fills the handle-gauge slot so the default card
+            // matches running cards' height (uniform grid rows).
+            HStack(spacing: Theme.Space.sm) {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Theme.text3)
+                Text("Read-only · default instance is protected")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.text3)
+            }
             HStack(spacing: Theme.Space.sm) {
                 Button {
                     onShowWindow(stat.effSlug)
@@ -274,6 +329,7 @@ public struct ProfileCardView: View {
                 .accessibilityIdentifier("card-default-remote")
                 Spacer(minLength: 0)
                 Button {
+                    onDetails(stat.effSlug)
                 } label: {
                     HStack(spacing: 2) {
                         Text("Details")
