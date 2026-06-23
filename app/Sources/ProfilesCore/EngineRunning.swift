@@ -28,6 +28,10 @@ public protocol EngineRunning: Sendable {
     /// (`error` key), not via exit/token, so this returns `RemoteInfo` rather than
     /// throwing on a missing prerequisite.
     func remoteInfo(_ slug: String) async throws -> RemoteInfo
+    /// Stop a profile's Claude Code `screen` session (`remotestop <slug>` →
+    /// `screen -S claude-<slug> -X quit`). Idempotent; the engine always prints
+    /// `ok`. Throws on the engine's `err`/`refused` tokens like other actions.
+    func remoteStop(_ slug: String) async throws
     /// Put text on the clipboard (`copy <text>` → `pbcopy`) for the Remote sheet's Copy buttons.
     func copy(_ text: String) async throws
     /// Resolve an instance's main process PID for in-process focus (`mainpid <slug>`,

@@ -75,6 +75,7 @@ public struct SidebarView: View {
             )
             .contentShape(Rectangle())
             .onTapGesture { selection = stat.effSlug }
+            .pointerCursor()
     }
 
     private var content: some View {

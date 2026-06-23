@@ -109,6 +109,7 @@ public struct ProfileListView: View {
         )
         .contentShape(Rectangle())
         .onTapGesture { selection = stat.effSlug }
+        .pointerCursor()
         .accessibilityIdentifier("list-row-\(stat.effSlug)")
     }
 

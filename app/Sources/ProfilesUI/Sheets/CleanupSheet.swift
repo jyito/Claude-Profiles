@@ -177,6 +177,7 @@ public struct CleanupSheet: View {
                 )
         }
         .buttonStyle(.plain)
+        .pointerCursor()
         .accessibilityIdentifier("cleanup-emergency")
     }
 }

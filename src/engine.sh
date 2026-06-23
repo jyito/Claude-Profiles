@@ -688,6 +688,21 @@ cmd_remoteinfo() {  # start/reuse a profile's Claude Code screen session; emit J
         "$(json_str "$slug")" "$(json_str "$session")" "$(json_str "$user")" "$(json_str "$host")" "$(json_str "$ts_ip")" "$already"
 }
 
+cmd_remote_stop() {  # stop a profile's Claude Code screen session (claude-<slug>); idempotent
+    local slug="${1:?}"
+    # Same trust boundary as cmd_remoteinfo: the slug is interpolated into the
+    # session name, so reject anything that isn't a bare engine slug. "default"
+    # is all-lowercase, so it passes (claude-default).
+    case "$slug" in ""|*[!a-z0-9]*) printf 'ok'; return 0 ;; esac
+    command -v screen >/dev/null 2>&1 || { printf 'ok'; return 0; }
+    # Target the exact session name as a whole token — claude-work must not touch
+    # claude-work2 (same boundary remote_live/cmd_remoteinfo use). `-X quit` to a
+    # missing session is a harmless no-op, so this is idempotent; swallow its exit
+    # so the command always succeeds.
+    screen -S "claude-$slug" -X quit 2>/dev/null || true
+    printf 'ok'
+}
+
 cmd_copy() {  # put text on the clipboard for the dashboard's Copy buttons (macOS only)
     command -v pbcopy >/dev/null 2>&1 || return 0
     printf '%s' "${1:-}" | pbcopy
@@ -725,6 +740,7 @@ case "${1:-stats}" in
     setconfig) cmd_setconfig "${2:?}" "${3:?}" ;;
     autotick) cmd_autotick ;;
     remoteinfo) cmd_remoteinfo "${2:?}" ;;
+    remotestop) cmd_remote_stop "${2:?}" ;;
     copy) cmd_copy "${2:-}" ;;
 esac
 fi

@@ -61,5 +61,6 @@ public struct PillButtonStyle: ButtonStyle {
                     .strokeBorder(stroke, lineWidth: 1)
             )
             .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.button, style: .continuous))
+            .pointerCursor()
     }
 }

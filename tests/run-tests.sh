@@ -80,8 +80,9 @@ EOF
 cat > "$WORK/shims/screen" <<EOF
 #!/bin/bash
 case "\$*" in
-  *-ls*)  cat "$WORK/screen-sessions" 2>/dev/null || echo "No Sockets found." ;;
-  *-dmS*) printf '%s\n' "\$*" >> "$WORK/screen.log" ;;
+  *-ls*)         cat "$WORK/screen-sessions" 2>/dev/null || echo "No Sockets found." ;;
+  *-X*quit*)     printf '%s\n' "\$*" >> "$WORK/screen-quit.log" ;;
+  *-dmS*)        printf '%s\n' "\$*" >> "$WORK/screen.log" ;;
 esac
 EOF
 cat > "$WORK/shims/scutil" <<'EOF'
@@ -342,6 +343,23 @@ rm -f "$WORK/shims/tailscale"
 rm -f "$WORK/PWNED"
 check "remoteinfo rejects injection slug" "\"\$ENGINE\" remoteinfo \"x'; touch '$WORK/PWNED'; echo '\" 2>/dev/null | grep -q 'invalid profile id'; [ ! -f '$WORK/PWNED' ]"
 check "remoteinfo rejects traversal slug" "\"\$ENGINE\" remoteinfo '../../escape/evil' 2>/dev/null | grep -q 'invalid profile id'; [ ! -d '$WORK/escape' ]"
+
+echo "== engine remotestop (turn Remote OFF) =="
+rm -f "$WORK/screen-quit.log"
+"$ENGINE" remotestop work
+check "remotestop quits the exact session"  "[ -f '$WORK/screen-quit.log' ] && grep -qF -- '-S claude-work -X quit' '$WORK/screen-quit.log'"
+check "remotestop does NOT touch claude-work2" "! grep -qF -- 'claude-work2' '$WORK/screen-quit.log'"
+check "remotestop emits ok"                 "[ \"\$('$ENGINE' remotestop work)\" = ok ]"
+# default → claude-default (engine.sh contract: Remote works for the default too)
+rm -f "$WORK/screen-quit.log"
+"$ENGINE" remotestop default
+check "remotestop default quits claude-default" "grep -qF -- '-S claude-default -X quit' '$WORK/screen-quit.log'"
+# Idempotent: a second stop with no live session is a harmless no-op that still emits ok.
+check "remotestop is idempotent (still ok)" "[ \"\$('$ENGINE' remotestop work)\" = ok ]"
+# Same untrusted-slug boundary as remoteinfo: an injection slug never reaches `screen`.
+rm -f "$WORK/screen-quit.log" "$WORK/PWNED"
+check "remotestop rejects injection slug"   "\"\$ENGINE\" remotestop \"x'; touch '$WORK/PWNED'; echo '\" >/dev/null 2>&1; [ ! -f '$WORK/PWNED' ] && [ ! -f '$WORK/screen-quit.log' ]"
+rm -f "$WORK/screen-quit.log"
 
 echo "== engine copy (clipboard bridge) =="
 cat > "$WORK/shims/pbcopy" <<PB

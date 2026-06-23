@@ -5,11 +5,13 @@ import ProfilesCore
 /// profile's Claude Code `screen` session — a local-network block and, when a
 /// Tailscale IP exists, an any-network block — each with a Copy button, plus a QR
 /// of the local attach command and collapsible iPad / Tailscale setup steps.
-/// Pure view: `onCopy(text)` / `onClose()`; the scene performs `engine copy`.
+/// Pure view: `onCopy(text)` / `onStop()` / `onClose()`; the scene performs the
+/// `engine copy` / `remotestop`.
 public struct RemoteSheet: View {
     let name: String
     let info: RemoteInfo
     let onCopy: (String) -> Void
+    let onStop: () -> Void
     let onClose: () -> Void
     /// Snapshot-only: render the setup steps expanded so the golden covers them.
     let snapshotStepsExpanded: Bool
@@ -21,11 +23,13 @@ public struct RemoteSheet: View {
                 info: RemoteInfo,
                 snapshotStepsExpanded: Bool = false,
                 onCopy: @escaping (String) -> Void,
+                onStop: @escaping () -> Void = {},
                 onClose: @escaping () -> Void) {
         self.name = name
         self.info = info
         self.snapshotStepsExpanded = snapshotStepsExpanded
         self.onCopy = onCopy
+        self.onStop = onStop
         self.onClose = onClose
     }
 
@@ -44,6 +48,14 @@ public struct RemoteSheet: View {
             Divider().overlay(Theme.hairline)
 
             HStack {
+                // The session is running by the time this modal opens (`remoteinfo`
+                // started/reused it), so a missing error means there's a session to
+                // stop. This is the only "turn Remote OFF" affordance.
+                if info.error == nil {
+                    Button { onStop() } label: { Text("Stop session") }
+                        .buttonStyle(PillButtonStyle(.neutral))
+                        .accessibilityIdentifier("remote-stop")
+                }
                 Spacer(minLength: 0)
                 Button { onClose() } label: { Text("Done") }
                     .buttonStyle(PillButtonStyle(.neutral))
@@ -170,6 +182,7 @@ public struct RemoteSheet: View {
                 .foregroundStyle(Theme.text2)
             }
             .buttonStyle(.plain)
+            .pointerCursor()
             .accessibilityIdentifier("remote-steps-toggle")
 
             if showSteps {

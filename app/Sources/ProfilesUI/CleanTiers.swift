@@ -77,6 +77,7 @@ public struct CleanTiers: View {
             )
         }
         .buttonStyle(.plain)
+        .pointerCursor()
         .accessibilityIdentifier("inspector-clean-\(tier.key)")
     }
 }

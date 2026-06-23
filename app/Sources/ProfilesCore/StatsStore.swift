@@ -124,6 +124,14 @@ public final class StatsStore {
         }
     }
 
+    /// Stop a profile's Claude Code `screen` session (Remote sheet's "Stop
+    /// session" button). Idempotent; the next stats tick clears the card's live
+    /// dot. Errors surface via `lastError`.
+    public func remoteStop(_ slug: String) async {
+        do { try await engine.remoteStop(slug); lastError = nil }
+        catch { lastError = String(describing: error) }
+    }
+
     /// Resolve an instance's main PID for in-process focus (Show Window / the
     /// menu-bar switcher). Returns nil if not running (or on a transport error,
     /// surfaced via `lastError`) — the caller no-ops rather than focusing pid 0.
