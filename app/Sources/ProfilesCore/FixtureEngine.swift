@@ -17,6 +17,8 @@ public final class FixtureEngine: EngineRunning, @unchecked Sendable {
     /// Canned remote info returned by `remoteInfo`.
     public var remote = RemoteInfo(slug: "work", session: "claude-work", user: "me",
                                    host: "mac.local", tailscaleIp: "100.64.0.1", alreadyRunning: false)
+    /// Records each slug passed to `remoteStop`.
+    public private(set) var remoteStopped: [String] = []
     /// Records each text passed to `copy`.
     public private(set) var copied: [String] = []
     /// The pid `mainPid` returns (nil simulates a stopped instance).
@@ -53,6 +55,10 @@ public final class FixtureEngine: EngineRunning, @unchecked Sendable {
     public func remoteInfo(_ slug: String) async throws -> RemoteInfo {
         if shouldThrow { throw EngineError.nonZeroExit(1) }
         return remote
+    }
+    public func remoteStop(_ slug: String) async throws {
+        if shouldThrow { throw EngineError.nonZeroExit(1) }
+        remoteStopped.append(slug)
     }
     public func copy(_ text: String) async throws {
         if shouldThrow { throw EngineError.nonZeroExit(1) }

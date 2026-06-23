@@ -235,6 +235,7 @@ public struct ProfileDetailView: View {
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
             .fixedSize()
+            .pointerCursor()
             .accessibilityIdentifier("detail-\(stat.effSlug)-overflow")
         }
     }

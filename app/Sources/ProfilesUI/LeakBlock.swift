@@ -99,6 +99,7 @@ public struct LeakBlock: View {
                 )
         }
         .buttonStyle(.plain)
+        .pointerCursor()
         .accessibilityIdentifier("inspector-restart")
     }
 }

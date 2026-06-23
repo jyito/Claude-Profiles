@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [0.7.3] — 2026-06-23
+
+- **New:** turn Remote **off** — the Remote modal now has a **"Stop session"** button that
+  stops the profile's Claude Code `screen` session; the card's mint live-dot clears on the
+  next tick. Works for the default instance too.
+- **Changed:** every button now shows the pointing-hand cursor on hover.
+
 ## [0.7.2] — 2026-06-23
 
 - **Changed:** the handle-leak gauge now flags **actual leaks**, not just near-exhaustion.

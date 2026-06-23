@@ -76,18 +76,21 @@ struct ProfilesApp: App {
                                 Label("Cleanup", systemImage: "trash")
                             }
                             .accessibilityIdentifier("toolbar-cleanup")
+                            .pointerCursor()
 
                             Button { presentSettings() } label: {
                                 Label("Settings", systemImage: "gearshape")
                             }
                             .keyboardShortcut(",", modifiers: .command)
                             .accessibilityIdentifier("toolbar-settings")
+                            .pointerCursor()
 
                             Button { activeSheet = .newProfile } label: {
                                 Label("New Profile", systemImage: "plus")
                             }
                             .keyboardShortcut("n", modifiers: .command)
                             .accessibilityIdentifier("toolbar-new-profile")
+                            .pointerCursor()
                         }
                     }
             }
@@ -252,12 +255,13 @@ struct ProfilesApp: App {
                 },
                 onClose: { activeSheet = nil }
             )
-        case .remote:
+        case .remote(let slug):
             if let loaded = loadedRemote {
                 RemoteSheet(
                     name: loaded.name,
                     info: loaded.info,
                     onCopy: { text in Task { await store.copy(text) } },
+                    onStop: { Task { await store.remoteStop(slug); activeSheet = nil } },
                     onClose: { activeSheet = nil }
                 )
             } else {

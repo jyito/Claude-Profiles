@@ -42,6 +42,7 @@ public struct RemoveProfile: View {
                     .foregroundStyle(Theme.text3)
             }
             .buttonStyle(.plain)
+            .pointerCursor()
             .accessibilityIdentifier("inspector-remove-disclose")
         }
     }
@@ -70,6 +71,7 @@ public struct RemoveProfile: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(!matches)
+                .pointerCursor()
                 .accessibilityIdentifier("inspector-remove-confirm")
 
                 Button {
@@ -81,6 +83,7 @@ public struct RemoveProfile: View {
                         .foregroundStyle(Theme.text3)
                 }
                 .buttonStyle(.plain)
+                .pointerCursor()
                 .accessibilityIdentifier("inspector-remove-cancel")
             }
 

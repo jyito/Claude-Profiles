@@ -81,6 +81,32 @@ final class RemoteInfoTests: XCTestCase {
         XCTAssertEqual(engine.copied, ["ssh me@mac.local"])
     }
 
+    // MARK: remoteStop — turn Remote OFF
+
+    func testEngineRemoteStopRecordsSlug() async throws {
+        let engine = FixtureEngine(stats: [])
+        try await engine.remoteStop("work")
+        XCTAssertEqual(engine.remoteStopped, ["work"])
+    }
+
+    func testStoreRemoteStopPassesThrough() async throws {
+        let engine = FixtureEngine(stats: [])
+        let store = StatsStore(engine: engine, clock: ImmediateClock())
+        await store.remoteStop("work")
+        XCTAssertEqual(engine.remoteStopped, ["work"])
+        let err = await MainActor.run { store.lastError }
+        XCTAssertNil(err)                       // a clean stop clears lastError
+    }
+
+    func testStoreRemoteStopSurfacesTransportError() async throws {
+        let engine = FixtureEngine(stats: [])
+        engine.shouldThrow = true
+        let store = StatsStore(engine: engine, clock: ImmediateClock())
+        await store.remoteStop("work")
+        let err = await MainActor.run { store.lastError }
+        XCTAssertNotNil(err)                     // a failed stop is visible, not silent
+    }
+
     static let allTests: [(String, (RemoteInfoTests) -> () async throws -> Void)] = [
         ("testDecodeSuccessJSON", testDecodeSuccessJSON),
         ("testDecodeErrorOnlyJSON", testDecodeErrorOnlyJSON),
@@ -90,5 +116,8 @@ final class RemoteInfoTests: XCTestCase {
         ("testStoreRemoteInfoPassesThrough", testStoreRemoteInfoPassesThrough),
         ("testStoreRemoteInfoSurfacesTransportError", testStoreRemoteInfoSurfacesTransportError),
         ("testStoreCopyRecordsText", testStoreCopyRecordsText),
+        ("testEngineRemoteStopRecordsSlug", testEngineRemoteStopRecordsSlug),
+        ("testStoreRemoteStopPassesThrough", testStoreRemoteStopPassesThrough),
+        ("testStoreRemoteStopSurfacesTransportError", testStoreRemoteStopSurfacesTransportError),
     ]
 }

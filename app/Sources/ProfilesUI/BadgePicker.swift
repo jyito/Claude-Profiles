@@ -55,6 +55,7 @@ public struct BadgePicker: View {
                 )
         }
         .buttonStyle(.plain)
+        .pointerCursor()
         .accessibilityIdentifier("inspector-badge-\(index)")
     }
 }

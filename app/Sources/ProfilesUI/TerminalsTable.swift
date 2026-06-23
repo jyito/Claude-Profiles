@@ -139,6 +139,7 @@ private struct TerminalRow: View {
                 )
         }
         .buttonStyle(.plain)
+        .pointerCursor()
         .accessibilityIdentifier("terminal-close-\(term.dev)")
     }
 }

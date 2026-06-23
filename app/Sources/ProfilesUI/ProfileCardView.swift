@@ -146,6 +146,7 @@ public struct ProfileCardView: View {
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
             .fixedSize()
+            .pointerCursor()
             .accessibilityIdentifier("card-\(stat.effSlug)-overflow")
         }
     }
@@ -240,6 +241,7 @@ public struct ProfileCardView: View {
                 .foregroundStyle(Theme.text2)
             }
             .buttonStyle(.plain)
+            .pointerCursor()
             .accessibilityIdentifier("card-\(stat.effSlug)-details")
         }
         .font(.system(size: 12, weight: .medium))
@@ -284,6 +286,7 @@ public struct ProfileCardView: View {
                     .foregroundStyle(Theme.text2)
                 }
                 .buttonStyle(.plain)
+                .pointerCursor()
                 .accessibilityIdentifier("card-\(stat.effSlug)-details")
             }
             .font(.system(size: 12, weight: .medium))
@@ -368,6 +371,7 @@ public struct ProfileCardView: View {
                     .foregroundStyle(Theme.text2)
                 }
                 .buttonStyle(.plain)
+                .pointerCursor()
                 .accessibilityIdentifier("card-default-details")
             }
             .font(.system(size: 12, weight: .medium))

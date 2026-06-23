@@ -98,6 +98,12 @@ public struct EngineClient: EngineRunning {
         }.value
     }
 
+    public func remoteStop(_ slug: String) async throws {
+        // `remotestop` exits 0 and prints `ok`; `run` surfaces any `err`/`refused`
+        // token as a thrown error, though the engine never prints one here.
+        try await run(["remotestop", slug])
+    }
+
     public func copy(_ text: String) async throws {
         // `copy` always exits 0 and prints nothing — `run` is a clean fit.
         try await run(["copy", text])
