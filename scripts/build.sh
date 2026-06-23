@@ -11,6 +11,12 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# The app build is macOS-only (SwiftUI via the Command Line Tools); fail clearly off-Mac.
+command -v swift >/dev/null 2>&1 || {
+  echo "build.sh: needs the Swift toolchain (macOS Command Line Tools) to build app/. The bundle is a macOS app." >&2
+  exit 1
+}
+
 APP="dist/Claude Profiles.app"
 
 echo "==> Building the native SwiftUI app (Profiles binary, release)"
