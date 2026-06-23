@@ -79,6 +79,12 @@ jobs:
       - name: layer 1 — logic tests
         run: cd app && swift run ProfilesCoreTests
       - name: layer 2 — snapshot render proof
+        # Pixel snapshots are a PR visual-regression gate. The goldens are
+        # authoritative for one platform; cross-OS anti-aliasing/font drift (e.g.
+        # macos-14 vs the recording runner) exceeds tolerance without signalling a
+        # real bug — so run them only on PRs (macos-latest), not on the release/cron
+        # matrix, which is for build + sign + notarize. Layer-1 logic still runs everywhere.
+        if: github.event_name == 'pull_request'
         run: cd app && swift run ProfilesSnapshotTests
       - name: test suite
         run: bash tests/run-tests.sh
