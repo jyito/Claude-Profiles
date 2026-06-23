@@ -242,9 +242,9 @@ public struct ProfileDetailView: View {
     // MARK: Hero trend charts (CPU · Memory · Handle pool)
 
     /// Three taller-than-the-card trend charts in a row. CPU keeps its coral metric
-    /// identity, Memory its teal; the handle chart is the one place amber/coral leak
-    /// SEVERITY shows (with a dashed ceiling rule + a leak verdict). The default
-    /// instance is read-only, so its handle verdict is informational only.
+    /// identity, Memory its teal; the handle chart carries the amber leak verdict
+    /// (with a dashed ceiling rule). The default instance is read-only, so its handle
+    /// verdict is informational only.
     private var heroCharts: some View {
         HStack(alignment: .top, spacing: Theme.Space.xl) {
             HeroTrend(eyebrow: "CPU",
@@ -291,25 +291,18 @@ public struct ProfileDetailView: View {
         return "\(sign)\(formatMemoryMB(abs(delta))) over \(mem.count * 2)s"
     }
 
-    /// The leak verdict sub-line under the handle chart, derived from `AlertState`
-    /// (the hysteresis severity) + the trend slope. The DEFAULT instance is read-only
-    /// (never auto-restarted, CLAUDE.md §5) so it never gets a "restart soon" verdict —
-    /// only an informational climbing/elevated note.
+    /// The leak verdict sub-line under the handle chart, derived from `AlertState`.
+    /// Amber-only — there's no coral/critical tier. The DEFAULT instance is read-only
+    /// (never auto-restarted, CLAUDE.md §5) so its leaking verdict is informational
+    /// ("▲ leaking") rather than the actionable "restart frees them".
     private var leakVerdict: (text: String, tint: Color) {
         switch state {
         case .calm:
-            return ("✓ healthy", Theme.text3)
-        case .warning(let climbing):
-            if climbing {
-                return stat.isDefault
-                    ? ("▲ climbing", Theme.amber)
-                    : ("▲ climbing — restart soon", Theme.amber)
-            }
-            return ("elevated", Theme.amber)
-        case .critical:
+            return ("✓ no active leak", Theme.text3)
+        case .leaking:
             return stat.isDefault
-                ? ("▲ near ceiling", Theme.coral)
-                : ("▲ climbing — restart soon", Theme.coral)
+                ? ("▲ leaking", Theme.amber)
+                : ("▲ leaking — restart frees them", Theme.amber)
         }
     }
 

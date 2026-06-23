@@ -251,10 +251,12 @@ struct DashboardView: View {
             if p.count > Self.historyLen { p.removeFirst(p.count - Self.historyLen) }
             ptmxHistory[key] = p
 
-            // per-slug hysteresis severity (default instance never leak-alerts in UI,
-            // but the engine still emits ptmx; feeding it is harmless and consistent)
+            // per-slug active-leak detection. The verdict compares held masters
+            // (`ptmx`) against live terminals (`ptys`) + a climbing floor — see
+            // PtmxHysteresis. The default instance feeds it too (the engine emits
+            // ptmx for it); its UI surfaces the leak informationally, never as a CTA.
             var h = hysteresis[key] ?? PtmxHysteresis()
-            states[key] = h.ingest(PtmxSample(used: stat.ptmx, max: stat.ptmxMax))
+            states[key] = h.ingest(PtmxSample(used: stat.ptmx, max: stat.ptmxMax, terminals: stat.ptys))
             hysteresis[key] = h
         }
 

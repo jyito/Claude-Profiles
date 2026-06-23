@@ -32,6 +32,11 @@ public func formatDiskMB(_ mb: Int) -> String {
     return String(format: "%.1f GB", Double(mb) / 1024.0)
 }
 
+/// Per-tile handle readout: just the count + "handles". The ceiling (`max`) is
+/// deliberately NOT shown here — it already lives in the KPI strip ("HANDLE POOL
+/// N/ceiling") and the detail page's handle-pool chart (dashed ceiling rule), so
+/// repeating "/ 511" on every card was redundant and inconsistent with the default
+/// card's "N handles". `max` is kept in the signature so callers don't restructure.
 public func formatHandles(used: Int, max: Int) -> String {
-    "\(used) / \(max) handles"
+    "\(used) handles"
 }

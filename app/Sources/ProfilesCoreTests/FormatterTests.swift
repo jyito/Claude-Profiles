@@ -18,7 +18,9 @@ final class FormatterTests: XCTestCase {
         XCTAssertEqual(formatDiskMB(1400), "1.4 GB")
     }
     func testHandles() async throws {
-        XCTAssertEqual(formatHandles(used: 12, max: 256), "12 / 256 handles")
+        // Per-tile readout is just the count — the ceiling lives in the KPI strip and
+        // the detail chart, not on every card.
+        XCTAssertEqual(formatHandles(used: 12, max: 256), "12 handles")
     }
     static let allTests: [(String, (FormatterTests) -> () async throws -> Void)] = [
         ("testMemory", testMemory), ("testCPUNotClamped", testCPUNotClamped),

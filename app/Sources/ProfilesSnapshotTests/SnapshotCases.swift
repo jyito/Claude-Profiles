@@ -37,17 +37,18 @@ enum SnapshotCases {
                 .padding(.horizontal, 6)
         })
 
-        // Task 5 — running ProfileCard (calm) + warning gauge
+        // Task 5 — running ProfileCard: a calm card (gray gauge, no accent border) +
+        // an actively-leaking card (amber gauge "N leaked ↑ climbing" + amber border).
         cases.append(SnapshotCase("card-running-business", size: CGSize(width: 340, height: 300)) {
             ProfileCardView(stat: Fixtures.business, cpu: Fixtures.cpuSeries,
                             mem: Fixtures.memSeries, state: .calm, selected: false)
                 .padding(Theme.Space.lg)
         })
-        cases.append(SnapshotCase("card-running-research-warning", size: CGSize(width: 340, height: 300)) {
-            // Unselected so the amber *severity* border shows (the coral selection
-            // ring would otherwise mask it — that path is covered by window-full).
+        cases.append(SnapshotCase("card-running-research-leaking", size: CGSize(width: 340, height: 300)) {
+            // Unselected so the amber leak border shows (the coral selection ring would
+            // otherwise mask it — that path is covered by window-full).
             ProfileCardView(stat: Fixtures.research, cpu: Fixtures.cpuSeriesHot,
-                            mem: Fixtures.memSeriesHot, state: .warning(climbing: true), selected: false)
+                            mem: Fixtures.memSeriesHot, state: .leaking, selected: false)
                 .padding(Theme.Space.lg)
         })
 
@@ -60,6 +61,14 @@ enum SnapshotCases {
         cases.append(SnapshotCase("card-default", size: CGSize(width: 340, height: 280)) {
             ProfileCardView(stat: Fixtures.defaultInstance, cpu: Fixtures.cpuSeries,
                             mem: Fixtures.memSeries, state: .calm, selected: false)
+                .padding(Theme.Space.lg)
+        })
+        // The default card while leaking: the INFORMATIONAL amber "⚠ N leaked" line
+        // (read-only — NO restart/clean/Details CTA, restricted-default contract intact)
+        // replaces the calm "protected · N handles" note. The maintainer's core ask.
+        cases.append(SnapshotCase("card-default-leaking", size: CGSize(width: 340, height: 280)) {
+            ProfileCardView(stat: Fixtures.defaultLeaking, cpu: Fixtures.cpuSeries,
+                            mem: Fixtures.memSeries, state: .leaking, selected: false)
                 .padding(Theme.Space.lg)
         })
         // The quit default: stopped status line + protected note + an Open / Remote
@@ -92,7 +101,7 @@ enum SnapshotCases {
             CardModel(stat: Fixtures.business, cpu: Fixtures.cpuSeries,
                       mem: Fixtures.memSeries, state: .calm),
             CardModel(stat: Fixtures.research, cpu: Fixtures.cpuSeriesHot,
-                      mem: Fixtures.memSeriesHot, state: .warning(climbing: true)),
+                      mem: Fixtures.memSeriesHot, state: .leaking),
             CardModel(stat: Fixtures.clientX, cpu: Fixtures.cpuSeries,
                       mem: Fixtures.memSeries, state: .calm),
         ]
@@ -121,13 +130,13 @@ enum SnapshotCases {
                 .padding(Theme.Space.lg)
         })
 
-        // Task 5 — leak-restart block (amber, warning) — resting + armed
-        cases.append(SnapshotCase("inspector-leakblock-warning", size: CGSize(width: 340, height: 180)) {
-            LeakBlock(stat: Fixtures.research, state: .warning(climbing: true)) { }
+        // Task 5 — leak-restart block (amber, leaking) — resting + armed
+        cases.append(SnapshotCase("inspector-leakblock-leaking", size: CGSize(width: 340, height: 180)) {
+            LeakBlock(stat: Fixtures.research, state: .leaking) { }
                 .padding(Theme.Space.lg)
         })
         cases.append(SnapshotCase("inspector-leakblock-armed", size: CGSize(width: 340, height: 220)) {
-            LeakBlock(stat: Fixtures.research, state: .warning(climbing: true), snapshotArmed: true) { }
+            LeakBlock(stat: Fixtures.research, state: .leaking, snapshotArmed: true) { }
                 .padding(Theme.Space.lg)
         })
 
@@ -149,8 +158,10 @@ enum SnapshotCases {
 
         // Task 8 — assembled inspector bodies by state (looser tolerance: tall composites)
         cases.append(SnapshotCase("inspector-running-full", size: CGSize(width: 360, height: 540), tolerance: 0.015) {
+            // Leaking, so the terminals table + the amber leak-restart block both show
+            // (the block only renders on an active leak now).
             InspectorView(stat: Fixtures.business, terminals: Fixtures.terminals,
-                          state: .warning(climbing: false)) { _ in }
+                          state: .leaking) { _ in }
         })
         cases.append(SnapshotCase("inspector-stopped-full", size: CGSize(width: 360, height: 480), tolerance: 0.015) {
             InspectorView(stat: Fixtures.clientX, terminals: [], state: .calm) { _ in }
@@ -161,20 +172,20 @@ enum SnapshotCases {
                           state: .calm) { _ in }
         })
 
-        // Task 9 — maximized master-detail page (the `.inspector` replacement). A
-        // running profile: header (badge + name + status) over the consolidated action
-        // bar (Show Window · Remote · Throttle CPU · Restart · ⋯ overflow glyph) over
-        // the three hero trend charts (CPU coral / MEMORY teal / HANDLE POOL amber with
-        // a dashed ceiling rule + a "▲ climbing — restart soon" verdict) and the stat
-        // strip (procs · terminals · disk · opened · last · remote) over the shared
-        // `InstanceSections` (terminals + leak block — Throttle moved up to the action
-        // bar). Looser tolerance: tall composite. snapshotMode renders the bare VStack
-        // (no ScrollView) and the overflow glyph (a `Menu` paints empty headless).
+        // Task 9 — maximized master-detail page (the `.inspector` replacement). An
+        // actively-leaking running profile: header (badge + name + status) over the
+        // consolidated action bar (Show Window · Remote · Throttle CPU · Restart · ⋯
+        // overflow glyph) over the three hero trend charts (CPU coral / MEMORY teal /
+        // HANDLE POOL amber with a dashed ceiling rule + a "▲ leaking — restart frees
+        // them" verdict) and the stat strip (procs · terminals · disk · opened · last ·
+        // remote) over the shared `InstanceSections` (terminals + amber leak block —
+        // Throttle moved up to the action bar). Looser tolerance: tall composite.
+        // snapshotMode renders the bare VStack (no ScrollView) and the overflow glyph.
         cases.append(SnapshotCase("profile-detail", size: CGSize(width: 720, height: 820), tolerance: 0.015) {
             ProfileDetailView(
                 stat: Fixtures.research, cpu: Fixtures.cpuSeriesHot, mem: Fixtures.memSeriesHot,
                 ptmx: Fixtures.ptmxSeriesHot,
-                state: .warning(climbing: true), terminals: Fixtures.terminals,
+                state: .leaking, terminals: Fixtures.terminals,
                 onAction: { _ in })
         })
 
