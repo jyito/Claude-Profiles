@@ -28,6 +28,10 @@ struct DashboardView: View {
     var onRemote: (String) -> Void = { _ in }
     /// Open the New Profile sheet (the empty-state CTA routes here, same as the toolbar).
     var onNewProfile: () -> Void = {}
+    /// A card's overflow menu (Restart / Quit / Force Quit), keyed by slug. The scene
+    /// owns the verb mapping + the confirmationDialog for the disruptive ones, so this
+    /// view stays pure of engine calls (matching Remote).
+    var onCardAction: (CardAction, String) -> Void = { _, _ in }
 
     /// Dim the detail content when the window isn't key/active — a quiet inactive
     /// tell, matching macOS sidebar/material behavior. `\.controlActiveState`
@@ -110,7 +114,8 @@ struct DashboardView: View {
                              onDetails: { open($0) },
                              onRemote: onRemote,
                              onShowWindow: showWindow,
-                             onOpen: { slug in Task { await store.perform(["open", slug]) } })
+                             onOpen: { slug in Task { await store.perform(["open", slug]) } },
+                             onCardAction: onCardAction)
         case .list:
             // A row selection pushes that profile's detail page (matching the grid's
             // Details tap). `selection` → `navPath` is wired in `body`'s onChange.

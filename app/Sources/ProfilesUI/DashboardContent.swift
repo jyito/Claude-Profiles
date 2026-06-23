@@ -31,6 +31,8 @@ public struct DashboardContent: View {
     let onRemote: (String) -> Void
     let onShowWindow: (String) -> Void
     let onOpen: (String) -> Void
+    /// Lifecycle overflow (Restart / Quit / Force Quit) for a card, keyed by slug.
+    let onCardAction: (CardAction, String) -> Void
 
     /// `scrolls: false` is for snapshots — `ImageRenderer` does not lay out a
     /// `ScrollView`'s content (it renders empty), so the harness renders the bare
@@ -39,7 +41,8 @@ public struct DashboardContent: View {
                 scrolls: Bool = true, onDetails: @escaping (String) -> Void = { _ in },
                 onRemote: @escaping (String) -> Void = { _ in },
                 onShowWindow: @escaping (String) -> Void = { _ in },
-                onOpen: @escaping (String) -> Void = { _ in }) {
+                onOpen: @escaping (String) -> Void = { _ in },
+                onCardAction: @escaping (CardAction, String) -> Void = { _, _ in }) {
         self.profiles = profiles
         self.cards = cards
         self.selection = selection
@@ -48,6 +51,7 @@ public struct DashboardContent: View {
         self.onRemote = onRemote
         self.onShowWindow = onShowWindow
         self.onOpen = onOpen
+        self.onCardAction = onCardAction
     }
 
     private let columns = [GridItem(.adaptive(minimum: 300, maximum: 380), spacing: Theme.Space.lg)]
@@ -60,7 +64,8 @@ public struct DashboardContent: View {
                     ProfileCardView(stat: m.stat, cpu: m.cpu, mem: m.mem,
                                     state: m.state, selected: selection == m.id,
                                     onDetails: onDetails, onRemote: onRemote,
-                                    onShowWindow: onShowWindow, onOpen: onOpen)
+                                    onShowWindow: onShowWindow, onOpen: onOpen,
+                                    onCardAction: { action in onCardAction(action, m.id) })
                         // Fill the grid cell so cards in a row share the tallest's
                         // height — uniform card sizes regardless of variant.
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
