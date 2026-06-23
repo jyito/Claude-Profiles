@@ -69,9 +69,12 @@ enum SnapshotCases {
                 .padding(Theme.Space.lg)
         })
 
-        // Task 8 — sidebar (row content over solid canvas; not the live material)
+        // Task 8 — sidebar. The REAL hand-built `SidebarView` (it renders headlessly
+        // now — no native `List`), so the golden verifies what ships. A constant
+        // selection drives the highlight.
         cases.append(SnapshotCase("sidebar", size: CGSize(width: 240, height: 320)) {
-            SidebarSnapshotContent(profiles: Fixtures.all)
+            SidebarView(profiles: Fixtures.all, selection: .constant(nil))
+                .background(Theme.canvas)
         })
 
         // Task 9 — full window (sidebar + KPI strip + card grid), looser tolerance.
@@ -87,7 +90,8 @@ enum SnapshotCases {
         ]
         cases.append(SnapshotCase("window-full", size: CGSize(width: 1080, height: 720), tolerance: 0.01) {
             HStack(spacing: 0) {
-                SidebarSnapshotContent(profiles: Fixtures.all)
+                SidebarView(profiles: Fixtures.all, selection: .constant(nil))
+                    .background(Theme.canvas)
                     .frame(width: 240, height: 720)
                 DashboardContent(profiles: Fixtures.all, cards: cards, selection: "research", scrolls: false)
                     .frame(width: 840, height: 720)
@@ -194,10 +198,11 @@ enum SnapshotCases {
             MenuContentSnapshot(profiles: Fixtures.all)
         })
 
-        // Task 4 — dense List view (stand-in: native Table renders empty headless).
+        // Task 4 — dense List view. The REAL hand-built `ProfileListView` (it renders
+        // headlessly now — no native `Table`), so the golden verifies what ships.
         // "research" selected so the coral selection wash shows.
         cases.append(SnapshotCase("list-view", size: CGSize(width: 760, height: 260), tolerance: 0.01) {
-            ProfileListSnapshotContent(profiles: Fixtures.all, selection: "research")
+            ProfileListView(profiles: Fixtures.all, selection: .constant("research"))
         })
 
         // Task 5 — empty + loading states (shimmer frozen in snapshotMode).

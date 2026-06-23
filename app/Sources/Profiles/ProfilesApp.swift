@@ -82,7 +82,8 @@ struct ProfilesApp: App {
                         }
                     }
             }
-            .frame(minWidth: 840, minHeight: 560)
+            .navigationSplitViewStyle(.balanced)
+            .frame(minWidth: 1000, minHeight: 620)
             .background(Theme.canvas)
             .preferredColorScheme(.dark)
             .onAppear { store.start() }
