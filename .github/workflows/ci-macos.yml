@@ -86,12 +86,12 @@ jobs:
         run: bash scripts/make-icon.sh
       - name: build (app + DMG + zip)
         run: bash scripts/build.sh
-      - name: applescript osacompile parse-check
+      - name: badge-icon osacompile parse-check
         run: |
           set -euo pipefail
-          for f in src/dashboard.applescript src/badge-icon.applescript; do
-            base=$(basename "$f")
-            sed 's|__RESOURCES__|/tmp/fake-resources|g' "$f" > "/tmp/$base"
-            osacompile -o "/tmp/${base%.applescript}.app" "/tmp/$base"
-            echo "compiled $f"
-          done
+          # The icon compositor engine.sh shells out to is the one AppleScript
+          # left after the SwiftUI cutover; parse-check it on real macOS.
+          f=src/badge-icon.applescript
+          sed 's|__RESOURCES__|/tmp/fake-resources|g' "$f" > /tmp/badge-icon.applescript
+          osacompile -o /tmp/badge-icon.app /tmp/badge-icon.applescript
+          echo "compiled $f"

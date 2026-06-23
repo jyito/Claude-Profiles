@@ -1,8 +1,9 @@
 #!/bin/bash
 # run-tests.sh — Linux-compatible test suite for Claude Profiles.
-# Shims macOS tools (osascript, defaults, ps, lsof) so the bash engine and
-# dialog flows can be exercised on any CI runner. The AppleScript window host
-# is macOS-only and is validated by review + the launcher's runtime fallback.
+# Shims macOS tools (osascript, defaults, ps, lsof) so the bash engine can be
+# exercised on any CI runner. The native SwiftUI dashboard (app/) is the UI as
+# of v0.7.0 and has its own Swift test runners (`swift run ProfilesCoreTests` /
+# `ProfilesSnapshotTests`); this suite covers engine.sh + the CLI.
 set -u
 cd "$(dirname "$0")"
 ROOT="$(cd .. && pwd)"
@@ -87,9 +88,8 @@ cat > "$WORK/shims/scutil" <<'EOF'
 #!/bin/bash
 echo "testmac"
 EOF
-# `open` MUST be shimmed before any launcher run: on a dev Mac, launch_dashboard
-# would otherwise osacompile + `open` a real stay-open dashboard applet, which
-# survives $WORK cleanup and orphans in the Dock. The shim just logs the args.
+# `open` is shimmed so engine actions that launch instances (opendefault, etc.)
+# just log their args instead of spawning real apps. The shim just logs the args.
 printf '#!/bin/bash\nprintf "%%s\\\\n" "$*" >> "%s/open.log"\n' "$WORK" > "$WORK/shims/open"
 # Stub the Claude Code CLI so remoteinfo's existence guard passes in CI (where it
 # isn't installed); a no-op is fine since `screen` is also a shim.
@@ -100,49 +100,35 @@ export PATH="$WORK/shims:$PATH"
 export CLAUDE_PROFILES_APP="$WORK/Claude.app"
 export CLAUDE_PROFILES_APPS_DIR="$WORK/apps"
 export CLAUDE_PROFILES_INSTANCES_DIR="$WORK/instances"
-LAUNCHER_SRC="$ROOT/src/launcher"
 ENGINE="$ROOT/src/engine.sh"
 
-# launcher resolves /usr/bin/osascript absolutely; make a shim-aware copy
-L="$WORK/launcher"
-sed 's|OSA="/usr/bin/osascript"|OSA="osascript"|' "$LAUNCHER_SRC" > "$L" && chmod +x "$L"
-
 echo "== syntax =="
-check "launcher bash syntax"   "bash -n '$LAUNCHER_SRC'"
 check "engine bash syntax"     "bash -n '$ENGINE'"
 check "cli bash syntax"        "bash -n '$ROOT/cli/claude-profiles.sh'"
 
-echo "== profile lifecycle (dialog flows) =="
-printf '＋  Add a profile…\nbutton returned:Create, text returned:Business\nbutton returned:Later\nfalse\n' > "$WORK/queue"
-"$L" --classic >/dev/null 2>&1
-check "add creates wrapper"    "[ -d '$WORK/apps/Claude Business.app' ]"
-check "add creates data dir"   "[ -d '$WORK/instances/business' ]"
-touch "$WORK/instances/business/marker"
-printf '＋  Add a profile…\nbutton returned:Create, text returned:Business\nbutton returned:Later\nfalse\n' > "$WORK/queue"
-"$L" --classic >/dev/null 2>&1
-check "re-add preserves data"  "[ -f '$WORK/instances/business/marker' ]"
-printf '＋  Add a profile…\nbutton returned:Create, text returned:Eve\" {X}\nbutton returned:Later\nfalse\n' > "$WORK/queue"
-"$L" --classic >/dev/null 2>&1
-check "hostile names sanitized" "[ -d '$WORK/apps/Claude Eve X.app' ]"
-check "--action add dispatch"  "printf 'button returned:Create, text returned:Disp\nbutton returned:Later\n' > '$WORK/queue'; '$L' --action add >/dev/null 2>&1; [ -d '$WORK/apps/Claude Disp.app' ]"
-
+# The `ps`/`lsof` shims model a running "business" instance whose data dir is
+# $WORK/instances/business. Create that wrapper + data dir up front so the stats,
+# terminals, throttle, and remote tests downstream have a real profile to target.
 echo "== engine headless lifecycle =="
+check "engine creates business" "[ \"\$('$ENGINE' create Business)\" = 'ok business' ] && [ -d '$WORK/apps/Claude Business.app' ] && [ -d '$WORK/instances/business' ]"
+touch "$WORK/instances/business/marker"
+check "engine re-create preserves data" "[ \"\$('$ENGINE' create Business)\" = 'ok business' ] && [ -f '$WORK/instances/business/marker' ]"
 check "engine create"          "[ \"\$('$ENGINE' create 'Head Less')\" = 'ok headless' ] && [ -d '$WORK/apps/Claude Head Less.app' ]"
 check "engine create sanitizes" "[ \"\$('$ENGINE' create 'Bad\":{Name}')\" = 'ok badname' ]"
 check "engine create reserves default" "printf '%s' \"\$('$ENGINE' create Default)\" | grep -qi reserved && [ ! -d '$WORK/instances/default' ]"
 check "engine create strips XML chars (valid plist)" "[ \"\$('$ENGINE' create 'Q&A')\" = 'ok qa' ] && python3 -c \"import plistlib; plistlib.load(open('$WORK/apps/Claude QA.app/Contents/Info.plist','rb'))\""
 check "engine remove keeps data" "mkdir -p '$WORK/instances/headless'; touch '$WORK/instances/headless/m'; [ \"\$('$ENGINE' remove headless)\" = ok ] && [ ! -d '$WORK/apps/Claude Head Less.app' ] && [ -f '$WORK/instances/headless/m' ]"
 check "engine purge erases data" "[ \"\$('$ENGINE' purge headless)\" = ok ] && [ ! -d '$WORK/instances/headless' ]"
-check "default launch exits 0"   "printf 'x\n' > '$WORK/queue'; '$L' >/dev/null 2>&1"
 
 echo "== per-profile badge icons =="
 check "badge color is deterministic" "[ \"\$(bash -c '. \"\$1\"; badge_color_for work' _ '$ENGINE')\" = \"\$(bash -c '. \"\$1\"; badge_color_for work' _ '$ENGINE')\" ]"
 check "badge color is r g b triple"  "bash -c '. \"\$1\"; badge_color_for work' _ '$ENGINE' | grep -qE '^[0-9]+ [0-9]+ [0-9]+\$'"
 check "badge falls back to plain copy" "rm -rf '$WORK/bf'; mkdir -p '$WORK/bf'; printf icnsDATA > '$WORK/srcicns'; bash -c '. \"\$1\"; RES_DIR=/nonexistent; badge_icon work \"Claude Work\" \"$WORK/srcicns\" \"$WORK/bf\"' _ '$ENGINE' 2>/dev/null; cmp -s '$WORK/srcicns' '$WORK/bf/app.icns'"
 # The real render path (sips -> osascript compositor -> iconutil) can't run here:
-# this suite shims osascript for the dialog tests, so badge_icon's compositor call
-# would hit the shim. The fallback + color tests above cover the bash logic; the
-# actual rendering is verified directly with the real osascript (see commit notes).
+# this suite shims osascript, so badge_icon's compositor call would hit the shim.
+# The fallback + color tests above cover the bash logic; the actual rendering is
+# verified directly with the real osascript (see commit notes), and CI parse-checks
+# src/badge-icon.applescript on real macOS.
 check "badge compositor present"     "[ -f '$ROOT/src/badge-icon.applescript' ] && grep -q 'badge_icon' '$ROOT/src/engine.sh' && grep -q 'badge-icon.applescript' '$ROOT/scripts/build.sh'"
 mkdir -p "$WORK/instances/.runtime"
 printf 'ovslug 3\n' > "$WORK/instances/.runtime/badges"
@@ -222,8 +208,6 @@ echo "== throttle (CPU priority) =="
 rm -f "$WORK/renice.log"
 check "throttle renices own tree"     "[ \"\$('$ENGINE' throttle business)\" = ok ] && grep -q '^10 100' '$WORK/renice.log'"
 check "throttle refuses when stopped" "[ \"\$('$ENGINE' throttle evex)\" = notrunning ]"
-check "throttle button in UI"         "grep -q 'Throttle CPU' '$ROOT/src/dashboard.html'"
-check "applet routes throttle"        "grep -q 'throttle' '$ROOT/src/dashboard.applescript'"
 
 echo "== restart (free leaked terminal handles) =="
 # A stopped/unknown instance has no tree to cycle, so restart skips straight to
@@ -231,8 +215,6 @@ echo "== restart (free leaked terminal handles) =="
 check "restart relaunches stopped (ok)" "[ \"\$('$ENGINE' restart ghostprof)\" = ok ]"
 check "restart rejects spaced slug"     "[ \"\$('$ENGINE' restart 'bad slug')\" = 'err invalid slug' ]"
 check "restart rejects traversal slug"  "[ \"\$('$ENGINE' restart '../../evil')\" = 'err invalid slug' ]"
-check "applet routes restart"           "grep -q 'restart' '$ROOT/src/dashboard.applescript'"
-check "restart control in UI"           "grep -q 'armRestart' '$ROOT/src/dashboard.html'"
 
 echo "== focus (headless, for global hotkeys) =="
 # osascript is shimmed; business (pid 100) is running, so focus resolves + returns ok.
@@ -281,13 +263,10 @@ check "autotick skips a profile under leak threshold" "bash -c '
   cmd_setconfig autoRestartLeakAt 0 >/dev/null
   [ ! -s \"$WORK/autorestart.log\" ]
 '"
-check "settings UI exposes auto-restart control" "grep -q 'set-restart' '$ROOT/src/dashboard.html' && grep -q \"saveSetting('autoRestartLeakAt'\" '$ROOT/src/dashboard.html'"
-check "updateConfig populates auto-restart select" "grep -q 'c.autoRestartLeakAt' '$ROOT/src/dashboard.html'"
 
 echo "== default instance launch =="
 rm -f "$WORK/open.log"   # the `open` shim is set up at the top; isolate this check
 check "opendefault launches Claude" "'$ENGINE' opendefault >/dev/null; grep -q -- '-n -a $WORK/Claude.app' '$WORK/open.log'"
-check "opendefault button in UI"    "grep -q \"act('opendefault')\" '$ROOT/src/dashboard.html' || grep -q 'opendefault' '$ROOT/src/dashboard.html'"
 
 echo "== engine cleanup safety =="
 mkdir -p "$WORK/instances/evex/GPUCache"
@@ -381,44 +360,6 @@ printf '<plist><dict>\n<key>CFBundleIdentifier</key>\n<string>local.claude-profi
 R=$("$ENGINE" cleanall)
 check "cleanall cleans stopped"  "case \"\$R\" in ok*bulkstopped*) [ ! -d '$WORK/instances/bulkstopped/GPUCache' ] ;; *) false ;; esac"
 check "cleanall skips running"   "case \"\$R\" in *business*) false ;; *) true ;; esac"
-check "cleanup modal in UI"      "grep -q 'id=\"cleanmodal\"' '$ROOT/src/dashboard.html'"
-check "killswitch arm-confirm"   "grep -q 'Click again to confirm' '$ROOT/src/dashboard.html'"
-
-echo "== settings UI =="
-check "settings modal in UI"     "grep -q 'id=\"setmodal\"' '$ROOT/src/dashboard.html'"
-check "settings save wired"      "grep -q 'saveSetting(' '$ROOT/src/dashboard.html'"
-check "auto-close warning shown" "grep -q 'can look idle' '$ROOT/src/dashboard.html'"
-check "config push hook present" "grep -q 'function updateConfig' '$ROOT/src/dashboard.html'"
-check "applet routes autotick"   "grep -q 'autotick' '$ROOT/src/dashboard.applescript'"
-
-echo "== menu-bar switcher (applet wiring) =="
-check "applet creates a status item"   "grep -q 'statusItemWithLength' '$ROOT/src/dashboard.applescript'"
-check "applet menu rebuilds on open"   "grep -q 'on menuNeedsUpdate:' '$ROOT/src/dashboard.applescript'"
-check "applet menu calls menulist"     "grep -q ' menulist' '$ROOT/src/dashboard.applescript'"
-check "applet switcher reuses focus"   "grep -q 'on menuClicked:' '$ROOT/src/dashboard.applescript' && grep -q 'focusInstance' '$ROOT/src/dashboard.applescript'"
-check "applet persists for menu bar"   "grep -q 'on reopen' '$ROOT/src/dashboard.applescript' && grep -q 'on quitApp:' '$ROOT/src/dashboard.applescript'"
-check "applet compiles (osacompile)"   "if command -v osacompile >/dev/null 2>&1; then osacompile -o '$WORK/applet-check.app' '$ROOT/src/dashboard.applescript' >/dev/null 2>&1; rc=\$?; rm -rf '$WORK/applet-check.app'; [ \$rc -eq 0 ]; else true; fi"
-
-echo "== polish =="
-check "loading screen present"  "grep -q 'id=\"loading\"' '$ROOT/src/dashboard.html'"
-check "button hover states"     "grep -q ':hover' '$ROOT/src/dashboard.html'"
-check "keyboard focus ring"     "grep -q 'focus-visible' '$ROOT/src/dashboard.html'"
-check "spinner animation"       "grep -q '@keyframes spin' '$ROOT/src/dashboard.html'"
-
-echo "== applet branding =="
-check "applet icon override stripped" "grep -q 'Delete :CFBundleIconName' '$LAUNCHER_SRC' && grep -q 'Assets.car' '$LAUNCHER_SRC'"
-check "applet bundle id branded"      "grep -q 'local.claude-profiles.dashboard' '$LAUNCHER_SRC'"
-check "applet reused when unchanged"  "grep -q 'cmp -s' '$LAUNCHER_SRC'"
-
-echo "== dashboard self-heal (moved app) =="
-printf 'property resourcesDir : "/Users/x/Applications/Claude Profiles.app/Contents/Resources"\n' > "$WORK/saved_old.applescript"
-# the actual incident: app now at /Applications, baked path was ~/Applications —
-# and "/Applications/…" is a SUBSTRING of "/Users/x/Applications/…", so an exact
-# match (not a substring test) is required to flag it stale.
-check "moved app flagged stale"   "bash -c '. \"\$1\" >/dev/null 2>&1; runtime_applet_stale \"/Applications/Claude Profiles.app/Contents/Resources\" \"\$2\"' _ '$LAUNCHER_SRC' '$WORK/saved_old.applescript'"
-check "matching path not stale"   "! bash -c '. \"\$1\" >/dev/null 2>&1; runtime_applet_stale \"/Users/x/Applications/Claude Profiles.app/Contents/Resources\" \"\$2\"' _ '$LAUNCHER_SRC' '$WORK/saved_old.applescript'"
-check "no cached build not stale" "! bash -c '. \"\$1\" >/dev/null 2>&1; runtime_applet_stale /any \"\$2\"' _ '$LAUNCHER_SRC' '$WORK/no_such_file'"
-check "launch_dashboard self-heals" "grep -q 'runtime_applet_stale' '$LAUNCHER_SRC'"
 
 echo "== attribution isolation (no cross-app bleed) =="
 # Two profiles whose data dirs are prefix-colliding: .../work is a substring of
@@ -447,201 +388,6 @@ LSOFEOF
 chmod +x "$WORK/shims/lsof"
 check "shared terminal counted once" "[ \"\$(bash -c '. \"\$1\"; pty_count_for_pids \$2 \$3' _ '$ENGINE' 400 401)\" = 1 ]"
 mv "$WORK/shims/lsof.bak" "$WORK/shims/lsof"
-
-echo "== dashboard JS =="
-if command -v node >/dev/null 2>&1; then
-    "$ENGINE" stats > "$WORK/stats.json"
-    R=$(node -e "
-const fs=require('fs');
-const html=fs.readFileSync('$ROOT/src/dashboard.html','utf8');
-const js=html.match(/<script>([\s\S]*)<\/script>/)[1];
-// Per-id element registry so we can observe livePatch's in-place updates (it
-// writes to cpuspk-/sub-/etc. by id), not just the grid innerHTML.
-const E={};
-global.document={getElementById:(id)=>{ if(!E[id]) E[id]={innerHTML:'',textContent:'',className:'',value:'',style:{},focus(){}}; return E[id]; },addEventListener:()=>{},title:''};
-global.setTimeout=()=>{};
-eval(js);
-const d=JSON.parse(fs.readFileSync('$WORK/stats.json','utf8'));
-updateStats(d); updateStats(d);   // 2nd tick is a livePatch (structure unchanged)
-const grid=(E['grid']||{}).innerHTML||'', loadCls=(E['loading']||{}).className||'';
-const allHtml=Object.keys(E).map(k=>E[k].innerHTML||'').join('');
-const cards=(grid.match(/class=\"card\"/g)||[]).length, sw=(grid.match(/Show Window/g)||[]).length;
-// Sparklines only get a polyline once hist has 2 points — which happens on the
-// 2nd tick via livePatch into the cpuspk-/memspk- elements, so this verifies the
-// in-place patch actually ran.
-const sp=(allHtml.match(/<polyline/g)||[]).length, rm=(grid.match(/Remove profile/g)||[]).length;
-let drill=0;
-try {
-  const run=d.find(p=>p.slug && p.running);
-  if (run) {
-    toggleExpand(run.slug);
-    updateTerminals(run.slug,[{dev:'/dev/ttys001',pid:100,cmd:'bash -l',idle:200}]);
-    const dh=(E['drill-'+run.slug]||{}).innerHTML||'', g2=(E['grid']||{}).innerHTML||'';
-    if (dh.indexOf('class=\"tterm\"')>-1 && dh.indexOf('ttys001')>-1 && g2.indexOf('expanded')>-1 && dh.indexOf('closeTerm(')>-1 && dh.indexOf(\"act('throttle'\")>-1) drill=1;
-  }
-} catch(e){}
-let tiers=0;
-try {
-  const stp=d.find(p=>p.slug && !p.running);
-  if (stp) {
-    expanded=null; toggleExpand(stp.slug);
-    const g3=(E['grid']||{}).innerHTML||'';
-    if (g3.indexOf('tierbtn')>-1 && g3.indexOf(\"act3('clean'\")>-1) tiers=1;
-  }
-} catch(e){}
-let lock=0;
-try { confirmStep['zz']=1; const a=uiLocked(); delete confirmStep['zz']; const b=uiLocked(); lock=(a && !b)?1:0; } catch(e){}
-let avatarColor=0;
-try { const prof=d.find(p=>p.slug && p.color); const g4=(E['grid']||{}).innerHTML||''; if(prof && g4.indexOf('background:'+prof.color)>-1) avatarColor=1; } catch(e){}
-let swatches=0;
-try { const g5=(E['grid']||{}).innerHTML||''; if(g5.indexOf('class=\"swatch')>-1 && g5.indexOf('setbadge')>-1) swatches=1; } catch(e){}
-let remotebtn=0, detailsbtn=0, defclean=0;
-try { const g6=(E['grid']||{}).innerHTML||''; if(g6.indexOf(\"act('remote'\")>-1) remotebtn=1; if(g6.indexOf('+ Details')>-1) detailsbtn=1;
-  // the default card gets Remote AND a Details toggle, both keyed 'default'
-  if(g6.indexOf(\"act('remote','default')\")>-1 && g6.indexOf(\"toggleExpand('default')\")>-1) defclean=1; } catch(e){}
-let ddrill=0;
-try {
-  expanded=null; toggleExpand('default');
-  updateTerminals('default',[{dev:'/dev/ttys004',pid:200,cmd:'Claude',idle:5}]);
-  const dh=(E['drill-default']||{}).innerHTML||'';
-  // default drill = terminals + throttle, but NO badge picker (no slug)
-  if(dh.indexOf('ttys004')>-1 && dh.indexOf(\"act('throttle','default')\")>-1 && dh.indexOf('class=\"swatch')===-1) ddrill=1;
-} catch(e){}
-let rmfill=0;
-try {
-  updateRemote({slug:'business',session:'claude-business',user:'me',host:'mac.local',tailscaleIp:'100.64.1.2',alreadyRunning:false});
-  const loc=(E['rm-local']||{}).textContent||'', ts=(E['rm-ts']||{}).textContent||'';
-  if(loc.indexOf('screen -r claude-business')>-1 && ts.indexOf('100.64.1.2')>-1) rmfill=1;
-} catch(e){}
-let rmcta=0;
-try {
-  updateRemote({slug:'business',session:'claude-business',user:'me',host:'mac.local',tailscaleIp:'',alreadyRunning:false});
-  if((E['rm-ts-cta']||{style:{}}).style.display!=='none' && (E['rm-ts-cmd']||{style:{}}).style.display==='none') rmcta=1;
-} catch(e){}
-// /dev/ptmx leak: always-visible status-line stat (any leak, collapsed card too),
-// brightening (.hot) past the threshold; cleanup inside Details; banner near ceiling.
-let lowstat=0, bannerhidden=0, leakstat=0, banner=0, leakclean=0;
-try {
-  expanded=null; restartArmed=null;
-  fullRender(d);                              // real stats: low ptmx → stat shown, NOT hot
-  const gl=(E['grid']||{}).innerHTML||'';
-  lowstat = (gl.indexOf('leaked')>-1 && gl.indexOf('leaked hot')===-1)?1:0;
-  bannerhidden = (((E['sysbanner']||{}).className||'').indexOf('hidden')>-1)?1:0;
-  const hi=JSON.parse(JSON.stringify(d)), r=hi.find(p=>p.running); r.ptmx=420; r.ptmxMax=511;
-  const es=(r.slug||'default');
-  fullRender(hi);                             // one instance near the ceiling
-  const gh=(E['grid']||{}).innerHTML||'';
-  if (gh.indexOf('420 leaked')>-1 && gh.indexOf('leaked hot')>-1) leakstat=1;  // shown + brightened
-  if (((E['sysbanner']||{}).className||'')==='sysbanner') banner=1;
-  // cleanup action lives in + Details, NOT on the card face
-  const onFace = gh.indexOf('Restart to free handles')>-1;
-  updateStats(hi);                            // lastData=hi so profileBySlug sees the leak
-  expanded=es;
-  updateTerminals(es,[{dev:'/dev/ttys009',pid:1,cmd:'bash',idle:10}]);
-  const da=(E['drill-'+es]||{}).innerHTML||'';
-  const hasAction = da.indexOf(\"armRestart('\"+es+\"')\")>-1 && da.indexOf('Restart to free handles')>-1;
-  restartArmed=es;
-  updateTerminals(es,[{dev:'/dev/ttys009',pid:1,cmd:'bash',idle:10}]);
-  const dc=(E['drill-'+es]||{}).innerHTML||'';
-  const hasConfirm = dc.indexOf(\"doRestart('\"+es+\"')\")>-1 && dc.indexOf('Confirm restart')>-1;
-  if (hasAction && hasConfirm && !onFace) leakclean=1;
-  restartArmed=null; expanded=null;
-} catch(e){}
-// Remote live-dot: a profile with remote:true renders the mint .rdot on its Remote button.
-let rdot=0;
-try {
-  const rr=JSON.parse(JSON.stringify(d)); const rp=rr.find(p=>p.slug); rp.remote=true;
-  expanded=null; fullRender(rr);
-  const g=(E['grid']||{}).innerHTML||'';
-  if (g.indexOf('class=\"rdot\"')>-1 && g.indexOf('session is live')>-1) rdot=1;
-} catch(e){}
-// ⌘⌥N hotkey: hotkeyFocus(1) → default (cp:focusdefault); hotkeyFocus(2) → 1st profile.
-let hotkey=0;
-try {
-  updateStats(d);
-  document.title='';
-  hotkeyFocus(1);
-  const t1=document.title;
-  document.title='';
-  hotkeyFocus(2);
-  const t2=document.title;
-  const prof=d.find(p=>p.slug);
-  if (t1==='cp:focusdefault' && t2===('cp:focus:'+(prof?prof.slug:''))) hotkey=1;
-} catch(e){}
-console.log(cards, sw, sp, rm, drill, tiers, (loadCls.indexOf('hidden')>-1?1:0), lock, avatarColor, swatches, remotebtn, detailsbtn, rmfill, rmcta, defclean, ddrill, lowstat, bannerhidden, leakstat, banner, leakclean, rdot, hotkey);
-" 2>/dev/null)
-    check "cards render"        "[ \"\$(echo '$R' | awk '{print \$1}')\" -ge 3 ]"
-    check "Show Window buttons" "[ \"\$(echo '$R' | awk '{print \$2}')\" = 2 ]"
-    check "sparklines render"   "[ \"\$(echo '$R' | awk '{print \$3}')\" -ge 4 ]"
-    check "in-card remove flow"  "[ \"\$(echo '$R' | awk '{print \$4}')\" -ge 1 ]"
-    check "drill-down renders terminals" "[ \"\$(echo '$R' | awk '{print \$5}')\" = 1 ]"
-    check "stopped drill shows clean tiers" "[ \"\$(echo '$R' | awk '{print \$6}')\" = 1 ]"
-    check "loading screen hides on render"  "[ \"\$(echo '$R' | awk '{print \$7}')\" = 1 ]"
-    check "input lock derived from confirm state" "[ \"\$(echo '$R' | awk '{print \$8}')\" = 1 ]"
-    check "card avatar uses badge color"          "[ \"\$(echo '$R' | awk '{print \$9}')\" = 1 ]"
-    check "drill-down shows badge swatches"       "[ \"\$(echo '$R' | awk '{print \$10}')\" = 1 ]"
-    check "card shows Remote button"              "[ \"\$(echo '$R' | awk '{print \$11}')\" = 1 ]"
-    check "card shows + Details button"           "[ \"\$(echo '$R' | awk '{print \$12}')\" = 1 ]"
-    check "remote modal fills ssh lines"          "[ \"\$(echo '$R' | awk '{print \$13}')\" = 1 ]"
-    check "remote modal shows tailscale CTA"      "[ \"\$(echo '$R' | awk '{print \$14}')\" = 1 ]"
-    check "default card has Remote + Details"     "[ \"\$(echo '$R' | awk '{print \$15}')\" = 1 ]"
-    check "default drill is terminals, no badges" "[ \"\$(echo '$R' | awk '{print \$16}')\" = 1 ]"
-    check "leak stat shown (not hot) when low"    "[ \"\$(echo '$R' | awk '{print \$17}')\" = 1 ]"
-    check "no system banner when ptmx low"        "[ \"\$(echo '$R' | awk '{print \$18}')\" = 1 ]"
-    check "leak stat brightens past threshold"    "[ \"\$(echo '$R' | awk '{print \$19}')\" = 1 ]"
-    check "system banner near ptmx ceiling"       "[ \"\$(echo '$R' | awk '{print \$20}')\" = 1 ]"
-    check "leak cleanup lives in + Details"       "[ \"\$(echo '$R' | awk '{print \$21}')\" = 1 ]"
-    check "remote live-dot on Remote button"      "[ \"\$(echo '$R' | awk '{print \$22}')\" = 1 ]"
-    check "⌘⌥N hotkey focuses Nth instance"        "[ \"\$(echo '$R' | awk '{print \$23}')\" = 1 ]"
-else
-    echo "  - node not found, skipping JS render tests"
-fi
-
-echo "== QR encoder (Remote modal) =="
-if command -v node >/dev/null 2>&1; then
-    Q=$(node -e "
-const fs=require('fs');
-const html=fs.readFileSync('$ROOT/src/dashboard.html','utf8');
-const js=html.match(/<script>([\s\S]*)<\/script>/)[1];
-global.document={getElementById:()=>null,addEventListener:()=>{},title:''};
-global.setTimeout=()=>{}; global.setInterval=()=>{};
-eval(js);
-let fmt=1, gf=0, struct=0, roundtrip=0, svg=0, bump=0;
-// 1) format-info BCH known-answer (ECC level L, masks 0..7) — authoritative table
-const KAT=['111011111000100','111001011110011','111110110101010','111100010011101','110011000101111','110001100011000','110110001000001','110100101110110'];
-for(let mk=0;mk<8;mk++){ if((qrFormatBits(mk)&0x7FFF)!==parseInt(KAT[mk],2)) fmt=0; }
-// 2) GF(256) table spot-check (α^8 = 29 with primitive 0x11D)
-gf = (QR_EXP[8]===29 && QR_LOG[29]===8) ? 1 : 0;
-// 3) structure: short text → v1 (21×21), finder corner is solid 7×7 with a ring
-const b=qrBuild('hello');
-if(b && b.size===21){
-  const m=b.matrix;
-  if(m[0][0]===1&&m[0][6]===1&&m[6][0]===1&&m[6][6]===1&&m[1][1]===0&&m[2][2]===1&&m[0][7]===0) struct=1;
-}
-// 4) round-trip: undo mask + read zigzag → original data+ec codewords
-function readback(b){
-  const m=b.matrix.map(r=>r.slice());
-  for(let r=0;r<b.size;r++)for(let c=0;c<b.size;c++){ if(!b.reserved[r][c]&&qrMaskCond(b.mask,r,c)) m[r][c]^=1; }
-  const bits=[]; for(let right=b.size-1;right>=1;right-=2){ if(right===6)right=5;
-    for(let vert=0;vert<b.size;vert++)for(let j=0;j<2;j++){ const col=right-j,row=(((right+1)&2)===0)?(b.size-1-vert):vert; if(!b.reserved[row][col]) bits.push(m[row][col]); } }
-  const cw=[]; for(let i=0;i+8<=bits.length&&cw.length<b.codewords.length;i+=8){ let v=0; for(let k=0;k<8;k++)v=(v<<1)|bits[i+k]; cw.push(v); } return cw;
-}
-const rb=readback(b); roundtrip=(rb.length===b.codewords.length && rb.every((v,i)=>v===b.codewords[i]))?1:0;
-// 5) svg output; 6) longer text bumps the version (bigger matrix)
-const s=qrSvg('hello'); if(s.indexOf('<svg')===0 && s.indexOf('<rect')>-1) svg=1;
-const big=qrBuild('ssh someuser@100.115.92.14 -t \"screen -r claude-personal-account\"');
-if(big && big.size>21) bump=1;
-console.log(fmt,gf,struct,roundtrip,svg,bump);
-" 2>/dev/null)
-    check "QR format-info BCH matches spec table" "[ \"\$(echo '$Q' | awk '{print \$1}')\" = 1 ]"
-    check "QR GF(256) tables correct"             "[ \"\$(echo '$Q' | awk '{print \$2}')\" = 1 ]"
-    check "QR finder patterns + v1 size"          "[ \"\$(echo '$Q' | awk '{print \$3}')\" = 1 ]"
-    check "QR data round-trips (placement+mask)"  "[ \"\$(echo '$Q' | awk '{print \$4}')\" = 1 ]"
-    check "QR renders inline SVG"                 "[ \"\$(echo '$Q' | awk '{print \$5}')\" = 1 ]"
-    check "QR bumps version for longer text"      "[ \"\$(echo '$Q' | awk '{print \$6}')\" = 1 ]"
-else
-    echo "  - node not found, skipping QR tests"
-fi
 
 echo
 printf '%d passed, %d failed\n' "$PASS" "$FAIL"

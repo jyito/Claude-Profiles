@@ -9,12 +9,15 @@ debugging on real macOS.
 Multi-account Claude Desktop for macOS. Each "profile" is a generated native
 `.app` wrapper that launches the real Claude.app with its own
 `--user-data-dir`, so each account stays permanently signed in and any number
-run simultaneously. The user-facing app is a native dashboard window (dark
-UI, live per-instance CPU/MEM/PTY/disk, sparklines, Show Window focusing,
-cleanup utilities). Status: **v0.3.0 feature-complete, working on the
-maintainer's Mac** (applet-layer items pending maintainer verification — see
-State section), 124/124 tests, CI green, public repo `jyito/Claude-Profiles`,
-intended to go public once docs/screenshots/signing are in place.
+run simultaneously. The user-facing app is a **native SwiftUI dashboard**
+(split-view with a permanent vibrant sidebar, KPI strip, master-detail profile
+pages with hero trend charts + leak verdict, live cards with sparklines + a
+handle-leak gauge, a MenuBarExtra switcher, Show Window focusing, cleanup
+utilities) built with the Command Line Tools — no Xcode — and signed +
+notarized. The bash `engine.sh` is still the data/actions backend. Status:
+**v0.7.0 — native SwiftUI dashboard SHIPPED**, replacing the old
+AppleScriptObjC + WebView host (retired at this cutover); maintainer-verified
+on macOS, CI green, public repo `jyito/Claude-Profiles`.
 
 ## Non-negotiables (PRs violating these get declined)
 
@@ -23,8 +26,12 @@ intended to go public once docs/screenshots/signing are in place.
    store, managed by Claude Desktop itself. Never script the login UI.
 2. **Zero network I/O.** No telemetry, no update checks, nothing. Local-only
    stats (`.profile-activity`, last 50 launches) are the only "analytics."
-3. **Zero dependencies.** macOS built-ins only: bash, osascript, osacompile,
-   ps, lsof, defaults, du, PlistBuddy. No Homebrew/Node/Python at runtime.
+3. **Zero RUNTIME dependencies** (macOS built-ins only at runtime): bash,
+   osascript, ps, lsof, defaults, du, PlistBuddy, iconutil/sips. No
+   Homebrew/Node/Python at runtime. The Swift toolchain (Command Line Tools —
+   **no Xcode**) is required to BUILD the app, but the shipped bundle is a
+   self-contained native binary + bundled `engine.sh`; it pulls no third-party
+   SwiftPM packages. `engine.sh` itself keeps its zero-dep, bash-3.2 constraints.
    (Tests use node/python3 but degrade gracefully.)
 4. **Never modify Claude.app** — breaks its code signature.
 5. **The default data dir (`~/Library/Application Support/Claude`) is
@@ -39,14 +46,46 @@ intended to go public once docs/screenshots/signing are in place.
 7. **bash 3.2 compatibility.** macOS ships bash 3.2. No `declare -A`,
    `mapfile`, `${var,,}`, or negative substring lengths.
 
-## Architecture (src/)
+## Architecture
 
-- **`launcher`** — the manager app's executable (bash). Default behavior:
-  compile + open the dashboard applet. `--classic` = dialog menu (also the
-  automatic fallback if osacompile fails). `--action add|remove` = dialog
-  flows for scripting. Dialog strings go through `esc_msg` (quote + newline
-  escaping); all dialogs show the app icon via `dialog_icon`.
-- **`engine.sh`** — data/actions backend, shared by both UIs.
+The manager app is the native SwiftUI package in **`app/`** (a SwiftPM
+project). `engine.sh` + `badge-icon.applescript` (in `src/`) are the bash
+backend, bundled into the app's Resources. A generated **profile wrapper**
+is still a tiny `.app` whose executable is an inline bash `launcher` that runs
+`open -n -a Claude.app --args --user-data-dir=<dir>` — written by `engine.sh`'s
+`cmd_create` (NOT the retired manager `launcher`, which is gone).
+
+- **`app/` (SwiftPM package)** — built with the Command Line Tools (no Xcode).
+  Three library/exe layers:
+  - **`ProfilesCore`** — pure logic, no SwiftUI. The engine seam:
+    `EngineRunning` (protocol abstracting "run the bash engine") + `PollClock`
+    (the tick abstraction) are the test seams; `EngineClient` shells out to
+    `engine.sh` via `Process` and `Codable`-decodes its JSON (the replacement
+    for the old `document.title` title-bridge — a real typed boundary now). The
+    `@Observable` `StatsStore` holds live state and drives the 2s poll. Also:
+    `ProfileStat`/`ProfileConfig`/`RemoteInfo`/`TerminalInfo` models,
+    `PtmxHysteresis` (leak-gauge state machine), `BadgePreview` (mirrors
+    `badge_color_for` so the New Profile sheet previews the disc), `Sort`,
+    `Formatters`, `FixtureEngine` (canned data for snapshot/UI tests).
+  - **`ProfilesUI`** — the `Theme` + all views: `ProfileCardView` (live card
+    with `Sparkline` + `HandleGauge` leak gauge), the vibrant `SidebarView`
+    (`VisualEffectView`), `KPIStripView`, the master-detail `ProfileDetailView`
+    (three hero trend charts — CPU / Memory / handle-pool-toward-ceiling — plus
+    a `LeakBlock` verdict), `InstanceSections`/`TerminalsTable`/`CleanTiers`,
+    the `Sheets/` (`NewProfileSheet` with live badge preview, `SettingsSheet`,
+    `CleanupSheet`, `RemoteSheet` with `QRCode`), `MenuContent` (the
+    MenuBarExtra switcher), `Focus` (Show-Window by PID). Snapshot-renderable
+    via `SnapshotMode`/`DashboardMode`.
+  - **`Profiles`** (executable) — the `@main` SwiftUI `App`/scene
+    (`ProfilesApp`), `DashboardView`, and `EnginePath` (`resolveEnginePath()`
+    finds the bundled `engine.sh`, falling back to `Bundle.main.resourcePath`).
+  - **Testing seams.** `swift test` needs Xcode, so tests run as **executable
+    runners** under the Command Line Tools: `ProfilesCoreTests` (Layer-1 logic,
+    via a vendored minimal `XCTest` shim) and `ProfilesSnapshotTests` (Layer-2
+    golden-PNG proof: `ImageRenderer` → PNG → `pngdiff.py` against
+    `app/Tests/__Snapshots__/*.png` within a per-case tolerance).
+- **`engine.sh`** — data/actions backend, called by the SwiftUI app (`Process`
+  + `Codable`) and by `cli/claude-profiles.sh`.
   `stats` emits a JSON array per profile + the default instance.
   Process attribution: main PID found by matching `--user-data-dir=<dir>` in
   `ps axo pid=,command=` as a COMPLETE argv value (the char after the dir must

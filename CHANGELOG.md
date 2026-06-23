@@ -2,6 +2,31 @@
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-06-22
+
+The dashboard is now a **native SwiftUI app** — a full rewrite replacing the
+AppleScriptObjC + WebView host. Built with the Command Line Tools (no Xcode),
+zero runtime dependencies, signed + notarized. `engine.sh` stays the bash backend.
+
+- **New:** native split-view window with a permanent vibrant sidebar. The card
+  grid is the overview; clicking a profile opens a **maximized detail page** with
+  a back button — no more squeezing side panel.
+- **New:** the detail page shows three hero trend lines — CPU, Memory, and the
+  **handle pool climbing toward its ceiling** with a leak verdict (✓ healthy /
+  ▲ climbing — restart soon) — plus a stat strip (procs · terminals · disk ·
+  opened · last launch · remote) and the terminals table / Throttle / clean
+  tiers / badge / Remove.
+- **New:** live cards with CPU/Memory sparklines + the handle-leak gauge, a
+  functional menu-bar switcher, Show Window across Spaces (in-process focus by
+  PID), and the modals — New Profile (with a live badge-disc preview), Settings,
+  Cleanup, and Remote (SSH commands + a scannable QR).
+- **Changed:** the app shells out to `engine.sh` via `Process` + typed `Codable`
+  decoding, replacing the old `document.title` title-bridge.
+- **Removed:** the AppleScriptObjC applet + the WebView `dashboard.html` host.
+- **Build:** `cd app && swift build`; tests are executable runners under the
+  Command Line Tools (`swift run ProfilesCoreTests` / `ProfilesSnapshotTests`,
+  since `swift test` needs Xcode) alongside the bash `tests/run-tests.sh`.
+
 ## [0.6.2] — 2026-06-21
 UI polish.
 - **Fixed:** the transient status toast ("Launching…", etc.) moved from the top-right (where it overlapped the New Profile button) to an upper-left pill that stays clear of the buttons.

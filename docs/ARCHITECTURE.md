@@ -1,8 +1,11 @@
 # Architecture
 
 This document explains how Claude Profiles works end to end, and why each
-design decision was made. The system has four components, all plain text
-files, no compilation anywhere.
+design decision was made. There are three parts: the generated **profile
+wrappers** (tiny bash `.app`s), the **`engine.sh`** data/actions backend (bash,
+macOS built-ins), and the **native SwiftUI app** (`app/`) that is the user-facing
+dashboard. The SwiftUI app is compiled with the Command Line Tools (no Xcode)
+and pulls in no third-party SwiftPM packages; `engine.sh` stays pure bash.
 
 ## 1. Profile wrappers — the core trick
 
@@ -11,14 +14,15 @@ Claude Desktop (Electron/Chromium) accepts `--user-data-dir=<path>` and keeps
 MCP configuration. Two instances pointed at two directories are, to Claude's
 servers, two independent installations.
 
-A profile is therefore just a generated bundle:
+A profile is therefore just a generated bundle (written by `engine.sh`'s
+`create`, not a separate manager binary):
 
 ```
 ~/Applications/Claude Business.app/
   Contents/
     Info.plist            # CFBundleIdentifier: local.claude-profiles.business
     MacOS/launcher        # short bash script (the entire executable)
-    Resources/app.icns    # copied from the real Claude.app at creation
+    Resources/app.icns    # badged copy of the real Claude.app icon
 ```
 
 The launcher, in essence:
@@ -47,25 +51,47 @@ Design points:
 credential store, managed by Claude Desktop itself. The launcher never reads,
 writes, or proxies a token, and never scripts the login UI.
 
-## 2. The manager (`src/launcher`)
+## 2. The manager — native SwiftUI app (`app/`)
 
-The manager is itself one of these bundles. Its launcher is a larger bash
-script that drives native macOS dialogs via `osascript` (`choose from list`,
-`display dialog`), so end users never touch a terminal. It implements:
+The user-facing manager is a native SwiftUI app, built from the SwiftPM package
+in `app/` with the Command Line Tools (no Xcode). The compiled `Profiles`
+binary plus `engine.sh` + `badge-icon.applescript` are assembled into
+`Claude Profiles.app` by `scripts/build.sh`. The package is three layers:
 
-- create / open / remove profiles (remove requires typing `DELETE` to erase a
-  saved login — the data dir is treated as precious by default)
-- a classic dialog-based activity view (also the dashboard's fallback)
-- `--action add|remove` argv dispatch so the dashboard window can reuse the
-  dialog flows
-- first-run icon bootstrap (copies Claude's `.icns` into itself)
+- **`ProfilesCore`** — pure logic, no SwiftUI. The engine seam lives here:
+  `EngineRunning` (a protocol abstracting "run the bash engine") and `PollClock`
+  (the tick abstraction) are the test seams; `EngineClient` is the real
+  implementation that shells out to `engine.sh` with `Process` and `Codable`-decodes
+  its JSON. The `@Observable` `StatsStore` holds live state and drives the 2-second
+  poll. Models (`ProfileStat`, `ProfileConfig`, `RemoteInfo`, `TerminalInfo`),
+  the leak-gauge state machine (`PtmxHysteresis`), `BadgePreview`, `Sort`, and
+  `Formatters` round it out. `FixtureEngine` supplies canned data so the UI and
+  snapshot tests never touch a live engine.
+- **`ProfilesUI`** — the `Theme` and every view: `ProfileCardView` (live card
+  with `Sparkline` + `HandleGauge`), the vibrant `SidebarView` (`VisualEffectView`),
+  `KPIStripView`, the master-detail `ProfileDetailView` (three hero trend charts —
+  CPU / Memory / handle-pool-toward-ceiling — plus a `LeakBlock` verdict), the
+  drill-down (`InstanceSections` / `TerminalsTable` / `CleanTiers`), the modal
+  sheets (`NewProfileSheet` with a live badge preview, `SettingsSheet`,
+  `CleanupSheet`, `RemoteSheet` with a `QRCode`), `MenuContent` (the MenuBarExtra
+  switcher), and `Focus` (Show Window by PID).
+- **`Profiles`** (executable) — the `@main` SwiftUI `App` (`ProfilesApp`) with
+  its `NavigationSplitView` + `MenuBarExtra` scene, `DashboardView`, and
+  `EnginePath` (`resolveEnginePath()` finds the bundled `engine.sh`, falling back
+  to `Bundle.main.resourcePath`).
 
-Dialog strings escape embedded quotes and convert newlines to AppleScript
-`\n` escapes (`esc_msg`). Every dialog displays the app icon (`dialog_icon`).
+The scene owns every engine call; the views are pure (fixtures + closures) so
+they render under the snapshot harness without a backend. Removing a profile
+requires typing `DELETE` to erase a saved login — the data dir is treated as
+precious by default. The same flows are reachable headlessly through
+`cli/claude-profiles.sh`, which drives the same `engine.sh`.
 
 ## 3. The engine (`src/engine.sh`)
 
-A small data/actions backend used by both UIs.
+A small data/actions backend. It is the SwiftUI app's only backend (invoked via
+`Process`, output decoded with `Codable`) and is also driven directly by
+`cli/claude-profiles.sh`. There is no other bridge — the typed `Process` +
+`Codable` boundary replaces the old WebView `document.title` title-polling.
 
 **Process attribution.** An instance's main process is found by matching its
 `--user-data-dir=` argument in `ps axo pid=,command=` as a *complete* argv
@@ -89,75 +115,94 @@ Claude instance, e.g.:
 ```json
 {"name":"Claude Business","slug":"business","running":true,
  "cpu":16.8,"mem":896,"procs":3,"ptys":3,"disk":480,
+ "ptmx":7,"ptmxMax":511,"remote":false,
  "opens":12,"last":"2026-06-10 08:12"}
 ```
 
+`ptmx` is the count of leaked `/dev/ptmx` master handles held (NOT deduped — vs
+`ptys`, the deduped count of real terminals), and `ptmxMax` is the system ceiling
+(`sysctl -n kern.tty.ptmx_max`), so the dashboard can warn before the pool
+exhausts. `remote` is whether that profile's Claude Code `screen` session is live.
+
 **Actions**: `open`, `quit` (TERM to the main process; Electron shuts helpers
-down cleanly), `force` (KILL to the whole tree — this is what releases stuck
-PTYs), `clean` (deletes only regenerable Electron caches: `Cache`,
-`Code Cache`, `GPUCache`, `Dawn*Cache`, `ShaderCache`, completed crash dumps —
-**never** `Cookies`/`Local Storage`, and refuses entirely if the instance is
-running), `mainpid`/`defaultpid` (PID lookup for window focusing). Cache
-deletion paths are guarded with `${var:?}` so an empty variable can never
-expand to `rm -rf /...`.
+down cleanly), `force` (KILL to the whole tree — releases stuck PTYs),
+`restart` (TERM-wait-KILL-relaunch — the only way to reclaim the leaked
+`/dev/ptmx` masters), `focus` (raise an instance's windows by PID),
+`create`/`remove`/`rebadge` (wrapper bundle + badged icon lifecycle),
+`clean` (deletes only regenerable Electron caches: `Cache`, `Code Cache`,
+`GPUCache`, `Dawn*Cache`, `ShaderCache`, completed crash dumps — **never**
+`Cookies`/`Local Storage`, and refuses entirely if the instance is running),
+`terminals`/`closeterm`/`throttle` (drill-down: list / hang up / renice, each
+guarded to the instance's own tree), `getconfig`/`setconfig`/`autotick` (the
+opt-in auto-clean / auto-close settings), `remoteinfo`/`copy` (the Remote sheet),
+and `mainpid`/`defaultpid` (PID lookup for window focusing). Cache deletion
+paths are guarded with `${var:?}` so an empty variable can never expand to
+`rm -rf /...`.
 
-## 4. The dashboard (`src/dashboard.html` + `src/dashboard.applescript`)
+## 4. The dashboard (native SwiftUI, `app/`)
 
-The dashboard is a real native window without compiled code:
+The dashboard is a compiled native SwiftUI app — no WebView, no AppleScript
+title-bridge. It is the `Profiles` executable described in §2; this section is
+how it talks to the engine and raises windows.
 
-- `dashboard.applescript`, run by `/usr/bin/osascript`, uses AppleScriptObjC
-  (`use framework "AppKit"/"WebKit"`) to create an `NSWindow` containing a
-  `WKWebView` that loads `dashboard.html` from the bundle's Resources.
+- **Engine boundary — `Process` + `Codable`.** `EngineClient` runs
+  `engine.sh <verb> [args]` through `Foundation.Process` (executable
+  `/bin/bash`, stderr routed to `/dev/null` so an undrained pipe can't deadlock
+  `waitUntilExit()`) and decodes the JSON output into typed Swift models with
+  `Codable`. Action verbs that exit 0 on failure (printing an error token like
+  `refused` / `err …`) are surfaced as thrown errors so a failed action never
+  reports success. This is a real typed boundary — no string-polling bridge.
 
-- **JS → native bridge:** AppleScriptObjC can't implement
-  `WKScriptMessageHandler` (no class subclassing) or completion-handler
-  blocks. Instead, page buttons set `document.title = "cp:verb:slug"`. The
-  window title is a KVO-readable property, so a 0.5 s `NSTimer` (script
-  objects *can* be timer targets) polls it, resets it, and dispatches the
-  action — no blocks, no subclasses, no permissions.
+- **Live polling.** The `@Observable StatsStore` (in `ProfilesCore`) runs
+  `engine.sh stats` every 2 seconds on a `PollClock`, keeps a 30-point rolling
+  CPU/memory history per profile for the sparklines and hero charts, and drives
+  the leak gauge through the `PtmxHysteresis` state machine. One store instance
+  is shared by the window scene and the `MenuBarExtra`, so their running dots
+  match by construction (no second poll loop).
 
-- **Native → JS:** every 4th tick (2 s), the timer runs `engine.sh stats` via
-  `do shell script` and injects `updateStats(<json>)` with
-  `evaluateJavaScript:completionHandler:(missing value)` (fire-and-forget is
-  allowed without a block).
+- **Window focusing (Show Window).** `Focus.show(pid:)` resolves the instance's
+  main PID via the engine (`mainpid` / `defaultpid`), then calls
+  `NSRunningApplication runningApplicationWithProcessIdentifier:` and
+  `activateWithOptions:`. PID-level targeting is what makes this work despite all
+  instances sharing Claude's bundle ID. macOS 14+ cooperative activation can
+  ignore the request (other Spaces/displays/fullscreen); the System Events
+  frontmost fallback then triggers the one-time Automation prompt — the only
+  permission in the project.
 
-- **Window focusing:** `cp:focus:<slug>` resolves the instance's main PID via
-  the engine, then calls `NSRunningApplication
-  runningApplicationWithProcessIdentifier:` and `activateWithOptions:3`
-  (activate-all-windows | ignoring-other-apps). PID-level targeting is what
-  makes this work despite all instances sharing Claude's bundle ID, and it
-  requires no Accessibility/Automation consent.
-
-- **Lifecycle:** closing the window (not minimizing — both `isVisible` and
-  `isMiniaturized` are checked) terminates the host. If the host exits
-  abnormally within ~4 s of launch, the manager falls back to the dialog
-  activity view automatically.
-
-- The HTML keeps 30-point rolling CPU/memory histories per profile and draws
-  sparklines as inline SVG polylines. No external resources are loaded; the
-  page works fully offline (matching the no-network guarantee).
+- **Purity.** The scene (`ProfilesApp`) owns every engine call; the views are
+  pure functions of `ProfileStat`/fixtures plus callback closures. That keeps the
+  whole UI renderable headlessly under the snapshot harness with no live backend.
 
 ## Testing strategy
 
-`tests/run-tests.sh` runs on Linux or macOS by shimming `osascript` (canned
-dialog responses from a queue), `defaults`, `ps` (a fixed fake process table
-with two instance trees), and `lsof`. This exercises: dialog lifecycle flows,
-idempotent re-add with data preservation, name sanitization, engine JSON
-correctness (tree-summed CPU/MEM, PTY counts), PID resolution, cache-clean
-safety rails, and the dashboard JS render path under Node.
+Two layers, both runnable without full Xcode:
 
-The one layer that cannot run off-macOS is `dashboard.applescript` (~120
-lines). It follows canonical AppleScriptObjC patterns and is protected by the
-runtime fallback; treat it as the first suspect for any window-related bug
-report, and test changes to it on real macOS.
+- **Bash / engine suite — `tests/run-tests.sh`** runs on Linux or macOS by
+  shimming `ps` (a fixed fake process table with two instance trees), `lsof`,
+  `defaults`, and friends. It exercises engine JSON correctness (tree-summed
+  CPU/MEM, deduped PTY counts), process attribution (the `work` vs `work2`
+  prefix trap), PID resolution, the wrapper-create flow with data preservation,
+  name sanitization, and the cache-clean safety rails.
+
+- **Swift suite — executable runners.** `swift test` needs full Xcode, so the
+  Swift layers run as plain executables under the Command Line Tools:
+  `swift run ProfilesCoreTests` (Layer-1 logic, via a small vendored `XCTest`
+  shim) and `swift run ProfilesSnapshotTests` (Layer-2 golden-PNG proof:
+  `ImageRenderer` → PNG diffed against `app/Tests/__Snapshots__/*.png` within a
+  per-case tolerance). The view layer is fixture-driven, so these render every
+  card / sheet / detail page without a live engine.
+
+The one layer that still can't be exercised off-macOS is the running SwiftUI
+window (AppKit/WebKit-free but still macOS-only); changes there should be checked
+on a real Mac, with the macOS version noted in the PR.
 
 ## Threat model notes
 
-- The launcher executes nothing it didn't generate; profile names are
-  sanitized before templating.
+- The engine executes nothing it didn't generate; profile names are sanitized
+  before being templated into wrapper bundles.
 - No network I/O anywhere in this codebase.
-- `rm -rf` sites are parameter-expansion-guarded.
-- The manager never elevates privileges and writes only under
-  `~/Applications`, `~/.claude-instances`, and `$TMPDIR`.
+- `rm -rf` sites are parameter-expansion-guarded (`${var:?}`).
+- The app never elevates privileges and writes only under `~/Applications`,
+  `~/.claude-instances`, and `$TMPDIR`.
 - Modifying Claude.app itself is explicitly out of scope (it would break its
   code signature).

@@ -10,7 +10,7 @@ themselves because they live in repository settings or require a human.
 | Workflow | File | Trigger | What it does |
 |----------|------|---------|--------------|
 | CI | `.github/workflows/ci.yml` | push, PR | shellcheck + actionlint, test suite, gitleaks scan, build |
-| macOS CI | `.github/workflows/ci-macos.yml` | PR to `main`, weekly, called by Release | full suite + icon + build + applet parse-check on real macOS |
+| macOS CI | `.github/workflows/ci-macos.yml` | PR to `main`, weekly, called by Release | `swift build` + Layer-1 logic + Layer-2 snapshot render + bash suite + icon + bundle build + `badge-icon` osacompile parse-check, on real macOS |
 | Scorecard | `.github/workflows/scorecard.yml` | push to `main`, weekly | OpenSSF supply-chain score (public repos only) |
 | Release | `.github/workflows/release.yml` | tag `v*` | gate on macOS CI, build, optional sign+notarize, SLSA provenance, publish |
 | Dependabot | `.github/dependabot.yml` | weekly | bump pinned action SHAs (grouped) |
@@ -100,10 +100,13 @@ Actions minutes are free for public repositories.
 
 ## Local pre-flight (before any push)
 ```bash
-bash tests/run-tests.sh
-shellcheck -S error src/launcher src/engine.sh cli/claude-profiles.sh scripts/*.sh
-bash scripts/build.sh
+bash tests/run-tests.sh                       # bash/engine suite (Linux or macOS)
+shellcheck -S error src/engine.sh cli/claude-profiles.sh scripts/*.sh
+cd app && swift build && swift run ProfilesCoreTests && swift run ProfilesSnapshotTests && cd ..
+bash scripts/build.sh                          # compile + assemble the bundle
 ```
-CI runs the same three plus actionlint and gitleaks. Applet/WebView changes
-(`src/dashboard.applescript`, `src/badge-icon.applescript`) can't be exercised
-by CI — verify those on a real Mac and note the macOS version in the PR.
+Linux CI runs the bash suite + shellcheck + actionlint + gitleaks + build; the
+macOS CI job adds `swift build`, both Swift runners, the icon regen, and the
+`badge-icon.applescript` osacompile parse-check. The running SwiftUI window and
+`src/badge-icon.applescript`'s rendered output are the layers CI can't fully
+exercise — verify those on a real Mac and note the macOS version in the PR.

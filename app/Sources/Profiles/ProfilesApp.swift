@@ -92,7 +92,9 @@ struct ProfilesApp: App {
                     }
             }
             .navigationSplitViewStyle(.balanced)
-            .frame(minWidth: 1000, minHeight: 620)
+            // Freely resizable: a sensible minimum (sidebar + detail; the old 1000px
+            // floor was for the retired 3-column inspector) and grow without limit.
+            .frame(minWidth: 860, maxWidth: .infinity, minHeight: 560, maxHeight: .infinity)
             .background(Theme.canvas)
             .preferredColorScheme(.dark)
             .onAppear { store.start() }
@@ -116,6 +118,8 @@ struct ProfilesApp: App {
             }
         }
         .windowToolbarStyle(.unified)
+        // Min size follows the content's minimum, freely resizable above it.
+        .windowResizability(.contentMinSize)
 
         // Menu-bar switcher. Shares the one `@Observable StatsStore` with the window,
         // so the running dots match by construction (no second poll loop). Rebuilds
