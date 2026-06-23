@@ -27,13 +27,18 @@ public struct ProfileCardView: View {
     let onOpen: (String) -> Void
     /// Overflow menu (running/default only): Restart / Quit / Force Quit.
     let onCardAction: (CardAction) -> Void
+    /// When true (the grid), the card SURFACE stretches to fill its cell so every card
+    /// in a row is exactly the same height regardless of content. False (single-card
+    /// snapshots) keeps natural height.
+    let fillsHeight: Bool
 
     public init(stat: ProfileStat, cpu: [Double], mem: [Double], state: AlertState,
                 selected: Bool = false, onDetails: @escaping (String) -> Void = { _ in },
                 onRemote: @escaping (String) -> Void = { _ in },
                 onShowWindow: @escaping (String) -> Void = { _ in },
                 onOpen: @escaping (String) -> Void = { _ in },
-                onCardAction: @escaping (CardAction) -> Void = { _ in }) {
+                onCardAction: @escaping (CardAction) -> Void = { _ in },
+                fillsHeight: Bool = false) {
         self.stat = stat
         self.cpu = cpu
         self.mem = mem
@@ -44,6 +49,7 @@ public struct ProfileCardView: View {
         self.onShowWindow = onShowWindow
         self.onOpen = onOpen
         self.onCardAction = onCardAction
+        self.fillsHeight = fillsHeight
     }
 
     public var body: some View {
@@ -52,7 +58,7 @@ public struct ProfileCardView: View {
             content
         }
         .padding(Theme.Space.lg)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: fillsHeight ? .infinity : nil, alignment: .topLeading)
         .background(cardSurface)
         .overlay(cardStroke)
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
