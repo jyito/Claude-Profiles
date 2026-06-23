@@ -5,13 +5,21 @@ import ProfilesUI
 /// The live detail column. Keeps a rolling 30-point CPU/Mem history per slug and
 /// a per-slug `PtmxHysteresis` (persisted across ticks in `@State` dictionaries
 /// keyed by slug), feeds the latest sample each tick, and builds the deterministic
-/// `DashboardContent`. The store re-renders this every 2s. Also hosts the right-side
-/// `.inspector` drill-down — opening it never reflows the grid (the design's bet).
+/// `DashboardContent`. The store re-renders this every 2s.
+///
+/// Master-detail (replacing the old `.inspector` 3rd column): the content lives in
+/// a `NavigationStack(path:)` whose root is the card grid / list and whose
+/// `String`-keyed destination is the maximized `ProfileDetailView`. A card's
+/// "Details ›" or a sidebar selection pushes the slug; the system back button pops
+/// to the grid. `navPath` and `selection` are kept in sync so the sidebar highlight
+/// and the pushed page always agree (and back-to-grid clears the selection).
 @MainActor
 struct DashboardView: View {
     let store: StatsStore
     @Binding var selection: String?
-    @Binding var inspectorShown: Bool
+    /// The detail column's navigation stack. Empty = overview (grid/list); a single
+    /// pushed slug = that profile's maximized detail page.
+    @Binding var navPath: [String]
     /// Grid (cards) vs List (dense table); driven by the toolbar segmented control.
     @Binding var viewMode: ProfileViewMode
     /// Called when a card's Remote button is tapped (scene presents the Remote sheet).
@@ -35,30 +43,50 @@ struct DashboardView: View {
     private static let historyLen = 30
 
     var body: some View {
-        detailContent
-            // Inactive-window dim: a subtle whole-pane fade when the window loses key.
-            .opacity(appearsActive ? 1 : 0.85)
-            .onChange(of: store.profiles) { _, fresh in
-                ingest(fresh)
-            }
-            .onAppear { ingest(store.profiles) }
-            .inspector(isPresented: $inspectorShown) {
-                inspectorContent
-                    .inspectorColumnWidth(min: 300, ideal: 340, max: 420)
-            }
-            // Load the selected instance's terminals whenever selection changes.
-            .task(id: selection) {
-                if let slug = selectedStat?.effSlug {
-                    await store.loadTerminals(for: slug)
+        NavigationStack(path: $navPath) {
+            detailContent
+                .navigationDestination(for: String.self) { slug in
+                    profileDetail(for: slug)
                 }
+        }
+        // Inactive-window dim: a subtle whole-pane fade when the window loses key.
+        .opacity(appearsActive ? 1 : 0.85)
+        .onChange(of: store.profiles) { _, fresh in
+            ingest(fresh)
+        }
+        .onAppear { ingest(store.profiles) }
+        // Sidebar selection drives the push; clearing it pops to the grid. Guarded so
+        // it doesn't fight the back button (which already mutates navPath → selection).
+        .onChange(of: selection) { _, slug in
+            let desired = slug.map { [$0] } ?? []
+            if navPath != desired { navPath = desired }
+        }
+        // The system back button pops navPath; mirror that back into selection so the
+        // sidebar highlight clears (and a re-selection re-pushes cleanly).
+        .onChange(of: navPath) { _, path in
+            let top = path.last
+            if selection != top { selection = top }
+        }
+        // Load the pushed instance's terminals whenever the open profile changes.
+        .task(id: navPath.last) {
+            if let slug = navPath.last,
+               store.profiles.contains(where: { $0.effSlug == slug }) {
+                await store.loadTerminals(for: slug)
             }
+        }
+    }
+
+    /// Open a profile's maximized detail page (sidebar row OR card "Details ›").
+    private func open(_ slug: String) {
+        if navPath.last != slug { navPath = [slug] }
     }
 
     /// State gating, then Grid vs List. The decision lives in `dashboardMode` (pure +
     /// unit-tested in ProfilesCore) so the empty-state gate can't regress to dead
     /// code: the engine always emits the default instance, so the onboarding state
-    /// must key off "only the default exists", not "no profiles". The grid/list both
-    /// feed `selection`, so flipping view mode keeps the inspector's open instance.
+    /// must key off "only the default exists", not "no profiles". This is the
+    /// `NavigationStack` ROOT — the grid/list overview. The toolbar Grid/List toggle
+    /// applies here; opening a profile pushes `ProfileDetailView` on top.
     @ViewBuilder private var detailContent: some View {
         switch dashboardMode(profiles: store.profiles, hasLoadedOnce: store.hasLoadedOnce) {
         case .loading:
@@ -74,19 +102,43 @@ struct DashboardView: View {
         switch viewMode {
         case .grid:
             DashboardContent(profiles: store.profiles, cards: cards, selection: selection,
-                             onDetails: { slug in
-                                 selection = slug
-                                 inspectorShown = true
-                             },
+                             onDetails: { open($0) },
                              onRemote: onRemote,
                              onShowWindow: showWindow,
                              onOpen: { slug in Task { await store.perform(["open", slug]) } })
         case .list:
+            // A row selection pushes that profile's detail page (matching the grid's
+            // Details tap). `selection` → `navPath` is wired in `body`'s onChange.
             ProfileListView(profiles: store.profiles, selection: $selection)
-                .onChange(of: selection) { _, new in
-                    // A row selection opens the inspector (matching the grid's Details tap).
-                    inspectorShown = (new != nil)
-                }
+        }
+    }
+
+    /// Build the maximized detail page for a pushed slug. Resolves the live stat; a
+    /// vanished slug (deleted while open) falls back to a quiet placeholder so the
+    /// pushed view never crashes on a missing profile.
+    @ViewBuilder private func profileDetail(for slug: String) -> some View {
+        if let stat = store.profiles.first(where: { $0.effSlug == slug }) {
+            ProfileDetailView(
+                stat: stat,
+                cpu: cpuHistory[stat.effSlug] ?? [stat.cpu],
+                mem: memHistory[stat.effSlug] ?? [stat.mem],
+                state: states[stat.effSlug] ?? .calm,
+                terminals: store.terminals,
+                onShowWindow: showWindow,
+                onRemote: onRemote,
+                onOpen: { s in Task { await store.perform(["open", s]) } },
+                onAction: { handle($0, for: stat) }
+            )
+        } else {
+            VStack {
+                Spacer()
+                Text("Select a profile")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.text3)
+                Spacer()
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Theme.canvas)
         }
     }
 
@@ -104,34 +156,7 @@ struct DashboardView: View {
         }
     }
 
-    // MARK: Inspector
-
-    private var selectedStat: ProfileStat? {
-        guard let selection else { return nil }
-        return store.profiles.first { $0.effSlug == selection }
-    }
-
-    @ViewBuilder private var inspectorContent: some View {
-        if let stat = selectedStat {
-            InspectorView(
-                stat: stat,
-                terminals: store.terminals,
-                state: states[stat.effSlug] ?? .calm,
-                onAction: { handle($0, for: stat) }
-            )
-        } else {
-            // No selection: a quiet placeholder rather than an empty pane.
-            VStack {
-                Spacer()
-                Text("Select a profile")
-                    .font(.system(size: 13))
-                    .foregroundStyle(Theme.text3)
-                Spacer()
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Theme.canvas)
-        }
-    }
+    // MARK: Drill-down actions
 
     /// Map an inspector action to the engine, then refresh stats + terminals. The
     /// view stays pure; the scene owns every engine call (CLAUDE.md non-negotiables).
@@ -150,14 +175,14 @@ struct DashboardView: View {
             case .setBadge(let index):
                 await store.perform(["setbadge", slug, String(index)])
             case .remove:
-                // Both `remove` and `purge` must succeed before we collapse: a failed
+                // Both `remove` and `purge` must succeed before we pop: a failed
                 // `purge` may have orphaned the (precious) data dir, so keep the
-                // inspector open and let `store.lastError` surface it. Return early —
-                // never `loadTerminals` against the just-deleted slug; the selection
-                // change (on success) already triggers `.task(id: selection)`.
+                // detail page open and let `store.lastError` surface it. Return early —
+                // never `loadTerminals` against the just-deleted slug; popping the
+                // stack (on success) re-routes back to the grid.
                 if await store.removeProfile(slug) {
+                    navPath = []
                     selection = nil
-                    inspectorShown = false
                 }
                 return
             }

@@ -9,7 +9,10 @@ struct ProfilesApp: App {
         clock: RealClock()
     )
     @State private var selection: String?
-    @State private var inspectorShown = false
+    /// The detail column's master-detail navigation stack. Empty = the overview
+    /// (card grid / list); a single pushed slug = that profile's maximized detail
+    /// page. Kept in sync with `selection` by `DashboardView`.
+    @State private var navPath: [String] = []
     /// Detail layout: card grid (default) or the dense list. Toolbar-driven.
     @State private var viewMode: ProfileViewMode = .grid
     /// Which modal (if any) is presented. The scene owns this — the sheet views are
@@ -23,10 +26,10 @@ struct ProfilesApp: App {
         WindowGroup("Claude Profiles") {
             NavigationSplitView {
                 SidebarView(profiles: store.profiles, selection: $selection)
-                    .onChange(of: selection) { _, new in
-                        // Selecting a sidebar row opens the inspector; clearing it closes it.
-                        inspectorShown = (new != nil)
-                    }
+                    // Selecting a sidebar row pushes that profile's detail page;
+                    // clearing it pops back to the grid. The selection→navPath sync
+                    // lives in `DashboardView` so the grid's "Details ›" and the
+                    // sidebar share one path.
                     .background(VisualEffectView())
                     .navigationSplitViewColumnWidth(min: 220, ideal: 240, max: 280)
                     .safeAreaInset(edge: .bottom) {
@@ -41,7 +44,7 @@ struct ProfilesApp: App {
                         .accessibilityIdentifier("sidebar-new-profile")
                     }
             } detail: {
-                DashboardView(store: store, selection: $selection, inspectorShown: $inspectorShown,
+                DashboardView(store: store, selection: $selection, navPath: $navPath,
                               viewMode: $viewMode,
                               onRemote: { slug in presentRemote(slug) },
                               onNewProfile: { activeSheet = .newProfile })
