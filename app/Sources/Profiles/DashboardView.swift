@@ -2,10 +2,12 @@ import SwiftUI
 import ProfilesCore
 import ProfilesUI
 
-/// The live detail column. Keeps a rolling 30-point CPU/Mem history per slug and
-/// a per-slug `PtmxHysteresis` (persisted across ticks in `@State` dictionaries
-/// keyed by slug), feeds the latest sample each tick, and builds the deterministic
-/// `DashboardContent`. The store re-renders this every 2s.
+/// The live detail column. Keeps a rolling ~60-point CPU/Mem/ptmx history per slug
+/// (≈2 min at the 2s tick — long enough that the detail-page hero trends read
+/// clearly; the card sparklines lengthen too, which is fine) and a per-slug
+/// `PtmxHysteresis` (persisted across ticks in `@State` dictionaries keyed by slug),
+/// feeds the latest sample each tick, and builds the deterministic `DashboardContent`.
+/// The store re-renders this every 2s.
 ///
 /// Master-detail (replacing the old `.inspector` 3rd column): the content lives in
 /// a `NavigationStack(path:)` whose root is the card grid / list and whose
@@ -37,10 +39,13 @@ struct DashboardView: View {
 
     @State private var cpuHistory: [String: [Double]] = [:]
     @State private var memHistory: [String: [Double]] = [:]
+    @State private var ptmxHistory: [String: [Double]] = [:]
     @State private var hysteresis: [String: PtmxHysteresis] = [:]
     @State private var states: [String: AlertState] = [:]
 
-    private static let historyLen = 30
+    // ~2 min of history at the 2s tick — long enough that the detail-page hero
+    // trends read clearly (also lengthens the card sparklines, intentionally).
+    private static let historyLen = 60
 
     var body: some View {
         NavigationStack(path: $navPath) {
@@ -122,6 +127,7 @@ struct DashboardView: View {
                 stat: stat,
                 cpu: cpuHistory[stat.effSlug] ?? [stat.cpu],
                 mem: memHistory[stat.effSlug] ?? [stat.mem],
+                ptmx: ptmxHistory[stat.effSlug] ?? [Double(stat.ptmx)],
                 state: states[stat.effSlug] ?? .calm,
                 terminals: store.terminals,
                 onShowWindow: showWindow,
@@ -218,6 +224,12 @@ struct DashboardView: View {
             if m.count > Self.historyLen { m.removeFirst(m.count - Self.historyLen) }
             memHistory[key] = m
 
+            // rolling leaked-handle (ptmx) series — feeds the detail handle trend.
+            var p = ptmxHistory[key] ?? []
+            p.append(Double(stat.ptmx))
+            if p.count > Self.historyLen { p.removeFirst(p.count - Self.historyLen) }
+            ptmxHistory[key] = p
+
             // per-slug hysteresis severity (default instance never leak-alerts in UI,
             // but the engine still emits ptmx; feeding it is harmless and consistent)
             var h = hysteresis[key] ?? PtmxHysteresis()
@@ -229,9 +241,10 @@ struct DashboardView: View {
         // transient slug) so these dicts can't grow unbounded over the window's
         // lifetime. Render is unaffected (it maps over store.profiles).
         let live = Set(fresh.map(\.effSlug))
-        cpuHistory = cpuHistory.filter { live.contains($0.key) }
-        memHistory = memHistory.filter { live.contains($0.key) }
-        hysteresis = hysteresis.filter { live.contains($0.key) }
-        states     = states.filter     { live.contains($0.key) }
+        cpuHistory  = cpuHistory.filter  { live.contains($0.key) }
+        memHistory  = memHistory.filter  { live.contains($0.key) }
+        ptmxHistory = ptmxHistory.filter { live.contains($0.key) }
+        hysteresis  = hysteresis.filter  { live.contains($0.key) }
+        states      = states.filter      { live.contains($0.key) }
     }
 }

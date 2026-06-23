@@ -155,12 +155,15 @@ enum SnapshotCases {
 
         // Task 9 — maximized master-detail page (the `.inspector` replacement). A
         // running profile: header (badge + name + status + Show Window / Remote) over
-        // the live metric row (CPU / MEMORY sparklines) over the shared
-        // `InstanceSections` (terminals + Throttle + leak block). Looser tolerance:
-        // tall composite. snapshotMode renders the bare VStack (no ScrollView).
-        cases.append(SnapshotCase("profile-detail", size: CGSize(width: 720, height: 720), tolerance: 0.015) {
+        // the three hero trend charts (CPU coral / MEMORY teal / HANDLE POOL amber
+        // with a dashed ceiling rule + a "▲ climbing — restart soon" verdict) and the
+        // stat strip (procs · terminals · disk · opened · last · remote) over the
+        // shared `InstanceSections` (terminals + Throttle + leak block). Looser
+        // tolerance: tall composite. snapshotMode renders the bare VStack (no ScrollView).
+        cases.append(SnapshotCase("profile-detail", size: CGSize(width: 720, height: 820), tolerance: 0.015) {
             ProfileDetailView(
                 stat: Fixtures.research, cpu: Fixtures.cpuSeriesHot, mem: Fixtures.memSeriesHot,
+                ptmx: Fixtures.ptmxSeriesHot,
                 state: .warning(climbing: true), terminals: Fixtures.terminals,
                 onAction: { _ in })
         })

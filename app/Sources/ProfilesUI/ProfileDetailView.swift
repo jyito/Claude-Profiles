@@ -1,4 +1,5 @@
 import SwiftUI
+import Charts
 import ProfilesCore
 
 /// The maximized single-profile detail page — the master-detail replacement for the
@@ -23,6 +24,8 @@ public struct ProfileDetailView: View {
     let stat: ProfileStat
     let cpu: [Double]
     let mem: [Double]
+    /// Rolling leaked-handle (ptmx) history — drives the handle hero trend.
+    let ptmx: [Double]
     let state: AlertState
     let terminals: [TerminalInfo]
     let onShowWindow: (String) -> Void
@@ -41,6 +44,7 @@ public struct ProfileDetailView: View {
     public init(stat: ProfileStat,
                 cpu: [Double],
                 mem: [Double],
+                ptmx: [Double] = [],
                 state: AlertState,
                 terminals: [TerminalInfo],
                 snapshotArmedDev: String? = nil,
@@ -53,6 +57,9 @@ public struct ProfileDetailView: View {
         self.stat = stat
         self.cpu = cpu
         self.mem = mem
+        // Default to the live ptmx sample so the trend is never empty (e.g. a
+        // first-tick profile or a caller that hasn't wired the series yet).
+        self.ptmx = ptmx.isEmpty ? [Double(stat.ptmx)] : ptmx
         self.state = state
         self.terminals = terminals
         self.snapshotArmedDev = snapshotArmedDev
@@ -71,7 +78,8 @@ public struct ProfileDetailView: View {
             // Metrics are meaningful only while the instance is alive; a stopped
             // profile shows its sections (clean tiers / badge / remove) directly.
             if stat.running || stat.isDefault {
-                metricRow
+                heroCharts
+                statStrip
             }
             InstanceSections(
                 stat: stat,
@@ -167,28 +175,233 @@ public struct ProfileDetailView: View {
         }
     }
 
-    // MARK: Metric row (echoes the card's CPU / MEMORY cells)
+    // MARK: Hero trend charts (CPU · Memory · Handle pool)
 
-    private var metricRow: some View {
+    /// Three taller-than-the-card trend charts in a row. CPU keeps its coral metric
+    /// identity, Memory its teal; the handle chart is the one place amber/coral leak
+    /// SEVERITY shows (with a dashed ceiling rule + a leak verdict). The default
+    /// instance is read-only, so its handle verdict is informational only.
+    private var heroCharts: some View {
         HStack(alignment: .top, spacing: Theme.Space.xl) {
-            metricCell(eyebrow: "CPU", value: formatCPU(stat.cpu), series: cpu, tint: Theme.cpuLine)
-            metricCell(eyebrow: "MEMORY", value: formatMemoryMB(stat.mem), series: mem, tint: Theme.memLine)
+            HeroTrend(eyebrow: "CPU",
+                      value: formatCPU(stat.cpu),
+                      sub: cpuSub,
+                      subTint: Theme.text3,
+                      series: cpu,
+                      tint: Theme.cpuLine)
+                .accessibilityIdentifier("detail-\(stat.effSlug)-trend-cpu")
+            HeroTrend(eyebrow: "MEMORY",
+                      value: formatMemoryMB(stat.mem),
+                      sub: memSub,
+                      subTint: Theme.text3,
+                      series: mem,
+                      tint: Theme.memLine)
+                .accessibilityIdentifier("detail-\(stat.effSlug)-trend-mem")
+            HeroTrend(eyebrow: "HANDLE POOL",
+                      value: "\(stat.ptmx) / \(stat.ptmxMax)",
+                      sub: leakVerdict.text,
+                      subTint: leakVerdict.tint,
+                      series: ptmx,
+                      tint: Theme.amber,
+                      ceiling: Double(stat.ptmxMax))
+                .accessibilityIdentifier("detail-\(stat.effSlug)-trend-handles")
         }
     }
 
-    private func metricCell(eyebrow: String, value: String, series: [Double], tint: Color) -> some View {
+    /// "peak {max}% · last {N}s" — N is the window length at the 2s tick cadence.
+    private var cpuSub: String {
+        let peak = cpu.max() ?? stat.cpu
+        let secs = max(cpu.count, 1) * 2
+        return "peak \(formatCPU(peak)) · last \(secs)s"
+    }
+
+    /// A short delta over the window when the series has ≥2 points; otherwise the
+    /// bare value (keeps the line meaningful on a first-tick profile).
+    private var memSub: String {
+        guard let first = mem.first, let last = mem.last, mem.count >= 2 else {
+            return formatMemoryMB(stat.mem)
+        }
+        let delta = last - first
+        if abs(delta) < 1 { return "flat over \(mem.count * 2)s" }
+        let sign = delta > 0 ? "+" : "−"
+        return "\(sign)\(formatMemoryMB(abs(delta))) over \(mem.count * 2)s"
+    }
+
+    /// The leak verdict sub-line under the handle chart, derived from `AlertState`
+    /// (the hysteresis severity) + the trend slope. The DEFAULT instance is read-only
+    /// (never auto-restarted, CLAUDE.md §5) so it never gets a "restart soon" verdict —
+    /// only an informational climbing/elevated note.
+    private var leakVerdict: (text: String, tint: Color) {
+        switch state {
+        case .calm:
+            return ("✓ healthy", Theme.text3)
+        case .warning(let climbing):
+            if climbing {
+                return stat.isDefault
+                    ? ("▲ climbing", Theme.amber)
+                    : ("▲ climbing — restart soon", Theme.amber)
+            }
+            return ("elevated", Theme.amber)
+        case .critical:
+            return stat.isDefault
+                ? ("▲ near ceiling", Theme.coral)
+                : ("▲ climbing — restart soon", Theme.coral)
+        }
+    }
+
+    // MARK: Stat strip (surface1 band of hairline-divided cells)
+
+    /// A KPI-strip-style band of secondary facts the hero charts don't carry:
+    /// process/terminal counts, on-disk size, lifetime opens, last launch, and the
+    /// Remote session state (mint live-dot). Disk shows "—" for the default sentinel.
+    private var statStrip: some View {
+        HStack(spacing: 0) {
+            statCell(eyebrow: "PROCS", value: "\(stat.procs)")
+            statDivider
+            statCell(eyebrow: "TERMINALS", value: "\(stat.ptys)")
+            statDivider
+            statCell(eyebrow: "DISK", value: formatDiskMB(stat.disk))
+            statDivider
+            statCell(eyebrow: "OPENED", value: "\(stat.opens)×")
+            statDivider
+            statCell(eyebrow: "LAST LAUNCH", value: stat.last.isEmpty ? "—" : stat.last)
+            statDivider
+            remoteCell
+        }
+        .padding(.vertical, Theme.Space.md)
+        .padding(.horizontal, Theme.Space.lg)
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
+                .fill(Theme.surface1)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
+                .strokeBorder(Theme.hairline, lineWidth: 1)
+        )
+        .accessibilityIdentifier("detail-\(stat.effSlug)-statstrip")
+    }
+
+    private var statDivider: some View {
+        Rectangle()
+            .fill(Theme.hairline)
+            .frame(width: 1, height: 32)
+            .padding(.horizontal, Theme.Space.sm)
+    }
+
+    private func statCell(eyebrow: String, value: String) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
             Text(eyebrow)
                 .font(.system(size: 10, weight: .semibold))
                 .tracking(0.6)
                 .foregroundStyle(Theme.text3)
             Text(value)
-                .font(.system(size: 28, weight: .medium))
+                .font(.system(size: 15, weight: .medium))
                 .monospacedDigit()
                 .foregroundStyle(Theme.text)
-            Sparkline(values: series, tint: tint)
-                .frame(height: 48)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var remoteCell: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.xs) {
+            Text("REMOTE")
+                .font(.system(size: 10, weight: .semibold))
+                .tracking(0.6)
+                .foregroundStyle(Theme.text3)
+            HStack(spacing: 5) {
+                if stat.remote {
+                    Circle().fill(Theme.mint).frame(width: 6, height: 6)
+                    Text("live")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(Theme.mint)
+                } else {
+                    Text("idle")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(Theme.text3)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+// MARK: - HeroTrend
+
+/// One detail-page hero trend chart: an eyebrow, a big monospaced value, a sub-line,
+/// and a ~56pt `LineMark` + `AreaMark` + live `PointMark` (taller than the card
+/// sparklines). Axes/legend hidden, Y pinned. An optional dashed `RuleMark` marks a
+/// ceiling (the handle pool's `ptmxMax`) so a climbing trend reads against its limit.
+private struct HeroTrend: View {
+    let eyebrow: String
+    let value: String
+    let sub: String
+    let subTint: Color
+    let series: [Double]
+    let tint: Color
+    /// Optional dashed ceiling line (e.g. the ptmx max). The Y domain expands to
+    /// include it so the rule is always visible above the trend.
+    var ceiling: Double? = nil
+
+    /// Pin Y to 0…max(series, ceiling) so per-core CPU >100% never flattens and the
+    /// ceiling rule stays on-chart.
+    private var yMax: Double {
+        let s = series.max() ?? 1
+        return Swift.max(s, ceiling ?? 0, 1)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.xs) {
+            Text(eyebrow)
+                .font(.system(size: 10, weight: .semibold))
+                .tracking(0.6)
+                .foregroundStyle(Theme.text3)
+            Text(value)
+                .font(.title2.monospacedDigit())
+                .foregroundStyle(Theme.text)
+            chart
+                .frame(height: 56)
+            Text(sub)
+                .font(.system(size: 11))
+                .monospacedDigit()
+                .foregroundStyle(subTint)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var chart: some View {
+        Chart {
+            if let ceiling {
+                RuleMark(y: .value("ceiling", ceiling))
+                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                    .foregroundStyle(Theme.text4)
+            }
+            ForEach(Array(series.enumerated()), id: \.offset) { i, v in
+                LineMark(x: .value("i", i), y: .value("v", v))
+                    .interpolationMethod(.monotone)
+                    .lineStyle(StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
+                    .foregroundStyle(tint)
+                AreaMark(x: .value("i", i), y: .value("v", v))
+                    .interpolationMethod(.monotone)
+                    .foregroundStyle(
+                        .linearGradient(
+                            colors: [tint.opacity(0.30), tint.opacity(0.0)],
+                            startPoint: .top, endPoint: .bottom
+                        )
+                    )
+            }
+            if let last = series.indices.last {
+                PointMark(x: .value("i", last), y: .value("v", series[last]))
+                    .symbol(.circle)
+                    .symbolSize(32)
+                    .foregroundStyle(tint)
+            }
+        }
+        .chartYScale(domain: 0...yMax)
+        .chartXAxis(.hidden)
+        .chartYAxis(.hidden)
+        .chartLegend(.hidden)
+        .accessibilityHidden(true)
     }
 }
