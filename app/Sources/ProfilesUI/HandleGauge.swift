@@ -3,9 +3,12 @@ import ProfilesCore
 
 /// The leaked-handle (ptmx) capacity gauge. Two always-on channels for the leak
 /// verdict — color + glyph + number — so it survives grayscale / colorblindness:
-/// calm reads gray with a `terminal` glyph and "N / max handles"; an active leak
-/// reads amber with a warning triangle, "N leaked", and a "↑ climbing" tell. There
-/// is no coral/critical tier — any active leak is amber, regardless of ceiling.
+/// calm reads gray with a `terminal` glyph and "N handles" (the count only — the
+/// ceiling lives in the KPI strip + the detail chart, not on every tile); an active
+/// leak reads amber with a warning triangle, "N leaked", and a "↑ climbing" tell. The
+/// capacity bar still fills toward the ceiling (amber when leaking) — only the text
+/// drops the "/ max". There is no coral/critical tier — any active leak is amber,
+/// regardless of ceiling.
 public struct HandleGauge: View {
     let used: Int
     let max: Int
