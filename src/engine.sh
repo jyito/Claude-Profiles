@@ -703,6 +703,112 @@ cmd_remote_stop() {  # stop a profile's Claude Code screen session (claude-<slug
     printf 'ok'
 }
 
+# ── Sign-in routing ──────────────────────────────────────────────────────────
+# macOS routes the claude:// browser-login callback to ONE running Claude
+# instance, with no chooser — a re-auth lands in whichever instance grabbed it.
+# The fix is the dance users discovered by hand: close every OTHER instance so
+# the callback has exactly one home, then restore what was closed afterwards.
+# Signals + launches only — data dirs and sign-ins are never touched, so every
+# closed instance reopens already authenticated.
+SIGNIN_FILE="$INSTANCES_DIR/.runtime/signin-restore"
+
+signin_running_others() {  # running instances EXCEPT the target; "default" sentinel first
+    local target="$1" slug
+    [ "$target" != "default" ] && [ -n "$(cmd_defaultpid)" ] && printf 'default\n'
+    for slug in $(all_profile_slugs); do
+        [ "$slug" = "$target" ] && continue
+        [ -n "$(main_pids_for_dir "$INSTANCES_DIR/$slug")" ] && printf '%s\n' "$slug"
+    done
+}
+
+json_slug_array() {  # stdin: one slug per line → compact JSON string array
+    local out="[" first=1 s
+    while IFS= read -r s; do
+        [ -n "$s" ] || continue
+        [ "$first" -eq 0 ] && out="$out,"
+        out="$out\"$s\""
+        first=0
+    done
+    printf '%s]' "$out"
+}
+
+cmd_signin() {  # route the next browser sign-in to <slug|default>: snapshot the other
+    # running instances to SIGNIN_FILE, close them (graceful TERM), and make sure
+    # the target is up. Emits {"target":…,"closed":[…]} for the dashboard banner.
+    local target="${1:?}" others slug
+    case "$target" in default) : ;; ''|*[!a-z0-9]*) printf 'err invalid slug'; return 0 ;; esac
+    if [ "$target" != "default" ] && ! wrapper_for_slug "$target" >/dev/null; then
+        printf 'err not found'; return 0
+    fi
+    others=$(signin_running_others "$target")
+    mkdir -p "$(dirname "$SIGNIN_FILE")"
+    if [ -n "$others" ]; then
+        printf '%s\n' "$others" > "$SIGNIN_FILE"
+        while IFS= read -r slug; do
+            [ -n "$slug" ] || continue
+            if [ "$slug" = "default" ]; then cmd_quit_default >/dev/null; else cmd_quit "$slug" >/dev/null; fi
+        done <<EOF
+$others
+EOF
+    else
+        rm -f "$SIGNIN_FILE"   # nothing closed → nothing to restore later
+    fi
+    # Ensure the target is up so the claude:// callback has exactly one home.
+    if [ "$target" = "default" ]; then
+        [ -z "$(cmd_defaultpid)" ] && cmd_open_default >/dev/null
+    else
+        [ -z "$(main_pids_for_dir "$INSTANCES_DIR/$target")" ] && cmd_open "$target"
+    fi
+    printf '{"target":"%s","closed":%s}' "$target" "$(printf '%s\n' "$others" | json_slug_array)"
+}
+
+cmd_signin_restore() {  # reopen everything cmd_signin closed; idempotent
+    local slug out
+    [ -f "$SIGNIN_FILE" ] || { printf '{"restored":[]}'; return 0; }
+    out=$(json_slug_array < "$SIGNIN_FILE")
+    while IFS= read -r slug; do
+        [ -n "$slug" ] || continue
+        # The file is engine-written, but revalidate each line before acting on it.
+        case "$slug" in
+            default) cmd_open_default >/dev/null ;;
+            *[!a-z0-9]*) : ;;
+            *) cmd_open "$slug" ;;
+        esac
+    done < "$SIGNIN_FILE"
+    rm -f "$SIGNIN_FILE"
+    printf '{"restored":%s}' "$out"
+}
+
+cmd_signin_state() {  # what a pending restore would reopen ([] when none pending) —
+    # lets the dashboard re-offer Restore after an app relaunch mid-sign-in.
+    if [ -f "$SIGNIN_FILE" ]; then
+        printf '{"pending":%s}' "$(json_slug_array < "$SIGNIN_FILE")"
+    else
+        printf '{"pending":[]}'
+    fi
+}
+
+cmd_signin_clear() {  # drop the pending restore without reopening anything
+    rm -f "$SIGNIN_FILE"
+    printf 'ok'
+}
+
+cmd_remotetty() {  # the tty of an ATTACHED screen client for claude-<slug>, or nothing.
+    # The CLIENT process reads `screen -x claude-<slug>` with a real tty (the
+    # detached SERVER is uppercase SCREEN on tty "??", which both guards exclude).
+    # Exact-token match on the session name so claude-work never matches
+    # claude-work2. Lets the stacker place the Terminal window already attached
+    # to a profile's Claude Code session instead of opening a duplicate.
+    local slug="${1:?}" tty
+    case "$slug" in ''|*[!a-z0-9]*) return 0 ;; esac
+    tty=$(ps axo tty=,command= | awk -v s="claude-$slug" '
+        $2 == "screen" || $2 ~ /\/screen$/ {
+            for (i = 3; i <= NF; i++) if ($i == s) { print $1; exit }
+        }' | head -n 1)
+    [ -n "$tty" ] && [ "$tty" != "??" ] && printf '/dev/%s' "${tty#/dev/}"
+    true
+}
+
 cmd_copy() {  # put text on the clipboard for the dashboard's Copy buttons (macOS only)
     command -v pbcopy >/dev/null 2>&1 || return 0
     printf '%s' "${1:-}" | pbcopy
@@ -741,6 +847,11 @@ case "${1:-stats}" in
     autotick) cmd_autotick ;;
     remoteinfo) cmd_remoteinfo "${2:?}" ;;
     remotestop) cmd_remote_stop "${2:?}" ;;
+    remotetty) cmd_remotetty "${2:?}" ;;
+    signin) cmd_signin "${2:?}" ;;
+    signinrestore) cmd_signin_restore ;;
+    signinstate) cmd_signin_state ;;
+    signinclear) cmd_signin_clear ;;
     copy) cmd_copy "${2:-}" ;;
 esac
 fi
