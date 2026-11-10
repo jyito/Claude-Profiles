@@ -49,8 +49,8 @@ final class StackPlanTests: XCTestCase {
         let frames = stackFrames(in: screen, count: 4)
         XCTAssertEqual(frames[0].minX, screen.minX, accuracy: 0.5)
         XCTAssertEqual(frames[0].maxY, screen.maxY, accuracy: 0.5)
-        XCTAssertLessThan(frames[0].minX, frames[1].minX)          // row 0: left → right
-        XCTAssertGreaterThan(frames[0].minY, frames[2].minY)       // row 1 sits below row 0
+        XCTAssertTrue(frames[0].minX < frames[1].minX, "row 0 should run left to right")          // row 0: left → right
+        XCTAssertTrue(frames[0].minY > frames[2].minY, "row 1 should sit below row 0")       // row 1 sits below row 0
     }
 
     func testEqualTileSizesPerLayout() async throws {
