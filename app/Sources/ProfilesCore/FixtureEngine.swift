@@ -114,4 +114,27 @@ public final class FixtureEngine: EngineRunning, @unchecked Sendable {
         remoteTtySlugs.append(slug)
         return remoteTtyValue
     }
+
+    // MARK: Routed sign-in (v0.8)
+
+    /// Records each slug passed to `signInRoute`.
+    public private(set) var signInRouteCalls: [String] = []
+    /// Canned pending target returned by `signInTarget`.
+    public var signInTargetValue: String?
+    public private(set) var signInTargetClearCalls = 0
+
+    public func signInRoute(_ slug: String) async throws {
+        if shouldThrow { throw EngineError.nonZeroExit(1) }
+        signInRouteCalls.append(slug)
+        signInTargetValue = slug
+    }
+    public func signInTarget() async throws -> String? {
+        if shouldThrow { throw EngineError.nonZeroExit(1) }
+        return signInTargetValue
+    }
+    public func signInTargetClear() async throws {
+        if shouldThrow { throw EngineError.nonZeroExit(1) }
+        signInTargetClearCalls += 1
+        signInTargetValue = nil
+    }
 }

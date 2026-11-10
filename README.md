@@ -34,7 +34,7 @@ That means:
 ## Features
 
 - **One-click profiles** — create a profile from a dialog; a native app appears instantly with the real Claude icon. Sign in once; it's permanent.
-- **Live dashboard** — a native **SwiftUI** split-view app: a permanent vibrant sidebar, a KPI strip, and master-detail profile pages with hero trend charts and a handle-leak verdict. Live cards show each instance's CPU, memory, process count, terminals, and disk, with rolling sparklines and a leak gauge, refreshed every 2 seconds. Stats are strictly per-instance: one account's numbers can never bleed into another's.
+- **Live dashboard** — a native **SwiftUI** tile-or-list app: a KPI strip, a card grid (or dense list), and master-detail profile pages with hero trend charts and a handle-leak verdict. Live cards show each instance's CPU, memory, process count, terminals, and disk, with rolling sparklines and a leak gauge, refreshed every 2 seconds. Stats are strictly per-instance: one account's numbers can never bleed into another's.
 - **Per-instance drill-down** — expand any card in place. A *running* profile reveals a live table of its terminal sessions (device, command, idle time) with one-click close; a *stopped* profile reveals granular cleanup tiers — Caches / GPU / Logs / Everything. A **Throttle** control lowers a CPU-hogging instance's priority without quitting it.
 
   <!-- SCREENSHOT — save as assets/drilldown.png (≥1000px wide). An expanded running card showing the terminals table; crop to the card. -->
@@ -43,7 +43,7 @@ That means:
 - **Menu-bar switcher** — a menu-bar item lists every account; click one to focus or launch it without opening the dashboard.
 - **Keyboard switching** — **⌘⌥1–9** focuses an instance while the dashboard is up; for the same chord *globally*, a copy-paste [Hammerspoon recipe](docs/HOTKEYS.md) drives the headless `engine focus` (your own optional tool — the app ships no global hooks).
 - **Automatic maintenance (opt-in)** — Settings can auto-clear caches on stopped profiles over a size limit, auto-close terminals idle past a threshold, and auto-restart a leaking instance. All off by default and local-only.
-- **Show Window** — with many instances and many windows, one click raises every window of a *specific* instance. It targets the process by PID via `NSRunningApplication`, which works even though all instances share Claude's bundle identifier — and needs no Accessibility permissions.
+- **Show Window** — with many instances and many windows, one click raises every window of a *specific* instance. It targets the process by PID via `NSRunningApplication`, which works even though all instances share Claude's bundle identifier — and needs no Accessibility permissions (only **Stack** does).
 - **Cleanup utilities** — graceful quit, force-quit of a full process tree (releases stuck terminals), per-profile cache clearing, and an Emergency Stop killswitch. Cache clearing only ever deletes regenerable Electron caches; it refuses to run against a live instance and never touches sign-ins.
 - **Safe removal** — deleting a profile's app takes one confirmation; deleting its saved login requires literally typing `DELETE`.
 - **Scriptable, too** — every action the dashboard performs is also reachable from `cli/claude-profiles.sh`, which drives the same `engine.sh` backend, so the whole tool is usable headlessly.
@@ -121,10 +121,10 @@ flowchart TD
 ## Known limitations
 
 - **Gatekeeper**: releases (v0.6.0+) are signed with an Apple Developer ID and notarized, so they open with a normal double-click (just the standard one-time "downloaded from the internet" confirmation). Apps the manager generates locally carry no quarantine and open normally.
-- **Deep-link logins**: macOS routes `claude://` callbacks to one instance. If a browser login lands in the wrong window, use the login page's copy-code option. Once per profile.
+- **Deep-link logins**: macOS routes `claude://` callbacks to one instance, with no chooser. Use **Sign in with this account** on a card: with **Settings → "Send sign-in links to the right Claude"** on, Claude Profiles forwards the login to that account (nothing is closed); with it off, the other instances are closed for the sign-in and restored afterwards. The login page's copy-code option still works either way.
 - **Spaces**: "Assign to Desktop" is unreliable across instances sharing a bundle ID; drag windows to Spaces manually and macOS remembers per session.
 - **Memory**: every instance is a full Electron app. The dashboard exists partly so you can see exactly what that costs.
-- **Show Window** raises all of an instance's windows (not one specific window); per-window control would require Accessibility permissions.
+- **Show Window** raises all of an instance's windows (not one specific window). **Stack** moves each Claude Desktop instance's main window and needs the Accessibility permission (asked once, only if you use Stack).
 - **Running instances are all named "Claude"** in the menu bar, ⌘-Tab, and the running Dock icon — because every profile launches the real, unmodified `Claude.app`. The per-profile **badge** distinguishes the launcher icons, and **Show Window** raises a specific instance by PID. Giving each running app its own name would require a renamed copy of Claude.app per profile, which breaks its code signature, defeats auto-updates, and (verified) trips Electron's integrity checks — see [docs/branded-apps-spike.md](docs/branded-apps-spike.md). It's a deliberate trade-off of the zero-modification design.
 
 ## Roadmap
@@ -134,6 +134,7 @@ flowchart TD
 - [x] Keyboard profile switching (⌘⌥1–9 + optional global Hammerspoon recipe)
 - [x] Developer ID signing + notarization for friction-free public distribution (v0.6.0)
 - [x] Homebrew cask — `brew install --cask jyito/tap/claude-profiles` (v0.6.0)
+- [x] Sign-in link routing, Stack (side-by-side windows), tile-first window (v0.8.0)
 - [x] Native SwiftUI dashboard — split-view, hero trend charts, leak verdict, MenuBarExtra switcher (v0.7.0; replaces the AppleScriptObjC + WebView host)
 
 ## Contributing

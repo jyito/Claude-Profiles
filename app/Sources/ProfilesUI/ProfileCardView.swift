@@ -5,7 +5,7 @@ import ProfilesCore
 /// these to engine verbs (accounting for the default instance) and confirms the
 /// disruptive ones before firing.
 public enum CardAction: Sendable, Equatable {
-    case quit, force, restart
+    case quit, force, restart, signIn
 }
 
 /// One profile card. Renders the running / stopped / default layout off a
@@ -137,6 +137,8 @@ public struct ProfileCardView: View {
                 .accessibilityIdentifier("card-\(stat.effSlug)-overflow")
         } else {
             Menu {
+                Button("Sign in with this account") { onCardAction(.signIn) }
+                Divider()
                 Button("Restart") { onCardAction(.restart) }
                 Button("Quit") { onCardAction(.quit) }
                 Button("Force Quit", role: .destructive) { onCardAction(.force) }

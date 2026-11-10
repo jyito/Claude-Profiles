@@ -793,6 +793,51 @@ cmd_signin_clear() {  # drop the pending restore without reopening anything
     printf 'ok'
 }
 
+# ── Routed sign-in (no instances closed) ─────────────────────────────────────
+# The router mode: Claude Profiles registers as the claude:// handler and forwards
+# the callback to the instance the user is signing in. The engine's only part is
+# remembering WHICH instance — a slug plus a timestamp, nothing else. The callback
+# URL itself (which carries an auth code) never reaches the engine or any file.
+SIGNIN_ROUTE_FILE="$INSTANCES_DIR/.runtime/signin-target"
+SIGNIN_ROUTE_TTL="${SIGNIN_ROUTE_TTL:-600}"   # seconds a pending target stays valid
+
+cmd_signin_route() {  # mark <slug|default> as the sign-in target and make sure it is up.
+    # Closes nothing. Emits {"target":"…"}.
+    local target="${1:?}"
+    case "$target" in default) : ;; ''|*[!a-z0-9]*) printf 'err invalid slug'; return 0 ;; esac
+    if [ "$target" != "default" ] && ! wrapper_for_slug "$target" >/dev/null; then
+        printf 'err not found'; return 0
+    fi
+    mkdir -p "$(dirname "$SIGNIN_ROUTE_FILE")"
+    printf '%s %s\n' "$target" "$(date +%s)" > "$SIGNIN_ROUTE_FILE"
+    if [ "$target" = "default" ]; then
+        [ -z "$(cmd_defaultpid)" ] && cmd_open_default >/dev/null
+    else
+        [ -z "$(main_pids_for_dir "$INSTANCES_DIR/$target")" ] && cmd_open "$target" >/dev/null
+    fi
+    printf '{"target":"%s"}' "$target"
+}
+
+cmd_signin_target() {  # the pending routed target, or null when none / expired / malformed
+    local slug ts now
+    if [ -f "$SIGNIN_ROUTE_FILE" ]; then
+        read -r slug ts < "$SIGNIN_ROUTE_FILE"
+        now=$(date +%s)
+        case "$slug" in ''|default) : ;; *[!a-z0-9]*) slug="" ;; esac
+        case "$ts" in ''|*[!0-9]*) slug="" ;; esac
+        if [ -n "$slug" ] && [ $((now - ts)) -le "$SIGNIN_ROUTE_TTL" ]; then
+            printf '{"target":"%s"}' "$slug"
+            return 0
+        fi
+    fi
+    printf '{"target":null}'
+}
+
+cmd_signin_target_clear() {  # forget the pending routed target (after the callback lands)
+    rm -f "$SIGNIN_ROUTE_FILE"
+    printf 'ok'
+}
+
 cmd_remotetty() {  # the tty of an ATTACHED screen client for claude-<slug>, or nothing.
     # The CLIENT process reads `screen -x claude-<slug>` with a real tty (the
     # detached SERVER is uppercase SCREEN on tty "??", which both guards exclude).
@@ -852,6 +897,9 @@ case "${1:-stats}" in
     signinrestore) cmd_signin_restore ;;
     signinstate) cmd_signin_state ;;
     signinclear) cmd_signin_clear ;;
+    signinroute) cmd_signin_route "${2:?}" ;;
+    signintarget) cmd_signin_target ;;
+    signintargetclear) cmd_signin_target_clear ;;
     copy) cmd_copy "${2:-}" ;;
 esac
 fi

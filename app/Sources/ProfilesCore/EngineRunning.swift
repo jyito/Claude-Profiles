@@ -62,6 +62,17 @@ public protocol EngineRunning: Sendable {
     /// `screen` session (`remotetty <slug>`), or nil when none is attached —
     /// lets the stacker place the existing window instead of opening a duplicate.
     func remoteTty(_ slug: String) async throws -> String?
+
+    // Routed sign-in (no instances closed). The engine only remembers WHICH
+    // instance the user is signing in; the callback URL never reaches it.
+
+    /// Mark `slug` as the pending sign-in target and make sure it is running
+    /// (`signinroute`). Closes nothing.
+    func signInRoute(_ slug: String) async throws
+    /// The pending routed target, or nil when none / expired (`signintarget`).
+    func signInTarget() async throws -> String?
+    /// Forget the pending routed target (`signintargetclear`).
+    func signInTargetClear() async throws
 }
 
 public extension EngineRunning {
@@ -79,4 +90,7 @@ public extension EngineRunning {
     func signInState() async throws -> [String] { [] }
     func signInClear() async throws {}
     func remoteTty(_ slug: String) async throws -> String? { nil }
+    func signInRoute(_ slug: String) async throws {}
+    func signInTarget() async throws -> String? { nil }
+    func signInTargetClear() async throws {}
 }

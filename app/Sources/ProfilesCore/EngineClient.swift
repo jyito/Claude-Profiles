@@ -157,6 +157,24 @@ public struct EngineClient: EngineRunning {
         }.value
     }
 
+    public func signInRoute(_ slug: String) async throws {
+        // Prints `{"target":…}` or `err …`; `run` surfaces the err token.
+        try await run(["signinroute", slug])
+    }
+
+    public func signInTarget() async throws -> String? {
+        let path = enginePath
+        return try await Task.detached(priority: .utility) {
+            let (out, code) = try Self.invoke(path, ["signintarget"])
+            if code != 0 { throw EngineError.nonZeroExit(code) }
+            return try JSONDecoder().decode(SignInTargetPayload.self, from: out).target
+        }.value
+    }
+
+    public func signInTargetClear() async throws {
+        try await run(["signintargetclear"])
+    }
+
     public func mainPid(_ slug: String) async throws -> Int32? {
         let path = enginePath
         // The default instance has no slug-dir to match — `defaultpid` finds the

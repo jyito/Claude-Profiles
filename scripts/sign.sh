@@ -31,7 +31,7 @@ DMG="dist/Claude-Profiles.dmg"
 [ -d "$APP" ] || { echo "missing $APP — run scripts/build.sh first" >&2; exit 1; }
 
 echo "==> Signing the app (hardened runtime)"
-codesign --deep --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$APP"
+codesign --deep --force --options runtime --timestamp --entitlements packaging/entitlements.plist --sign "$SIGN_IDENTITY" "$APP"
 codesign --verify --strict --verbose=2 "$APP"
 
 echo "==> Repacking the signed app into the zip + dmg"

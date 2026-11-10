@@ -213,6 +213,37 @@ public final class StatsStore {
         signInMode = SignInMode(target: nil, closed: pending)
     }
 
+    // MARK: Routed sign-in (callback router)
+
+    /// Mark `slug` as the sign-in target and make sure it is running; nothing is
+    /// closed. Returns whether the engine accepted it (error via `lastError`).
+    @discardableResult
+    public func routeSignIn(_ slug: String) async -> Bool {
+        do {
+            try await engine.signInRoute(slug)
+            lastError = nil
+            await refreshOnce()
+            return true
+        } catch {
+            lastError = String(describing: error)
+            await refreshOnce()
+            return false
+        }
+    }
+
+    /// The pending routed target, or nil. A transport error reads as "no target"
+    /// (the router then falls back to the chooser) and is surfaced via `lastError`.
+    public func signInTarget() async -> String? {
+        do { return try await engine.signInTarget() }
+        catch { lastError = String(describing: error); return nil }
+    }
+
+    /// Forget the pending routed target once its callback has been forwarded.
+    public func clearSignInTarget() async {
+        do { try await engine.signInTargetClear() }
+        catch { lastError = String(describing: error) }
+    }
+
     /// The tty of a Terminal window already attached to `slug`'s Claude Code
     /// session, for the window stacker. nil = none attached (or transport error,
     /// surfaced via `lastError`) — the stacker opens a fresh window instead.

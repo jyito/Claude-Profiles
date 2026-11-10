@@ -392,6 +392,22 @@ check "signin rejects traversal slug"  "[ \"\$('$ENGINE' signin '../x')\" = 'err
 check "signin rejects unknown profile" "[ \"\$('$ENGINE' signin nosuch)\" = 'err not found' ]"
 rm -f "$WORK/signin-kill.log" "$WORK/signin-kill2.log" "$WORK/signin-out.json" "$WORK/signin-out2.json"
 
+echo "== routed sign-in (target marker; nothing closed) =="
+rm -f "$WORK/instances/.runtime/signin-target" "$WORK/open.log"
+check "signintarget is null with nothing pending" "[ \"\$('$ENGINE' signintarget)\" = '{\"target\":null}' ]"
+check "signinroute records the target" "[ \"\$('$ENGINE' signinroute business)\" = '{\"target\":\"business\"}' ] && grep -q '^business [0-9]' '$WORK/instances/.runtime/signin-target'"
+check "signinroute closes nothing and launches nothing when target is up" "[ ! -f '$WORK/open.log' ]"
+check "signintarget returns the pending slug" "[ \"\$('$ENGINE' signintarget)\" = '{\"target\":\"business\"}' ]"
+check "signintarget expires past the TTL" "printf 'business 1000\n' > '$WORK/instances/.runtime/signin-target'; [ \"\$('$ENGINE' signintarget)\" = '{\"target\":null}' ]"
+check "signintarget rejects a tampered slug" "printf '../x %s\n' \"\$(date +%s)\" > '$WORK/instances/.runtime/signin-target'; [ \"\$('$ENGINE' signintarget)\" = '{\"target\":null}' ]"
+check "signintarget rejects a malformed timestamp" "printf 'business abc\n' > '$WORK/instances/.runtime/signin-target'; [ \"\$('$ENGINE' signintarget)\" = '{\"target\":null}' ]"
+check "signinroute default is allowed" "[ \"\$('$ENGINE' signinroute default)\" = '{\"target\":\"default\"}' ]"
+check "signinroute rejects traversal slug"  "[ \"\$('$ENGINE' signinroute '../x')\" = 'err invalid slug' ]"
+check "signinroute rejects unknown profile" "[ \"\$('$ENGINE' signinroute nosuch)\" = 'err not found' ]"
+check "signintargetclear forgets the target" "[ \"\$('$ENGINE' signintargetclear)\" = ok ] && [ \"\$('$ENGINE' signintarget)\" = '{\"target\":null}' ]"
+check "route file never holds a URL" "'$ENGINE' signinroute business >/dev/null; ! grep -qi 'claude://' '$WORK/instances/.runtime/signin-target'"
+rm -f "$WORK/instances/.runtime/signin-target" "$WORK/open.log"
+
 echo "== remotetty (attached Claude Code terminal) =="
 # The CLIENT (`screen -x claude-<slug>`, lowercase, real tty) marks attachment;
 # the detached SERVER (uppercase SCREEN, tty ??) must never match.
