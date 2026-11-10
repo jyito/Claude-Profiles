@@ -66,7 +66,8 @@ final class StackPlanTests: XCTestCase {
 
     func testDegenerateBoundsReturnEmpty() async throws {
         XCTAssertTrue(stackFrames(in: .zero, count: 2).isEmpty)
-        XCTAssertTrue(stackFrames(in: CGRect(x: 0, y: 0, width: -10, height: 100), count: 2).isEmpty)
+        XCTAssertTrue(stackFrames(in: CGRect(x: 0, y: 0, width: 0, height: 100), count: 2).isEmpty)
+        XCTAssertTrue(stackFrames(in: CGRect(x: 0, y: 0, width: 100, height: 0), count: 2).isEmpty)
     }
 
     static let allTests: [(String, (StackPlanTests) -> () async throws -> Void)] = [

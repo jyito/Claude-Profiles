@@ -115,6 +115,7 @@ final class SignInTests: XCTestCase {
         let tmp = try fakeEngine("""
         [ "$1" = signinrestore ] && printf '%s' '{"restored":["default"]}'
         [ "$1" = signinstate ] && printf '%s' '{"pending":[]}'
+        exit 0
         """)
         defer { try? FileManager.default.removeItem(at: tmp) }
         let client = EngineClient(enginePath: tmp.path)
