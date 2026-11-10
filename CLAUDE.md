@@ -15,9 +15,9 @@ pages with hero trend charts + leak verdict, live cards with sparklines + a
 handle-leak gauge, a MenuBarExtra switcher, Show Window focusing, cleanup
 utilities) built with the Command Line Tools — no Xcode — and signed +
 notarized. The bash `engine.sh` is still the data/actions backend. Status:
-**v0.8.0 — sign-in routing + Stack + tile-first window (UNVERIFIED on a Mac:
-the Swift/UI layer of this release was written without a Swift toolchain; treat
-it as unproven until built and QA'd).** v0.7.0 was the native SwiftUI cutover,
+**v0.8.0 — sign-in routing + Stack + tile-first window (builds, Core tests and
+snapshot goldens pass on the macOS CI runner; live behavior — router delivery,
+Stack, permissions — is still UNVERIFIED by hand on a Mac).** v0.7.0 was the native SwiftUI cutover,
 replacing the old AppleScriptObjC + WebView host; maintainer-verified on macOS,
 CI green, public repo `jyito/Claude-Profiles`.
 
