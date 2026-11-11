@@ -86,6 +86,19 @@ jobs:
         # matrix, which is for build + sign + notarize. Layer-1 logic still runs everywhere.
         if: github.event_name == 'pull_request'
         run: cd app && swift run ProfilesSnapshotTests
+      - name: record snapshots for review (only when the gate failed)
+        # A failed gate leaves the new/changed goldens as an artifact so a
+        # contributor without a Mac can commit them after eyeballing the PNGs.
+        # This re-renders on the CI runner, the same platform the gate compares on.
+        if: failure() && github.event_name == 'pull_request'
+        run: cd app && SNAPSHOT_RECORD=1 swift run ProfilesSnapshotTests
+      - name: upload recorded snapshots
+        if: failure() && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: recorded-snapshots
+          path: app/Tests/__Snapshots__/
+          retention-days: 7
       - name: test suite
         run: bash tests/run-tests.sh
       - name: regenerate icon (sips reads SVG natively)

@@ -361,6 +361,75 @@ rm -f "$WORK/screen-quit.log" "$WORK/PWNED"
 check "remotestop rejects injection slug"   "\"\$ENGINE\" remotestop \"x'; touch '$WORK/PWNED'; echo '\" >/dev/null 2>&1; [ ! -f '$WORK/PWNED' ] && [ ! -f '$WORK/screen-quit.log' ]"
 rm -f "$WORK/screen-quit.log"
 
+echo "== sign-in routing (close others so claude:// has one home) =="
+# World per the ps shim: business (pid 100) and the default (pid 200) both run.
+# signin business must snapshot + close ONLY the default. `kill` is a builtin —
+# PATH shims can't intercept it — so these go through a sourced shell where a
+# kill() FUNCTION shadows the builtin; no real process is ever signalled.
+check "signin closes others and records them" "bash -c '
+  kill() { printf \"%s\\n\" \"\$*\" >> \"$WORK/signin-kill.log\"; }
+  . \"$ENGINE\"
+  rm -f \"$WORK/signin-kill.log\"
+  cmd_signin business > \"$WORK/signin-out.json\"
+' && grep -q '\"target\":\"business\"' '$WORK/signin-out.json' \
+  && grep -q '\"closed\":\[\"default\"\]' '$WORK/signin-out.json' \
+  && grep -q -- '-TERM 200' '$WORK/signin-kill.log' \
+  && ! grep -q -- ' 100' '$WORK/signin-kill.log'"
+check "signin wrote the restore list" "grep -qx default '$WORK/instances/.runtime/signin-restore'"
+check "signinstate reports the pending restore" "[ \"\$('$ENGINE' signinstate)\" = '{\"pending\":[\"default\"]}' ]"
+rm -f "$WORK/open.log"
+check "signinrestore reopens what was closed" "[ \"\$('$ENGINE' signinrestore)\" = '{\"restored\":[\"default\"]}' ] && grep -q -- '-n -a $WORK/Claude.app' '$WORK/open.log'"
+check "restore clears pending (and is idempotent)" "[ \"\$('$ENGINE' signinstate)\" = '{\"pending\":[]}' ] && [ \"\$('$ENGINE' signinrestore)\" = '{\"restored\":[]}' ]"
+check "signin default closes the profile instead" "bash -c '
+  kill() { printf \"%s\\n\" \"\$*\" >> \"$WORK/signin-kill2.log\"; }
+  . \"$ENGINE\"
+  rm -f \"$WORK/signin-kill2.log\"
+  cmd_signin default > \"$WORK/signin-out2.json\"
+' && grep -q '\"closed\":\[\"business\"\]' '$WORK/signin-out2.json' \
+  && grep -q -- '-TERM 100' '$WORK/signin-kill2.log'"
+check "signinclear drops pending without reopening" "rm -f '$WORK/open.log'; [ \"\$('$ENGINE' signinclear)\" = ok ] && [ \"\$('$ENGINE' signinstate)\" = '{\"pending\":[]}' ] && [ ! -f '$WORK/open.log' ]"
+check "signin rejects traversal slug"  "[ \"\$('$ENGINE' signin '../x')\" = 'err invalid slug' ]"
+check "signin rejects unknown profile" "[ \"\$('$ENGINE' signin nosuch)\" = 'err not found' ]"
+rm -f "$WORK/signin-kill.log" "$WORK/signin-kill2.log" "$WORK/signin-out.json" "$WORK/signin-out2.json"
+
+echo "== routed sign-in (target marker; nothing closed) =="
+rm -f "$WORK/instances/.runtime/signin-target" "$WORK/open.log"
+check "signintarget is null with nothing pending" "[ \"\$('$ENGINE' signintarget)\" = '{\"target\":null}' ]"
+check "signinroute records the target" "[ \"\$('$ENGINE' signinroute business)\" = '{\"target\":\"business\"}' ] && grep -q '^business [0-9]' '$WORK/instances/.runtime/signin-target'"
+check "signinroute closes nothing and launches nothing when target is up" "[ ! -f '$WORK/open.log' ]"
+check "signintarget returns the pending slug" "[ \"\$('$ENGINE' signintarget)\" = '{\"target\":\"business\"}' ]"
+check "signintarget expires past the TTL" "printf 'business 1000\n' > '$WORK/instances/.runtime/signin-target'; [ \"\$('$ENGINE' signintarget)\" = '{\"target\":null}' ]"
+check "signintarget rejects a tampered slug" "printf '../x %s\n' \"\$(date +%s)\" > '$WORK/instances/.runtime/signin-target'; [ \"\$('$ENGINE' signintarget)\" = '{\"target\":null}' ]"
+check "signintarget rejects a malformed timestamp" "printf 'business abc\n' > '$WORK/instances/.runtime/signin-target'; [ \"\$('$ENGINE' signintarget)\" = '{\"target\":null}' ]"
+check "signinroute default is allowed" "[ \"\$('$ENGINE' signinroute default)\" = '{\"target\":\"default\"}' ]"
+check "signinroute rejects traversal slug"  "[ \"\$('$ENGINE' signinroute '../x')\" = 'err invalid slug' ]"
+check "signinroute rejects unknown profile" "[ \"\$('$ENGINE' signinroute nosuch)\" = 'err not found' ]"
+check "signintargetclear forgets the target" "[ \"\$('$ENGINE' signintargetclear)\" = ok ] && [ \"\$('$ENGINE' signintarget)\" = '{\"target\":null}' ]"
+check "route file never holds a URL" "'$ENGINE' signinroute business >/dev/null; ! grep -qi 'claude://' '$WORK/instances/.runtime/signin-target'"
+rm -f "$WORK/instances/.runtime/signin-target" "$WORK/open.log"
+
+echo "== remotetty (attached Claude Code terminal) =="
+# The CLIENT (`screen -x claude-<slug>`, lowercase, real tty) marks attachment;
+# the detached SERVER (uppercase SCREEN, tty ??) must never match.
+cp "$WORK/shims/ps" "$WORK/shims/ps.bak"
+cat > "$WORK/shims/ps" <<'PSEOF'
+#!/bin/bash
+case "$*" in
+  *"tty=,command="*)
+    printf 'ttys004       screen -x claude-work\n'
+    printf 'ttys005       screen -x claude-work2\n'
+    printf '??            SCREEN -dmS claude-other bash -lc x\n'
+    ;;
+esac
+PSEOF
+chmod +x "$WORK/shims/ps"
+check "remotetty finds the exact session tty" "[ \"\$('$ENGINE' remotetty work)\" = /dev/ttys004 ]"
+check "remotetty token-safe (work vs work2)"  "[ \"\$('$ENGINE' remotetty work2)\" = /dev/ttys005 ]"
+check "remotetty ignores the detached server" "[ -z \"\$('$ENGINE' remotetty other)\" ]"
+check "remotetty empty for unknown session"   "[ -z \"\$('$ENGINE' remotetty nosuch)\" ]"
+check "remotetty rejects bad slug quietly"    "[ -z \"\$('$ENGINE' remotetty '../x')\" ]"
+mv "$WORK/shims/ps.bak" "$WORK/shims/ps"
+
 echo "== engine copy (clipboard bridge) =="
 cat > "$WORK/shims/pbcopy" <<PB
 #!/bin/bash

@@ -69,4 +69,72 @@ public final class FixtureEngine: EngineRunning, @unchecked Sendable {
         mainPidSlugs.append(slug)
         return mainPidValue
     }
+
+    // MARK: Sign-in routing + stacking (v0.8)
+
+    /// Canned `signIn` result keyed off the requested slug; `signInClosed` is what
+    /// the fake engine "closed" (empty simulates nothing-else-running).
+    public var signInClosed: [String] = ["default"]
+    /// Records each slug passed to `signIn`.
+    public private(set) var signInCalls: [String] = []
+    /// Canned pending list returned by `signInState` (simulates an app relaunch
+    /// mid-sign-in when non-empty).
+    public var signInPendingList: [String] = []
+    /// Counts `signInRestore` / `signInClear` calls so tests can assert routing.
+    public private(set) var signInRestoreCalls = 0
+    public private(set) var signInClearCalls = 0
+    /// Canned tty returned by `remoteTty` (nil = no attached Terminal window).
+    public var remoteTtyValue: String?
+    /// Records each slug passed to `remoteTty`.
+    public private(set) var remoteTtySlugs: [String] = []
+
+    public func signIn(_ slug: String) async throws -> SignInResult {
+        if shouldThrow { throw EngineError.nonZeroExit(1) }
+        signInCalls.append(slug)
+        return SignInResult(target: slug, closed: signInClosed)
+    }
+    public func signInRestore() async throws -> [String] {
+        if shouldThrow { throw EngineError.nonZeroExit(1) }
+        signInRestoreCalls += 1
+        let restored = signInPendingList.isEmpty ? signInClosed : signInPendingList
+        signInPendingList = []
+        return restored
+    }
+    public func signInState() async throws -> [String] {
+        if shouldThrow { throw EngineError.nonZeroExit(1) }
+        return signInPendingList
+    }
+    public func signInClear() async throws {
+        if shouldThrow { throw EngineError.nonZeroExit(1) }
+        signInClearCalls += 1
+        signInPendingList = []
+    }
+    public func remoteTty(_ slug: String) async throws -> String? {
+        if shouldThrow { throw EngineError.nonZeroExit(1) }
+        remoteTtySlugs.append(slug)
+        return remoteTtyValue
+    }
+
+    // MARK: Routed sign-in (v0.8)
+
+    /// Records each slug passed to `signInRoute`.
+    public private(set) var signInRouteCalls: [String] = []
+    /// Canned pending target returned by `signInTarget`.
+    public var signInTargetValue: String?
+    public private(set) var signInTargetClearCalls = 0
+
+    public func signInRoute(_ slug: String) async throws {
+        if shouldThrow { throw EngineError.nonZeroExit(1) }
+        signInRouteCalls.append(slug)
+        signInTargetValue = slug
+    }
+    public func signInTarget() async throws -> String? {
+        if shouldThrow { throw EngineError.nonZeroExit(1) }
+        return signInTargetValue
+    }
+    public func signInTargetClear() async throws {
+        if shouldThrow { throw EngineError.nonZeroExit(1) }
+        signInTargetClearCalls += 1
+        signInTargetValue = nil
+    }
 }

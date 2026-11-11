@@ -27,80 +27,81 @@ struct ProfilesApp: App {
     /// or cancel.
     @State private var pendingCardAction: PendingCardAction?
 
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    /// Whether Claude Profiles is the registered `claude://` handler (the router).
+    @State private var routingEnabled = URLRouter.isEnabled()
+
     var body: some Scene {
         WindowGroup("Claude Profiles") {
-            NavigationSplitView {
-                SidebarView(profiles: store.profiles, selection: $selection)
-                    // Selecting a sidebar row pushes that profile's detail page;
-                    // clearing it pops back to the grid. The selection→navPath sync
-                    // lives in `DashboardView` so the grid's "Details ›" and the
-                    // sidebar share one path.
-                    .background(VisualEffectView())
-                    .navigationSplitViewColumnWidth(min: 220, ideal: 240, max: 280)
-                    .safeAreaInset(edge: .bottom) {
-                        Button {
-                            activeSheet = .newProfile
+            // Tile-first: no sidebar. The overview is the card grid or the list;
+            // a card's "Details ›" (or a list row) pushes the detail page.
+            DashboardView(store: store, selection: $selection, navPath: $navPath,
+                          viewMode: $viewMode,
+                          onRemote: { slug in presentRemote(slug) },
+                          onNewProfile: { activeSheet = .newProfile },
+                          onCardAction: { action, slug in handleCardAction(action, slug) })
+                .navigationTitle("Profiles")
+                .toolbar {
+                    ToolbarItem(placement: .navigation) {
+                        Image(systemName: "square.on.square")
+                            .foregroundStyle(Theme.coral)
+                    }
+                    ToolbarItem(placement: .principal) {
+                        Picker("View", selection: $viewMode) {
+                            ForEach(ProfileViewMode.allCases) { mode in
+                                Image(systemName: mode.symbol)
+                                    .accessibilityLabel(mode.label)
+                                    .tag(mode)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .accessibilityIdentifier("toolbar-viewmode")
+                    }
+                    ToolbarItemGroup(placement: .primaryAction) {
+                        Menu {
+                            Button("Desktop windows") { arrange(.desktop) }
+                            Button("Terminals") { arrange(.terminals) }
+                            Divider()
+                            Button("Everything") { arrange(.both) }
                         } label: {
+                            Label("Stack", systemImage: "rectangle.split.2x1")
+                        }
+                        .accessibilityIdentifier("toolbar-stack")
+                        .pointerCursor()
+
+                        Button { activeSheet = .cleanup } label: {
+                            Label("Cleanup", systemImage: "trash")
+                        }
+                        .accessibilityIdentifier("toolbar-cleanup")
+                        .pointerCursor()
+
+                        Button { presentSettings() } label: {
+                            Label("Settings", systemImage: "gearshape")
+                        }
+                        .keyboardShortcut(",", modifiers: .command)
+                        .accessibilityIdentifier("toolbar-settings")
+                        .pointerCursor()
+
+                        Button { activeSheet = .newProfile } label: {
                             Label("New Profile", systemImage: "plus")
-                                .frame(maxWidth: .infinity)
                         }
-                        .buttonStyle(PillButtonStyle(.prominentCoral))
-                        .padding(Theme.Space.md)
-                        .accessibilityIdentifier("sidebar-new-profile")
+                        .keyboardShortcut("n", modifiers: .command)
+                        .accessibilityIdentifier("toolbar-new-profile")
+                        .pointerCursor()
                     }
-            } detail: {
-                DashboardView(store: store, selection: $selection, navPath: $navPath,
-                              viewMode: $viewMode,
-                              onRemote: { slug in presentRemote(slug) },
-                              onNewProfile: { activeSheet = .newProfile },
-                              onCardAction: { action, slug in handleCardAction(action, slug) })
-                    .navigationTitle("Profiles")
-                    .toolbar {
-                        ToolbarItem(placement: .navigation) {
-                            Image(systemName: "square.on.square")
-                                .foregroundStyle(Theme.coral)
-                        }
-                        ToolbarItem(placement: .principal) {
-                            Picker("View", selection: $viewMode) {
-                                ForEach(ProfileViewMode.allCases) { mode in
-                                    Image(systemName: mode.symbol)
-                                        .accessibilityLabel(mode.label)
-                                        .tag(mode)
-                                }
-                            }
-                            .pickerStyle(.segmented)
-                            .accessibilityIdentifier("toolbar-viewmode")
-                        }
-                        ToolbarItemGroup(placement: .primaryAction) {
-                            Button { activeSheet = .cleanup } label: {
-                                Label("Cleanup", systemImage: "trash")
-                            }
-                            .accessibilityIdentifier("toolbar-cleanup")
-                            .pointerCursor()
-
-                            Button { presentSettings() } label: {
-                                Label("Settings", systemImage: "gearshape")
-                            }
-                            .keyboardShortcut(",", modifiers: .command)
-                            .accessibilityIdentifier("toolbar-settings")
-                            .pointerCursor()
-
-                            Button { activeSheet = .newProfile } label: {
-                                Label("New Profile", systemImage: "plus")
-                            }
-                            .keyboardShortcut("n", modifiers: .command)
-                            .accessibilityIdentifier("toolbar-new-profile")
-                            .pointerCursor()
-                        }
-                    }
-            }
-            .navigationSplitViewStyle(.balanced)
-            // Freely resizable: a sensible minimum (sidebar + detail; the old 1000px
-            // floor was for the retired 3-column inspector) and grow without limit.
-            .frame(minWidth: 860, maxWidth: .infinity, minHeight: 560, maxHeight: .infinity)
+                }
+            .frame(minWidth: 640, maxWidth: .infinity, minHeight: 520, maxHeight: .infinity)
             .background(Theme.canvas)
             .preferredColorScheme(.dark)
-            .onAppear { store.start() }
+            .onAppear {
+                routingEnabled = URLRouter.isEnabled()
+                store.start()
+                // Deliver `claude://` links (and any that launched us) to the router.
+                let routed = store
+                CallbackBridge.shared.handler = { url in
+                    Task { @MainActor in await CallbackRouter(store: routed).route(url) }
+                }
+            }
             .sheet(item: $activeSheet) { sheet in
                 sheetContent(for: sheet)
             }
@@ -142,6 +143,15 @@ struct ProfilesApp: App {
                 .accessibilityIdentifier("menubar-row-\(stat.effSlug)")
             }
             Divider()
+            Menu("Sign in with…") {
+                ForEach(sortProfiles(store.profiles)) { stat in
+                    Button(stat.name) { signIn(stat.effSlug, name: stat.name) }
+                        .accessibilityIdentifier("menubar-signin-\(stat.effSlug)")
+                }
+            }
+            Button("Stack Windows") { arrange(.desktop) }
+                .accessibilityIdentifier("menubar-stack")
+            Divider()
             Button("New Profile") { activeSheet = .newProfile }
                 .keyboardShortcut("n", modifiers: .command)
                 .accessibilityIdentifier("menubar-new-profile")
@@ -178,6 +188,8 @@ struct ProfilesApp: App {
             // Graceful — no confirmation needed.
             let verbs = quitVerbs(slug: slug, isDefault: isDefault)
             Task { await store.perform(verbs) }
+        case .signIn:
+            signIn(slug, name: name)
         case .force, .restart:
             pendingCardAction = PendingCardAction(
                 action: action, slug: slug, name: name, isDefault: isDefault
@@ -191,7 +203,7 @@ struct ProfilesApp: App {
         switch pending.action {
         case .force: verbs = forceVerbs(slug: pending.slug, isDefault: pending.isDefault)
         case .restart: verbs = restartVerbs(slug: pending.slug, isDefault: pending.isDefault)
-        case .quit: verbs = quitVerbs(slug: pending.slug, isDefault: pending.isDefault)
+        case .quit, .signIn: verbs = quitVerbs(slug: pending.slug, isDefault: pending.isDefault)
         }
         Task { await store.perform(verbs) }
         pendingCardAction = nil
@@ -220,6 +232,92 @@ struct ProfilesApp: App {
         }
     }
 
+    // MARK: Sign in
+
+    /// Sign in with `slug`'s account. With the router on, nothing is closed: the
+    /// target is recorded, started if needed, and brought forward — the router sends
+    /// the browser callback to it. With the router off, fall back to closing the other
+    /// running Claudes (after a confirmation) so the callback has one home.
+    @MainActor private func signIn(_ slug: String, name: String) {
+        if routingEnabled {
+            Task {
+                if await store.routeSignIn(slug), let pid = await store.mainPid(slug) {
+                    Focus.show(pid: pid)
+                }
+            }
+            return
+        }
+        let others = store.profiles.filter { $0.running && $0.effSlug != slug }
+        guard !others.isEmpty else {
+            // Nothing else running: the callback is unambiguous already.
+            Task {
+                await store.beginSignIn(slug)
+                if let pid = await store.mainPid(slug) { Focus.show(pid: pid) }
+            }
+            return
+        }
+        let alert = NSAlert()
+        alert.messageText = "Sign in to \(name)?"
+        alert.informativeText = "macOS sends the browser login to only one running Claude, so the other \(others.count == 1 ? "one is" : "\(others.count) are") closed first. Restore reopens \(others.count == 1 ? "it" : "them"), still signed in. (Turn on sign-in routing in Settings to skip this.)"
+        alert.addButton(withTitle: "Close Others and Sign in")
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        Task {
+            await store.beginSignIn(slug)
+            if let pid = await store.mainPid(slug) { Focus.show(pid: pid) }
+        }
+    }
+
+    // MARK: Stack (side-by-side windows)
+
+    enum ArrangeMode { case desktop, terminals, both }
+
+    /// Tile the running Claude windows and/or Claude Code terminals side by side on
+    /// the screen the dashboard is on.
+    @MainActor private func arrange(_ mode: ArrangeMode) {
+        Task {
+            var targets: [ArrangeTarget] = []
+            let live = sortProfiles(store.profiles)
+            if mode != .terminals {
+                for stat in live where stat.running {
+                    if let pid = await store.mainPid(stat.effSlug) {
+                        targets.append(.desktop(slug: stat.effSlug, pid: pid))
+                    }
+                }
+            }
+            if mode != .desktop {
+                for stat in live where stat.remote {
+                    targets.append(.terminal(slug: stat.effSlug, tty: await store.remoteTty(stat.effSlug)))
+                }
+            }
+            guard !targets.isEmpty else {
+                notice("Nothing to stack", "Open at least one Claude, or start a Remote terminal session, first.")
+                return
+            }
+            let needsAX = targets.contains { if case .desktop = $0 { return true } else { return false } }
+            if needsAX && !Arrange.isTrusted {
+                Arrange.requestTrust()
+                notice("Allow Accessibility to stack windows",
+                       "Claude Profiles needs Accessibility access to move Claude's windows. Turn it on in System Settings, Privacy & Security, Accessibility, then choose Stack again.")
+                return
+            }
+            let screen = NSApp.keyWindow?.screen ?? NSScreen.main
+            guard let bounds = screen?.visibleFrame else { return }
+            let result = Arrange.stack(targets, in: bounds)
+            if !result.skipped.isEmpty {
+                notice("Some windows weren't moved", result.skipped.joined(separator: "\n"))
+            }
+        }
+    }
+
+    @MainActor private func notice(_ title: String, _ text: String) {
+        let a = NSAlert()
+        a.messageText = title
+        a.informativeText = text
+        a.addButton(withTitle: "OK")
+        a.runModal()
+    }
+
     // MARK: Sheet routing
     //
     // The scene owns every engine call; the sheet views are pure (fixtures +
@@ -239,6 +337,11 @@ struct ProfilesApp: App {
         case .settings:
             SettingsSheet(
                 config: store.config,
+                routing: routingEnabled,
+                onRoutingChange: { on in
+                    if on { URLRouter.enable() } else { URLRouter.disable() }
+                    routingEnabled = URLRouter.isEnabled()
+                },
                 onChange: { key, value in Task { await store.setConfig(key, value) } },
                 onClose: { activeSheet = nil }
             )
@@ -306,6 +409,7 @@ struct PendingCardAction: Identifiable {
         case .quit: return "quit"
         case .force: return "force"
         case .restart: return "restart"
+        case .signIn: return "signin"
         }
     }
 
@@ -314,6 +418,7 @@ struct PendingCardAction: Identifiable {
         case .force: return "Force-quit \(name)?"
         case .restart: return "Restart \(name)?"
         case .quit: return "Quit \(name)?"
+        case .signIn: return "Sign in to \(name)?"
         }
     }
 
@@ -321,7 +426,7 @@ struct PendingCardAction: Identifiable {
         switch action {
         case .force: return "Unsaved work in that Claude may be lost."
         case .restart: return "Its windows and terminals close and reopen; login and chats are kept."
-        case .quit: return ""
+        case .quit, .signIn: return ""
         }
     }
 
@@ -330,6 +435,7 @@ struct PendingCardAction: Identifiable {
         case .force: return "Force Quit"
         case .restart: return "Restart"
         case .quit: return "Quit"
+        case .signIn: return "Sign in"
         }
     }
 

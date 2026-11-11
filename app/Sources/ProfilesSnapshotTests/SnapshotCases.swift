@@ -86,15 +86,14 @@ enum SnapshotCases {
                 .padding(Theme.Space.lg)
         })
 
-        // Task 8 — sidebar. The REAL hand-built `SidebarView` (it renders headlessly
-        // now — no native `List`), so the golden verifies what ships. A constant
-        // selection drives the highlight.
-        cases.append(SnapshotCase("sidebar", size: CGSize(width: 240, height: 320)) {
-            SidebarView(profiles: Fixtures.all, selection: .constant(nil))
-                .background(Theme.canvas)
+        // Sign-in banner (v0.8) — the strip shown while other instances are closed
+        // for a sign-in. Replaces the retired sidebar case.
+        cases.append(SnapshotCase("signin-banner", size: CGSize(width: 820, height: 80)) {
+            SignInBanner(targetName: "Business", closedCount: 2)
+                .padding(Theme.Space.lg)
         })
 
-        // Task 9 — full window (sidebar + KPI strip + card grid), looser tolerance.
+        // Task 9 — full window (KPI strip + card grid; tile-first, no sidebar), looser tolerance.
         let cards: [CardModel] = [
             CardModel(stat: Fixtures.defaultInstance, cpu: Fixtures.cpuSeries,
                       mem: Fixtures.memSeries, state: .calm),
@@ -106,13 +105,8 @@ enum SnapshotCases {
                       mem: Fixtures.memSeries, state: .calm),
         ]
         cases.append(SnapshotCase("window-full", size: CGSize(width: 1080, height: 720), tolerance: 0.01) {
-            HStack(spacing: 0) {
-                SidebarView(profiles: Fixtures.all, selection: .constant(nil))
-                    .background(Theme.canvas)
-                    .frame(width: 240, height: 720)
-                DashboardContent(profiles: Fixtures.all, cards: cards, selection: "research", scrolls: false)
-                    .frame(width: 840, height: 720)
-            }
+            DashboardContent(profiles: Fixtures.all, cards: cards, selection: "research", scrolls: false)
+                .frame(width: 1080, height: 720)
         })
 
         // ── Phase 3: Inspector drill-down ──────────────────────────────────────

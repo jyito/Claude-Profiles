@@ -16,13 +16,21 @@ public struct SettingsSheet: View {
     let config: ProfileConfig
     let onChange: (String, Int) -> Void
     let onClose: () -> Void
+    /// Sign-in link routing (the `claude://` router). nil hides the section, which
+    /// keeps the settings golden unchanged.
+    let routing: Bool?
+    let onRoutingChange: (Bool) -> Void
 
     @Environment(\.snapshotMode) private var snapshotMode
 
     public init(config: ProfileConfig,
+                routing: Bool? = nil,
+                onRoutingChange: @escaping (Bool) -> Void = { _ in },
                 onChange: @escaping (String, Int) -> Void,
                 onClose: @escaping () -> Void) {
         self.config = config
+        self.routing = routing
+        self.onRoutingChange = onRoutingChange
         self.onChange = onChange
         self.onClose = onClose
     }
@@ -90,6 +98,10 @@ public struct SettingsSheet: View {
 
             rulesSection
 
+            if let routing {
+                routingSection(routing)
+            }
+
             Divider().overlay(Theme.hairline)
 
             HStack {
@@ -103,6 +115,30 @@ public struct SettingsSheet: View {
         .padding(Theme.Space.xl)
         .frame(width: 460)
         .background(Theme.surface1)
+    }
+
+    // MARK: Sign-in link routing
+
+    private func routingSection(_ on: Bool) -> some View {
+        VStack(alignment: .leading, spacing: Theme.Space.sm) {
+            Toggle(isOn: Binding(get: { on }, set: { onRoutingChange($0) })) {
+                Text("Send sign-in links to the right Claude")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Theme.text)
+            }
+            .toggleStyle(.switch)
+            .accessibilityIdentifier("settings-signin-routing")
+            Text("Makes Claude Profiles the handler for claude:// links and forwards each login to the account you chose, so you never have to close the others. Turn it off to hand the links back to Claude. Links are passed straight through and never stored.")
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.text2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(Theme.Space.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: Theme.Radius.button, style: .continuous)
+                .fill(Theme.surface2)
+        )
     }
 
     // MARK: Rules

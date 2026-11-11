@@ -2,6 +2,26 @@
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-11-10
+
+- **New: sign-in link routing.** Logging in used to land in whichever Claude macOS picked,
+  with no chooser, so you had to quit the other instances by hand. Turn on **Settings →
+  "Send sign-in links to the right Claude"** and Claude Profiles becomes the `claude://`
+  handler: choose **Sign in with this account** on a card (or list row, or the menu bar)
+  and the browser login is forwarded straight to that account. Nothing is closed. With the
+  switch off, Sign in falls back to **closing the others and restoring them** (a banner
+  offers **Restore**).
+- **New: Stack.** A toolbar button tiles your Claude windows side by side (1 to 3 across, then
+  a grid) for Claude Desktop instances, Claude Code Remote terminals, or both. Desktop
+  windows need the **Accessibility** permission (asked once).
+- **Changed: tile-first window.** The left sidebar is gone; the window is the card grid or
+  the list. Cards and list rows (right-click) carry Show Window / Open / Sign in / Restart /
+  Quit.
+- **Engine:** new verbs `signin`, `signinrestore`, `signinstate`, `signinclear`, `signinroute`,
+  `signintarget`, `signintargetclear`, `remotetty`.
+- **Note:** the router relays the one-time login link between the browser and Claude on your
+  Mac. It is held in memory for the hand-off and never logged, stored or sent anywhere else.
+
 ## [0.7.3] — 2026-06-23
 
 - **New:** turn Remote **off** — the Remote modal now has a **"Stop session"** button that

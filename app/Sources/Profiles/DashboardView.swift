@@ -12,9 +12,9 @@ import ProfilesUI
 /// Master-detail (replacing the old `.inspector` 3rd column): the content lives in
 /// a `NavigationStack(path:)` whose root is the card grid / list and whose
 /// `String`-keyed destination is the maximized `ProfileDetailView`. A card's
-/// "Details ›" or a sidebar selection pushes the slug; the system back button pops
-/// to the grid. `navPath` and `selection` are kept in sync so the sidebar highlight
-/// and the pushed page always agree (and back-to-grid clears the selection).
+/// "Details ›" or a list-row tap pushes the slug; the system back button pops to
+/// the overview. `navPath` and `selection` are kept in sync so the list highlight
+/// and the pushed page always agree (and back-to-overview clears the selection).
 @MainActor
 struct DashboardView: View {
     let store: StatsStore
@@ -53,7 +53,10 @@ struct DashboardView: View {
 
     var body: some View {
         NavigationStack(path: $navPath) {
-            detailContent
+            VStack(spacing: 0) {
+                signInBanner
+                detailContent
+            }
                 .navigationDestination(for: String.self) { slug in
                     profileDetail(for: slug)
                 }
@@ -64,14 +67,15 @@ struct DashboardView: View {
             ingest(fresh)
         }
         .onAppear { ingest(store.profiles) }
-        // Sidebar selection drives the push; clearing it pops to the grid. Guarded so
-        // it doesn't fight the back button (which already mutates navPath → selection).
+        // A list-row selection drives the push; clearing it pops to the overview.
+        // Guarded so it doesn't fight the back button (which already mutates
+        // navPath → selection).
         .onChange(of: selection) { _, slug in
             let desired = slug.map { [$0] } ?? []
             if navPath != desired { navPath = desired }
         }
         // The system back button pops navPath; mirror that back into selection so the
-        // sidebar highlight clears (and a re-selection re-pushes cleanly).
+        // list highlight clears (and a re-selection re-pushes cleanly).
         .onChange(of: navPath) { _, path in
             let top = path.last
             if selection != top { selection = top }
@@ -85,7 +89,24 @@ struct DashboardView: View {
         }
     }
 
-    /// Open a profile's maximized detail page (sidebar row OR card "Details ›").
+    /// Shown above the overview while a sign-in has closed other instances.
+    @ViewBuilder private var signInBanner: some View {
+        if let mode = store.signInMode {
+            let name = mode.target.flatMap { t in
+                store.profiles.first { $0.effSlug == t }?.name
+            }
+            SignInBanner(
+                targetName: name,
+                closedCount: mode.closed.count,
+                onRestore: { Task { await store.restoreSignIn() } },
+                onDismiss: { Task { await store.dismissSignIn() } }
+            )
+            .padding(.horizontal, Theme.Space.xl)
+            .padding(.top, Theme.Space.lg)
+        }
+    }
+
+    /// Open a profile's maximized detail page (card "Details ›" or a list row tap).
     private func open(_ slug: String) {
         if navPath.last != slug { navPath = [slug] }
     }
@@ -119,7 +140,10 @@ struct DashboardView: View {
         case .list:
             // A row selection pushes that profile's detail page (matching the grid's
             // Details tap). `selection` → `navPath` is wired in `body`'s onChange.
-            ProfileListView(profiles: store.profiles, selection: $selection)
+            ProfileListView(profiles: store.profiles, selection: $selection,
+                            onShowWindow: showWindow,
+                            onOpen: openInstance,
+                            onCardAction: onCardAction)
         }
     }
 

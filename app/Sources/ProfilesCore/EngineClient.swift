@@ -109,6 +109,72 @@ public struct EngineClient: EngineRunning {
         try await run(["copy", text])
     }
 
+    public func signIn(_ slug: String) async throws -> SignInResult {
+        let path = enginePath
+        return try await Task.detached(priority: .utility) {
+            let (out, code) = try Self.invoke(path, ["signin", slug])
+            if code != 0 { throw EngineError.nonZeroExit(code) }
+            // `signin` prints JSON on success or `err <msg>` on failure — both exit 0.
+            let stdout = String(data: out, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if stdout.hasPrefix("err") { throw EngineError.actionFailed(stdout) }
+            return try SignInResult.decode(from: Data(stdout.utf8))
+        }.value
+    }
+
+    public func signInRestore() async throws -> [String] {
+        let path = enginePath
+        return try await Task.detached(priority: .utility) {
+            let (out, code) = try Self.invoke(path, ["signinrestore"])
+            if code != 0 { throw EngineError.nonZeroExit(code) }
+            return try JSONDecoder().decode(SignInRestoredPayload.self, from: out).restored
+        }.value
+    }
+
+    public func signInState() async throws -> [String] {
+        let path = enginePath
+        return try await Task.detached(priority: .utility) {
+            let (out, code) = try Self.invoke(path, ["signinstate"])
+            if code != 0 { throw EngineError.nonZeroExit(code) }
+            return try JSONDecoder().decode(SignInPendingPayload.self, from: out).pending
+        }.value
+    }
+
+    public func signInClear() async throws {
+        // `signinclear` prints `ok`, exit 0 — the generic `run` fits.
+        try await run(["signinclear"])
+    }
+
+    public func remoteTty(_ slug: String) async throws -> String? {
+        let path = enginePath
+        return try await Task.detached(priority: .utility) {
+            let (out, code) = try Self.invoke(path, ["remotetty", slug])
+            if code != 0 { throw EngineError.nonZeroExit(code) }
+            // Stdout is `/dev/ttysNNN` or empty (no attached client) → nil.
+            let stdout = String(data: out, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return stdout.isEmpty ? nil : stdout
+        }.value
+    }
+
+    public func signInRoute(_ slug: String) async throws {
+        // Prints `{"target":…}` or `err …`; `run` surfaces the err token.
+        try await run(["signinroute", slug])
+    }
+
+    public func signInTarget() async throws -> String? {
+        let path = enginePath
+        return try await Task.detached(priority: .utility) {
+            let (out, code) = try Self.invoke(path, ["signintarget"])
+            if code != 0 { throw EngineError.nonZeroExit(code) }
+            return try JSONDecoder().decode(SignInTargetPayload.self, from: out).target
+        }.value
+    }
+
+    public func signInTargetClear() async throws {
+        try await run(["signintargetclear"])
+    }
+
     public func mainPid(_ slug: String) async throws -> Int32? {
         let path = enginePath
         // The default instance has no slug-dir to match — `defaultpid` finds the

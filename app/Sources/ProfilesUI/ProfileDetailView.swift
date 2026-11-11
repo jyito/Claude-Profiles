@@ -25,7 +25,7 @@ import ProfilesCore
 /// Pure: no store/clock reads. The live `DashboardView` hands the rolling CPU/Mem
 /// series + `AlertState`; the snapshot harness hands fixtures. The scrollable wrap
 /// is gated behind `snapshotMode` because `ImageRenderer` collapses a `ScrollView`
-/// to empty (same gotcha as SidebarView/ProfileListView/DashboardContent).
+/// to empty (same gotcha as ProfileListView/DashboardContent).
 public struct ProfileDetailView: View {
     let stat: ProfileStat
     let cpu: [Double]
@@ -227,6 +227,8 @@ public struct ProfileDetailView: View {
                 .accessibilityIdentifier("detail-\(stat.effSlug)-overflow")
         } else {
             Menu {
+                Button("Sign in with this account") { onCardAction(.signIn) }
+                Divider()
                 Button("Quit") { onCardAction(.quit) }
                 Button("Force Quit", role: .destructive) { onCardAction(.force) }
             } label: {

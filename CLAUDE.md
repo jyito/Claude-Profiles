@@ -10,20 +10,30 @@ Multi-account Claude Desktop for macOS. Each "profile" is a generated native
 `.app` wrapper that launches the real Claude.app with its own
 `--user-data-dir`, so each account stays permanently signed in and any number
 run simultaneously. The user-facing app is a **native SwiftUI dashboard**
-(split-view with a permanent vibrant sidebar, KPI strip, master-detail profile
+(tile-or-list window with no sidebar, KPI strip, master-detail profile
 pages with hero trend charts + leak verdict, live cards with sparklines + a
 handle-leak gauge, a MenuBarExtra switcher, Show Window focusing, cleanup
 utilities) built with the Command Line Tools — no Xcode — and signed +
 notarized. The bash `engine.sh` is still the data/actions backend. Status:
-**v0.7.0 — native SwiftUI dashboard SHIPPED**, replacing the old
-AppleScriptObjC + WebView host (retired at this cutover); maintainer-verified
-on macOS, CI green, public repo `jyito/Claude-Profiles`.
+**v0.8.0 — sign-in routing + Stack + tile-first window (builds, Core tests and
+snapshot goldens pass on the macOS CI runner; live behavior — router delivery,
+Stack, permissions — is still UNVERIFIED by hand on a Mac).** v0.7.0 was the native SwiftUI cutover,
+replacing the old AppleScriptObjC + WebView host; maintainer-verified on macOS,
+CI green, public repo `jyito/Claude-Profiles`.
 
 ## Non-negotiables (PRs violating these get declined)
 
 1. **Never touch credentials.** No reading/storing/transmitting tokens,
    passwords, cookies, Keychain. The per-profile data dir IS the credential
    store, managed by Claude Desktop itself. Never script the login UI.
+   **v0.8 amendment (maintainer-approved): the opt-in `claude://` router.** When
+   enabled it receives the browser login callback URL (which carries a one-time
+   auth code) and relays it, verbatim, to the chosen Claude process. Rules it must
+   keep: the URL is held in memory for the hand-off only, never parsed, logged,
+   written to disk, or sent anywhere but that process; the engine only ever stores a
+   target SLUG + timestamp (`.runtime/signin-target`, tested to never hold a URL);
+   the handler registration is opt-in and reversible (previous handler remembered
+   in UserDefaults and restored on disable).
 2. **Zero network I/O.** No telemetry, no update checks, nothing. Local-only
    stats (`.profile-activity`, last 50 launches) are the only "analytics."
 3. **Zero RUNTIME dependencies** (macOS built-ins only at runtime): bash,
@@ -68,8 +78,9 @@ is still a tiny `.app` whose executable is an inline bash `launcher` that runs
     `badge_color_for` so the New Profile sheet previews the disc), `Sort`,
     `Formatters`, `FixtureEngine` (canned data for snapshot/UI tests).
   - **`ProfilesUI`** — the `Theme` + all views: `ProfileCardView` (live card
-    with `Sparkline` + `HandleGauge` leak gauge), the vibrant `SidebarView`
-    (`VisualEffectView`), `KPIStripView`, the master-detail `ProfileDetailView`
+    with `Sparkline` + `HandleGauge` leak gauge), `SignInBanner`, `Arrange`
+    (Stack: AX window placement + Terminal AppleScript), `URLRouter` (claude://
+    handler registration + forward-by-PID), `KPIStripView`, the master-detail `ProfileDetailView`
     (three hero trend charts — CPU / Memory / handle-pool-toward-ceiling — plus
     a `LeakBlock` verdict), `InstanceSections`/`TerminalsTable`/`CleanTiers`,
     the `Sheets/` (`NewProfileSheet` with live badge preview, `SettingsSheet`,
@@ -153,6 +164,30 @@ is still a tiny `.app` whose executable is an inline bash `launcher` that runs
   Automation permission prompt, the only permission in the project. Also
   user-dependent: Desktop & Dock → "switch to a Space with open windows"
   affects the jump.
+- **Sign-in routing (v0.8).** macOS delivers the `claude://` login callback to
+  ONE running instance (all share a bundle ID) with no chooser. Two strategies,
+  both engine-backed: (a) `signin <slug>` closes every other instance (recorded in
+  `.runtime/signin-restore`) and `signinrestore` reopens them; (b) the router —
+  Claude Profiles is registered as the `claude://` handler (Settings toggle,
+  `URLRouter.enable`), `signinroute <slug>` records the target (10-min TTL), and
+  `CallbackRouter` forwards the URL to that instance's PID as a `GetURL` Apple
+  event (`decideRoute` is the pure, tested policy; no target + several running →
+  chooser alert). The Apple-event send needs the Automation permission for Claude
+  and the `com.apple.security.automation.apple-events` entitlement under hardened
+  runtime (`packaging/entitlements.plist`, passed by `sign.sh`). `CallbackBridge`
+  queues a URL that launches the app; the Apple-event handler is installed in
+  `applicationWillFinishLaunching` so SwiftUI never opens a window for it.
+  **Unverified on a real Mac:** that Claude Desktop (Electron `open-url`) accepts a
+  `GetURL` event addressed to a specific PID, and that registering as the handler
+  doesn't steal `claude://` before the user opts in (Info.plist now declares the
+  scheme).
+- **Stack (v0.8).** `stackFrames(in:count:gap:)` (ProfilesCore, pure, tested) gives
+  Cocoa y-up frames; `Arrange` flips to AX/Terminal y-down using the PRIMARY
+  screen's height. Desktop windows move via the Accessibility API (a second
+  permission, asked only when Stack is used); terminals via Terminal AppleScript,
+  reusing the window already attached to `screen -x claude-<slug>` (`remotetty`) or
+  opening one for a live session. tty/slug are regex-validated before they touch
+  script text.
 - **`kill` is a bash builtin** — PATH shims can't intercept it; that's why
   the test suite doesn't exercise quit/force, by design. Keep it that way.
 - **Locally generated/built bundles carry no quarantine** — no Gatekeeper
@@ -217,7 +252,7 @@ SwiftUI `app/`.
 ## Build / test / release
 
 ```bash
-bash tests/run-tests.sh    # 124 tests; runs on macOS or Linux (mac tools shimmed)
+bash tests/run-tests.sh    # 137 tests; runs on macOS or Linux (mac tools shimmed)
 # SwiftUI app (Command Line Tools — no Xcode needed):
 cd app && swift build                  # build ProfilesCore + the app shell
 cd app && swift run ProfilesCoreTests  # Layer-1 logic tests (executable runner; XCTest doesn't run under CLT)

@@ -29,10 +29,20 @@ public enum ProfileViewMode: String, CaseIterable, Identifiable, Sendable {
 public struct ProfileListView: View {
     let profiles: [ProfileStat]
     @Binding var selection: String?
+    /// Right-click actions per row (Show Window / Open / Sign in / Restart / Quit).
+    let onShowWindow: (String) -> Void
+    let onOpen: (String) -> Void
+    let onCardAction: (CardAction, String) -> Void
 
-    public init(profiles: [ProfileStat], selection: Binding<String?>) {
+    public init(profiles: [ProfileStat], selection: Binding<String?>,
+                onShowWindow: @escaping (String) -> Void = { _ in },
+                onOpen: @escaping (String) -> Void = { _ in },
+                onCardAction: @escaping (CardAction, String) -> Void = { _, _ in }) {
         self.profiles = profiles
         self._selection = selection
+        self.onShowWindow = onShowWindow
+        self.onOpen = onOpen
+        self.onCardAction = onCardAction
     }
 
     private var ordered: [ProfileStat] { sortProfiles(profiles) }
@@ -109,6 +119,20 @@ public struct ProfileListView: View {
         )
         .contentShape(Rectangle())
         .onTapGesture { selection = stat.effSlug }
+        .contextMenu {
+            if stat.running {
+                Button("Show Window") { onShowWindow(stat.effSlug) }
+            } else {
+                Button("Open") { onOpen(stat.effSlug) }
+            }
+            Button("Sign in with this account") { onCardAction(.signIn, stat.effSlug) }
+            if stat.running {
+                Divider()
+                Button("Restart") { onCardAction(.restart, stat.effSlug) }
+                Button("Quit") { onCardAction(.quit, stat.effSlug) }
+                Button("Force Quit", role: .destructive) { onCardAction(.force, stat.effSlug) }
+            }
+        }
         .pointerCursor()
         .accessibilityIdentifier("list-row-\(stat.effSlug)")
     }

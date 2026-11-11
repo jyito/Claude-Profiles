@@ -152,6 +152,106 @@ public final class StatsStore {
         catch { lastError = String(describing: error) }
     }
 
+    // MARK: Sign-in routing
+
+    /// Non-nil while instances the engine closed for a sign-in await restore —
+    /// drives the dashboard's sign-in banner.
+    public private(set) var signInMode: SignInMode?
+
+    /// Route the next browser sign-in to `slug`: the engine closes the other
+    /// running instances and ensures the target is up. Enters sign-in mode only
+    /// when something was actually closed — with nothing else running the
+    /// `claude://` callback is already unambiguous, so no banner.
+    @discardableResult
+    public func beginSignIn(_ slug: String) async -> Bool {
+        do {
+            let result = try await engine.signIn(slug)
+            signInMode = result.closed.isEmpty
+                ? nil
+                : SignInMode(target: result.target, closed: result.closed)
+            lastError = nil
+            await refreshOnce()
+            return true
+        } catch {
+            lastError = String(describing: error)
+            await refreshOnce()
+            return false
+        }
+    }
+
+    /// Reopen everything the sign-in closed, then leave sign-in mode. On engine
+    /// failure the mode is KEPT so the banner (and the user's way back) survives.
+    public func restoreSignIn() async {
+        do {
+            _ = try await engine.signInRestore()
+            signInMode = nil
+            lastError = nil
+        } catch {
+            lastError = String(describing: error)
+        }
+        await refreshOnce()
+    }
+
+    /// Dismiss the banner without reopening anything (drops the engine's pending
+    /// restore list too, so it doesn't resurface on the next launch).
+    public func dismissSignIn() async {
+        do {
+            try await engine.signInClear()
+            signInMode = nil
+            lastError = nil
+        } catch {
+            lastError = String(describing: error)
+        }
+    }
+
+    /// Startup probe: after an app relaunch mid-sign-in the engine still holds
+    /// the restore list — re-enter sign-in mode (target unknown) so Restore is
+    /// re-offered. Best-effort: a probe failure is silent (no lastError), the
+    /// regular tick will surface real engine trouble.
+    public func checkSignInPending() async {
+        guard let pending = try? await engine.signInState(), !pending.isEmpty else { return }
+        signInMode = SignInMode(target: nil, closed: pending)
+    }
+
+    // MARK: Routed sign-in (callback router)
+
+    /// Mark `slug` as the sign-in target and make sure it is running; nothing is
+    /// closed. Returns whether the engine accepted it (error via `lastError`).
+    @discardableResult
+    public func routeSignIn(_ slug: String) async -> Bool {
+        do {
+            try await engine.signInRoute(slug)
+            lastError = nil
+            await refreshOnce()
+            return true
+        } catch {
+            lastError = String(describing: error)
+            await refreshOnce()
+            return false
+        }
+    }
+
+    /// The pending routed target, or nil. A transport error reads as "no target"
+    /// (the router then falls back to the chooser) and is surfaced via `lastError`.
+    public func signInTarget() async -> String? {
+        do { return try await engine.signInTarget() }
+        catch { lastError = String(describing: error); return nil }
+    }
+
+    /// Forget the pending routed target once its callback has been forwarded.
+    public func clearSignInTarget() async {
+        do { try await engine.signInTargetClear() }
+        catch { lastError = String(describing: error) }
+    }
+
+    /// The tty of a Terminal window already attached to `slug`'s Claude Code
+    /// session, for the window stacker. nil = none attached (or transport error,
+    /// surfaced via `lastError`) — the stacker opens a fresh window instead.
+    public func remoteTty(_ slug: String) async -> String? {
+        do { return try await engine.remoteTty(slug) }
+        catch { lastError = String(describing: error); return nil }
+    }
+
     /// Remove a profile: `remove` (delete the wrapper) THEN `purge` (delete its
     /// data dir). The data dir is precious (CLAUDE.md §6), so only report success
     /// when BOTH steps succeed — a failed `purge` (orphaned data dir) must be
@@ -173,6 +273,9 @@ public final class StatsStore {
     public func start() {
         guard task == nil else { return }
         task = Task { [weak self] in
+            // One-shot: recover a sign-in restore pending from a previous run
+            // before the regular tick loop begins.
+            await self?.checkSignInPending()
             while !Task.isCancelled {
                 // Bail if the store has been deinited — optional-chained no-ops
                 // would otherwise busy-spin (the while condition stays true).

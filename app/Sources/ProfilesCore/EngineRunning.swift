@@ -40,6 +40,39 @@ public protocol EngineRunning: Sendable {
     /// prints one here. The PID, never the bundle id, is the focus target (all
     /// instances share Claude's bundle id).
     func mainPid(_ slug: String) async throws -> Int32?
+
+    // MARK: Sign-in routing + stacking (v0.8)
+    // Declared as requirements (not only extension defaults) so calls through
+    // `any EngineRunning` dispatch dynamically to EngineClient / FixtureEngine.
+
+    /// Route the next browser sign-in to `slug` ("default" for the default
+    /// instance): the engine closes every OTHER running instance (recording them
+    /// for restore) and makes sure the target is up, so the `claude://` callback
+    /// has exactly one home. Throws `actionFailed` on the engine's `err` token.
+    func signIn(_ slug: String) async throws -> SignInResult
+    /// Reopen everything `signIn` closed (`signinrestore`); returns the restored
+    /// slugs. Idempotent — nothing pending returns `[]`.
+    func signInRestore() async throws -> [String]
+    /// What a pending restore would reopen (`signinstate`) — non-empty after an
+    /// app relaunch mid-sign-in, so the dashboard can re-offer Restore.
+    func signInState() async throws -> [String]
+    /// Drop a pending restore without reopening anything (`signinclear`).
+    func signInClear() async throws
+    /// The tty of a Terminal window already attached to `slug`'s Claude Code
+    /// `screen` session (`remotetty <slug>`), or nil when none is attached —
+    /// lets the stacker place the existing window instead of opening a duplicate.
+    func remoteTty(_ slug: String) async throws -> String?
+
+    // Routed sign-in (no instances closed). The engine only remembers WHICH
+    // instance the user is signing in; the callback URL never reaches it.
+
+    /// Mark `slug` as the pending sign-in target and make sure it is running
+    /// (`signinroute`). Closes nothing.
+    func signInRoute(_ slug: String) async throws
+    /// The pending routed target, or nil when none / expired (`signintarget`).
+    func signInTarget() async throws -> String?
+    /// Forget the pending routed target (`signintargetclear`).
+    func signInTargetClear() async throws
 }
 
 public extension EngineRunning {
@@ -48,4 +81,16 @@ public extension EngineRunning {
     func run(_ verb: String, _ slug: String) async throws {
         try await run([verb, slug])
     }
+
+    // Default implementations keep any other conformer compiling (no-op sign-in).
+    func signIn(_ slug: String) async throws -> SignInResult {
+        SignInResult(target: slug, closed: [])
+    }
+    func signInRestore() async throws -> [String] { [] }
+    func signInState() async throws -> [String] { [] }
+    func signInClear() async throws {}
+    func remoteTty(_ slug: String) async throws -> String? { nil }
+    func signInRoute(_ slug: String) async throws {}
+    func signInTarget() async throws -> String? { nil }
+    func signInTargetClear() async throws {}
 }
