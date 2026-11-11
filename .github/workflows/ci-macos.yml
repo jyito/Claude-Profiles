@@ -34,16 +34,16 @@ jobs:
       - id: pick
         run: |
           # PR: one runner (fast feedback). Release (workflow_call → inherits the
-          # tag-push event): macos-14 + macos-15 — NOT macos-13, whose runners
-          # queue for long stretches and have repeatedly stalled releases. The
-          # weekly cron still exercises the full matrix incl. macos-13, where a
-          # slow runner blocks nothing.
+          # tag-push event): macos-15 + macos-26. macos-13 and macos-14 are retired
+          # (GitHub: "The configuration 'macos-14-arm64-us-default' is not
+          # supported" — the v0.8.0 release run died on it), so they must not
+          # appear here. The weekly cron runs the same two.
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             echo 'os=["macos-latest"]' >> "$GITHUB_OUTPUT"
           elif [ "${{ github.event_name }}" = "schedule" ]; then
-            echo 'os=["macos-13","macos-14","macos-15"]' >> "$GITHUB_OUTPUT"
+            echo 'os=["macos-15","macos-26"]' >> "$GITHUB_OUTPUT"
           else
-            echo 'os=["macos-14","macos-15"]' >> "$GITHUB_OUTPUT"
+            echo 'os=["macos-15","macos-26"]' >> "$GITHUB_OUTPUT"
           fi
 
   macos:
@@ -81,7 +81,7 @@ jobs:
       - name: layer 2 — snapshot render proof
         # Pixel snapshots are a PR visual-regression gate. The goldens are
         # authoritative for one platform; cross-OS anti-aliasing/font drift (e.g.
-        # macos-14 vs the recording runner) exceeds tolerance without signalling a
+        # macos-15 vs the recording runner) exceeds tolerance without signalling a
         # real bug — so run them only on PRs (macos-latest), not on the release/cron
         # matrix, which is for build + sign + notarize. Layer-1 logic still runs everywhere.
         if: github.event_name == 'pull_request'
